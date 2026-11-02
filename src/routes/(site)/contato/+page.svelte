@@ -138,8 +138,8 @@
 			{#each canais as c (c.href)}
 				<a
 					href={c.href}
-					class="block rounded-box border border-line bg-base-100 px-4 py-3.5 no-underline
-					       transition-all hover:-translate-y-0.5 hover:border-primary"
+					class="block cartao-interativo rounded-box border border-line bg-base-100 px-4 py-3.5
+					       no-underline"
 				>
 					<span
 						class="mb-1.5 block text-xs font-bold tracking-[0.05em] text-base-content/65 uppercase"

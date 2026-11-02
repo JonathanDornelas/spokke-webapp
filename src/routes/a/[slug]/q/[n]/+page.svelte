@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
+	import { DURACAO } from '$lib/movimento';
 	import Avatar from '$lib/components/Avatar.svelte';
 	// Uma questão. A correção acontece NO SERVIDOR (regra inviolável 2) — o estado
 	// "Verificando…" existe de verdade, nada de veredito otimista no cliente.
@@ -108,10 +109,10 @@
 			sourceDir: 'ltr',
 			interaction: 'cloze',
 			skill: 'writing',
-			skillLabel: 'Writing',
+			skillLabel: 'Escrita',
 			sourceLabel: 'Português',
 			targetLabel: 'Inglês',
-			gradingLabel: 'Tolerant',
+			gradingLabel: 'tolerante',
 			prompt: 'Complete a frase',
 			hint: 'Acento e caixa são ignorados nesta questão.',
 			masked: 'She ___ ___ working here since 2019.'
@@ -395,8 +396,12 @@
 		saindoDe = page.url.pathname;
 		// A busca do dado e a animação de saída correm JUNTAS. `preloadData`
 		// pode falhar (offline, 404) — o `goto` abaixo trata isso do jeito
-		// normal, então aqui o erro é ignorado de propósito.
-		await Promise.all([preloadData(href).catch(() => {}), new Promise((r) => setTimeout(r, 170))]);
+		// normal, então aqui o erro é ignorado de propósito. A espera é a duração
+		// do `q-out` — o mesmo token, `$lib/movimento.ts` ↔ `app.css`.
+		await Promise.all([
+			preloadData(href).catch(() => {}),
+			new Promise((r) => setTimeout(r, DURACAO.curta))
+		]);
 		await goto(href);
 	}
 	/* eslint-enable svelte/no-navigation-without-resolve */
@@ -637,7 +642,7 @@
 			onclick={voltar}
 			disabled={ocupado}
 			class="grid size-10 shrink-0 place-items-center rounded-full bg-base-200 text-base-content no-underline
-			       transition-[background,transform] duration-150 hover:-translate-x-0.5 hover:bg-base-300 active:scale-90
+			       transition-[background,transform,translate,scale] duration-150 hover:-translate-x-0.5 hover:bg-base-300 active:scale-90
 			       lg:size-auto lg:gap-2 lg:rounded-field lg:px-3 lg:py-2.5 lg:text-[13.5px] lg:font-semibold"
 			aria-label="Questão anterior"
 		>
@@ -658,7 +663,7 @@
 
 	<div class="h-[9px] flex-1 overflow-hidden rounded-full bg-base-300 lg:max-w-[480px]">
 		<div
-			class="h-full origin-left animate-[en-grow-x_1s_var(--ease-out-soft)_both] rounded-full bg-primary"
+			class="h-full origin-left animate-progresso rounded-full bg-primary"
 			style="width: {(data.index / data.activity.itemCount) * 100}%"
 		></div>
 	</div>

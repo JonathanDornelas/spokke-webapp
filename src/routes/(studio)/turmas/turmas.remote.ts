@@ -13,7 +13,7 @@ import { itemAudioHashes } from '$lib/server/player/runtime';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
 import { enqueueConvites, type ConviteJob } from '$lib/server/queue';
-import { labelForTag, languageLabels } from '$lib/kernel/language/profiles';
+import { labelForTag } from '$lib/kernel/language/profiles';
 import { campoIdioma } from '$lib/idiomas';
 import { alunosValidos, parseAlunos } from '$lib/turmas/parse-alunos';
 
@@ -50,7 +50,8 @@ function alunosDoFormulario(modo: string | undefined, colado?: string, um_a_um?:
 export const criarTurma = form(
 	z.object({
 		name: z.string().min(1, 'Dê um nome para a turma'),
-		languageLabel: z.string().optional(),
+		/** A TAG, de um seletor das tags do produto — o mesmo campo de `editarTurma`. */
+		idioma: campoIdioma,
 		color: z.enum(CORES).default('violeta'),
 		modo: z.string().optional(),
 		/** Bloco colado, um aluno por linha. */
@@ -58,17 +59,11 @@ export const criarTurma = form(
 		/** `[{ name, email }]` do modo um a um, montado pelo componente. */
 		alunos: z.string().optional()
 	}),
-	async ({ name, languageLabel, color, modo, colado, alunos: umAUm }) => {
+	async ({ name, idioma, color, modo, colado, alunos: umAUm }) => {
 		const teacher = teacherOf();
 		const lista = alunosDoFormulario(modo, colado, umAUm);
 
-		const turma = await turmas(teacher).create(
-			name.trim(),
-			// Rótulo que não é idioma do produto vira "sem idioma", não erro 500.
-			(languageLabel && languageLabels[languageLabel]) || null,
-			color,
-			lista
-		);
+		const turma = await turmas(teacher).create(name.trim(), idioma, color, lista);
 		redirect(303, resolve('/(studio)/turmas/[id]', { id: turma.id }));
 	}
 );

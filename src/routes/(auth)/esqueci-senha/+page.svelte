@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Alternador from '$lib/components/Alternador.svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import Loading from '$lib/components/Loading.svelte';
@@ -59,7 +60,7 @@
 <svelte:head><title>Recuperar acesso — entendo</title></svelte:head>
 
 <div
-	class="w-full max-w-[384px] animate-[en-fade-up_560ms_var(--ease-out-soft)_both] rounded-box
+	class="w-full max-w-[384px] animate-entrada rounded-box
 	       border border-line bg-base-100 p-8 shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)]"
 >
 	{#if sent}
@@ -101,24 +102,16 @@
 			</div>
 		</div>
 	{:else}
-		<div
-			class="mb-6 grid grid-cols-2 gap-1 rounded-full bg-base-200 p-1"
-			role="tablist"
-			aria-label="Recuperar a conta de"
-		>
-			{#each [{ id: 'professor' as const, label: 'Professor' }, { id: 'aluno' as const, label: 'Aluno' }] as opcao (opcao.id)}
-				<button
-					type="button"
-					role="tab"
-					aria-selected={como === opcao.id}
-					onclick={() => (como = opcao.id)}
-					class="rounded-full px-4 py-2 text-[0.84rem] transition-colors
-					       {como === opcao.id
-						? 'bg-primary font-bold text-primary-content'
-						: 'font-semibold text-base-content/65 hover:text-base-content'}">{opcao.label}</button
-				>
-			{/each}
-		</div>
+		<Alternador
+			opcoes={[
+				{ id: 'professor' as const, label: 'Professor' },
+				{ id: 'aluno' as const, label: 'Aluno' }
+			]}
+			bind:valor={como}
+			rotulo="Recuperar a conta de"
+			largura="cheia"
+			class="mb-6"
+		/>
 		<h1 class="mb-1.5 font-display text-[22px] font-semibold tracking-[-0.02em]">
 			Recuperar acesso
 		</h1>

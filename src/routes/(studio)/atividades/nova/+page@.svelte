@@ -160,7 +160,7 @@
 								onclick={() => (nivel = id)}
 								aria-pressed={nivel === id}
 								title={id ? rotuloDoNivel(id) : 'Sem nível'}
-								class="rounded-full px-3.5 py-2 text-[13px] transition-[border-color,transform] duration-150 hover:-translate-y-0.5
+								class="rounded-full px-3.5 py-2 text-[13px] transition-[border-color,transform,translate,scale] duration-150 hover:-translate-y-0.5
 								       {nivel === id
 									? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
 									: 'border border-line bg-base-200 font-semibold text-base-content/65'}"
@@ -218,7 +218,7 @@
 								type="button"
 								onclick={() => alternar(skill)}
 								aria-pressed={marcada}
-								class="flex items-center gap-2 rounded-full px-3.5 py-2 text-[13px] transition-[border-color,transform] duration-150 hover:-translate-y-0.5
+								class="flex items-center gap-2 rounded-full px-3.5 py-2 text-[13px] transition-[border-color,transform,translate,scale] duration-150 hover:-translate-y-0.5
 								       {marcada
 									? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
 									: 'border border-line bg-base-200 font-semibold text-base-content/65'}"
@@ -258,9 +258,9 @@
 					Por que não escolho a habilidade?
 				</p>
 				<p class="mb-[18px] text-[13.5px] leading-relaxed text-base-content/65">
-					Listening, speaking, reading e writing não são um campo desta tela. Elas saem da
-					combinação entre o material que você cola, a interação gerada e a forma de correção. Você
-					vê quais habilidades a atividade treina na etapa de publicar, já derivadas.
+					Escuta, fala, leitura e escrita não são um campo desta tela. Elas saem da combinação entre
+					o material que você cola, a interação gerada e a forma de correção. Você vê quais
+					habilidades a atividade treina na etapa de publicar, já derivadas.
 				</p>
 				<!-- Cada operador fica AGRUPADO com o chip seguinte (`shrink-0`): sem
 				     isso, o "×" quebra sozinho no fim da linha nesta coluna estreita. -->

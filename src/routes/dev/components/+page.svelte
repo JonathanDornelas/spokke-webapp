@@ -28,6 +28,10 @@
 	import Loading from '$lib/components/Loading.svelte';
 	import LoadingBar from '$lib/components/LoadingBar.svelte';
 	import MaterialForm, { type Modo } from '$lib/components/MaterialForm.svelte';
+	import Bandeja from '$lib/components/Bandeja.svelte';
+	import SeletorDeEtiqueta from '$lib/components/SeletorDeEtiqueta.svelte';
+	import SeletorDeAtividades from '$lib/components/SeletorDeAtividades.svelte';
+	import { CLASSE_DA_ETIQUETA, etiquetaDaTurma, type CorDeEtiqueta } from '$lib/etiquetas';
 	import MaterialList from '$lib/components/MaterialList.svelte';
 	import type { MaterialRow } from '$lib/components/material-form';
 	import { reveal } from '$lib/actions/reveal';
@@ -94,12 +98,26 @@
 		['player', 'Player — 6 interações'],
 		['studio', 'Studio'],
 		['materiais', 'Materiais'],
+		['bandeja', 'Bandeja'],
 		['avatar', 'Avatar'],
 		['planos', 'Planos'],
 		['teclado', 'Teclado virtual'],
 		['movimento', 'Movimento'],
 		['scroll', 'Entrada em scroll']
 	] as const;
+
+	// ── bandeja ──
+	let bandejaDemo = $state(false);
+	let bandejaComErro = $state(false);
+	let nomeDemo = $state('Unidade 4 — rotina');
+	let corDemo = $state<CorDeEtiqueta>('teal');
+	let escolhidasDemo = $state<string[]>([]);
+	const atividadesDemo = [
+		{ id: 'a1', title: 'Present perfect — turma B', level: 'B1', idioma: 'en-US', noAr: true },
+		{ id: 'a2', title: 'Rotina da manhã', level: 'A2', idioma: 'en-US', noAr: true },
+		{ id: 'a3', title: 'Frutas e legumes', level: 'A1', idioma: 'es-ES', noAr: false },
+		{ id: 'a4', title: 'Pedir no restaurante', level: null, idioma: 'en-US', noAr: true }
+	];
 
 	// ── avatar e planos ──
 	let avatarDemo = $state(CODIGO_PADRAO);
@@ -324,7 +342,7 @@
 			{#each sections as [id, label] (id)}
 				<a
 					href="#{id}"
-					class="transition-[color,transform] duration-150 hover:-translate-y-px hover:text-primary"
+					class="transition-[color,transform,translate,scale] duration-150 hover:-translate-y-px hover:text-primary"
 				>
 					{label}
 				</a>
@@ -623,7 +641,7 @@
 			<div class="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
 				{#each iconSet as icon (icon.name)}
 					<div
-						class="flex motion-tap flex-col items-center gap-3 rounded-box border border-line bg-card p-4.5 transition-[transform,border-color,color] duration-200 hover:-translate-y-1 hover:border-primary hover:text-primary"
+						class="flex motion-tap flex-col items-center gap-3 rounded-box border border-line bg-card p-4.5 transition-[transform,border-color,color,translate,scale] duration-200 hover:-translate-y-1 hover:border-primary hover:text-primary"
 					>
 						<svg class="size-[26px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 							<!-- eslint-disable-next-line svelte/no-at-html-tags -- icon.path é literal fixo definido acima, não input do usuário -->
@@ -907,7 +925,7 @@
 							<div>
 								<div class="font-display text-[19px] font-semibold">Present perfect — turma B</div>
 								<div class="mt-1.5 text-[13px] text-base-content/60">
-									Inglês · 8 itens · listening, reading, writing
+									Inglês · 8 questões · escuta, leitura, escrita
 								</div>
 							</div>
 							<Badge variant="primary" tone="solid">publicada v3</Badge>
@@ -1091,7 +1109,7 @@
 			</p>
 
 			<div class="mt-6 flex flex-wrap gap-7">
-				<!-- Listening + escolha -->
+				<!-- Escuta + escolha -->
 				<div class="max-w-[366px]">
 					<div class={phoneFrame}>
 						<PlayerQuestionShell index={choiceIndex} total={choiceTotal}>
@@ -1124,7 +1142,7 @@
 										stroke-width="2"
 									/>
 								</svg>
-								Listening
+								Escuta
 							</div>
 							<h3 class="mb-5 font-display text-[26px] leading-tight font-semibold">
 								Escute e escolha o que você ouviu
@@ -1719,6 +1737,32 @@
 			</div>
 		</section>
 
+		<section id="bandeja" class="mb-14 scroll-mt-6">
+			<h2 class="font-display text-2xl">Bandeja</h2>
+			<p class="mt-1 max-w-2xl text-sm text-base-content/60">
+				Todo formulário de criar e editar do Studio que não é atividade abre aqui: ~40% da tela,
+				cabeçalho com a etiqueta do que se cria, corpo que rola e rodapé com o resumo e as ações.
+			</p>
+			<div class="mt-6 flex flex-wrap gap-2">
+				<button
+					type="button"
+					onclick={() => {
+						bandejaComErro = false;
+						bandejaDemo = true;
+					}}
+					class="btn motion-tap btn-primary font-bold">Abrir a bandeja</button
+				>
+				<button
+					type="button"
+					onclick={() => {
+						bandejaComErro = true;
+						bandejaDemo = true;
+					}}
+					class="btn motion-tap btn-plain">Com erro do servidor</button
+				>
+			</div>
+		</section>
+
 		<section id="avatar" class="mb-14 scroll-mt-6">
 			<h2 class="font-display text-2xl">Avatar</h2>
 			<p class="mt-1 max-w-2xl text-sm text-base-content/60">
@@ -2034,7 +2078,7 @@
 				{#each revealCards as i (i)}
 					<div
 						class="reveal-row rounded-box border border-line bg-card p-5"
-						use:reveal={{ delay: i * 90 }}
+						use:reveal={{ ordem: i }}
 					>
 						<p class="font-display text-2xl text-primary">{i}</p>
 						<p class="text-[13px] text-base-content/60">cartão {i}</p>
@@ -2046,3 +2090,60 @@
 </div>
 
 <AvatarEditor bind:codigo={avatarDemo} bind:aberto={editorDemo} />
+
+<Bandeja
+	aberta={bandejaDemo}
+	onfechar={() => (bandejaDemo = false)}
+	titulo="Novo módulo"
+	descricao="Uma sequência de atividades que você manda para a turma no ritmo que escolher."
+	resumo={escolhidasDemo.length
+		? `${escolhidasDemo.length} atividades entram no módulo, nesta ordem.`
+		: 'As atividades podem entrar depois. As turmas e os envios, no módulo aberto.'}
+	erro={bandejaComErro ? 'Não deu para criar agora. Tente de novo em instantes.' : null}
+>
+	{#snippet marca()}
+		<span
+			class="grid size-[46px] flex-none place-items-center rounded-[13px] text-[15px] font-bold {CLASSE_DA_ETIQUETA[
+				corDemo
+			]}"
+			aria-hidden="true">{etiquetaDaTurma(nomeDemo || 'NM')}</span
+		>
+	{/snippet}
+	<div class="grid gap-7">
+		<div class="grid gap-5">
+			<label class="fieldset">
+				<span class="fieldset-legend">Nome</span>
+				<input bind:value={nomeDemo} class="input w-full text-[15px]" data-autofoco />
+				<span class="fieldset-label">Aparece na sua lista e no mapa de fases do aluno.</span>
+			</label>
+			<label class="fieldset">
+				<span class="fieldset-legend"
+					>Descrição <span class="font-normal text-base-content/60">· opcional</span></span
+				>
+				<textarea
+					rows="2"
+					class="textarea w-full"
+					placeholder="O que este módulo cobre, numa linha."></textarea>
+			</label>
+			<SeletorDeEtiqueta bind:cor={corDemo} sigla={etiquetaDaTurma(nomeDemo || 'NM')} />
+		</div>
+		<section class="grid gap-3 border-t border-line pt-6">
+			<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+				<h3 class="text-[15px] font-bold">Atividades</h3>
+				<span class="text-[12.5px] text-base-content/60"
+					>opcional · a ordem do clique é a ordem do módulo</span
+				>
+			</div>
+			<SeletorDeAtividades atividades={atividadesDemo} bind:escolhidas={escolhidasDemo} />
+		</section>
+	</div>
+	{#snippet rodape()}
+		<button
+			type="button"
+			onclick={() => (bandejaDemo = false)}
+			class="btn min-h-11 motion-tap btn-plain">Cancelar</button
+		>
+		<button type="button" class="btn min-h-11 motion-tap btn-primary font-bold">Criar módulo</button
+		>
+	{/snippet}
+</Bandeja>

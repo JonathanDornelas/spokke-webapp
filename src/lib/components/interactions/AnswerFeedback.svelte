@@ -72,7 +72,7 @@
 </script>
 
 <div
-	class="mt-3.5 flex animate-[en-fade-up_420ms_var(--ease-out-soft)_both] items-start gap-2.5
+	class="mt-3.5 flex animate-entrada items-start gap-2.5
 	       rounded-field border-s-[3px] bg-base-200 px-4 py-3 {borda[state]}"
 	role="status"
 	aria-live="polite"

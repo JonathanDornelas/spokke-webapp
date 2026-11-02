@@ -16,7 +16,8 @@ import { atividades } from '$lib/server/db/repos/activities';
 import { materiais } from '$lib/server/db/repos/content-units';
 import { isTtsConfigured } from '$lib/server/tts';
 import { playerRepo } from '$lib/server/db/repos/player';
-import { itemAudioHashes } from '$lib/server/player/runtime';
+import { buildRuntimeItem, itemAudioHashes } from '$lib/server/player/runtime';
+import { edicaoDoItemSchema, montarItemEditado } from '$lib/server/atividades/item-editado';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
 import { isAsrConfigured } from '$lib/server/asr';
 import { gerarCodigoAcesso, normalizarCodigoAcesso } from '$lib/server/player/access-code';
@@ -28,7 +29,7 @@ import { parseContentUnit } from '$lib/kernel/content/parse';
 import { parseRawMaterial } from '$lib/kernel/content/parse-raw';
 import { camposMaterial, montarMaterial } from '$lib/server/atividades/material-form';
 import { getProfile, tagForLabel } from '$lib/kernel/language/profiles';
-import { interactionKindSchema, interactionSchema, promptSchema } from '$lib/kernel/item';
+import { interactionSchema } from '$lib/kernel/item';
 import type { Skill } from '$lib/kernel/interactions/types';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { transcritorPara } from '$lib/server/escrita';
@@ -512,66 +513,86 @@ export const criarItemManual = command(
 );
 
 /**
- * Nível 3: edição manual de um item. O payload é validado contra o
- * `authoringSchema` da interação escolhida — é isso que permite trocar a
- * interação e o formulário mudar sozinho, sem UI escrita à mão.
+ * Nível 3: edição manual de um item — o editor de questão. Quem decide o que
+ * vale é `montarItemEditado` (`$lib/server/atividades/item-editado.ts`), o
+ * MESMO que a prévia usa: a tela não oferece o que o servidor recusaria, e o
+ * que o formulário não edita (a língua da resposta, por exemplo) é mantido.
  *
- * `payload` é OPCIONAL de propósito: o editor ainda não monta campo a campo
- * o gabarito de toda interação (kernel.md "Nível 3" segue pendente). Sem ele,
- * o payload atual do item é mantido e o professor edita só enunciado, prompt
- * e modo de correção — melhor do que travar a tela inteira ou, pior, gravar
- * um gabarito incompleto por cima do que o gerador produziu.
+ * Mudou o texto de um prompt de áudio, o arquivo antigo não serve mais: o TTS
+ * novo é pedido AQUI, para a síntese acontecer enquanto o professor revisa (a
+ * etapa 4 também repõe, mas aí ele já está esperando).
  */
 export const salvarItem = form(
-	z.object({
-		activityId: z.string(),
-		itemId: z.string(),
-		interaction: interactionKindSchema,
-		instructionKey: z.string().optional(),
-		/** Enunciado escrito pelo professor; vazio volta para a copy padrão. */
-		instruction: z.string().optional(),
-		promptText: z.string().optional(),
-		promptKind: z.enum(['text', 'audio', 'image', 'composite']),
-		payload: z.string().optional(), // JSON do formulário derivado do authoringSchema
-		gradingMode: z.enum(['exact', 'tolerant', 'sequence', 'set', 'asr', 'rubric'])
-	}),
-	async (input) => {
-		const { teacher } = await activityOr404(input.activityId);
+	edicaoDoItemSchema.extend({ activityId: z.string(), itemId: z.string() }),
+	async ({ activityId, itemId, ...edicao }) => {
+		const { teacher, activity } = await activityOr404(activityId);
 
-		const atual = await atividades(teacher).draftItem(input.activityId, input.itemId);
+		const atual = await atividades(teacher).draftItem(activityId, itemId);
 		if (!atual) error(404, 'Item não encontrado neste rascunho');
-		const atualInteraction = interactionSchema.parse(atual.interaction);
 
-		if (!input.payload && atualInteraction.type !== input.interaction) {
-			return {
-				ok: false,
-				error: 'Trocar a interação exige preencher os campos dela — ainda não dá por aqui.'
-			};
-		}
+		const editado = montarItemEditado(atual, edicao);
+		if (!editado.ok) return { ok: false as const, error: editado.error };
 
-		const parsedPayload: unknown = input.payload
-			? JSON.parse(input.payload)
-			: atualInteraction.payload;
-		const validated = getInteraction(input.interaction).authoringSchema.safeParse(parsedPayload);
-		if (!validated.success) {
-			return { ok: false, error: 'Os campos deste tipo de interação não estão completos.' };
-		}
-
-		const prompt = promptSchema.parse({
-			kind: input.promptKind,
-			text: input.promptText || undefined,
-			instructionKey: input.instructionKey || undefined,
-			instruction: input.instruction?.trim() || undefined
-		});
-
-		const updated = await atividades(teacher).updateDraftItem(input.activityId, input.itemId, {
-			prompt,
-			interaction: { type: input.interaction, payload: validated.data } as Prisma.InputJsonValue,
-			grading: { mode: input.gradingMode }
+		const updated = await atividades(teacher).updateDraftItem(activityId, itemId, {
+			// Os três já passaram pelos schemas do kernel em `montarItemEditado`; o
+			// `unknown` só atravessa o tipo de JSON do Prisma, que não aceita interface.
+			prompt: editado.prompt as unknown as Prisma.InputJsonValue,
+			interaction: editado.interaction as unknown as Prisma.InputJsonValue,
+			grading: editado.grading as unknown as Prisma.InputJsonValue
 		});
 		if (!updated) error(404, 'Item não encontrado neste rascunho');
 
-		return { ok: true };
+		if (editado.audioMudou) {
+			await enfileirarAudioFaltante({
+				teacherId: teacher.id,
+				targetTag: activity.targetLang,
+				items: [updated]
+			});
+		}
+		return { ok: true as const };
+	}
+);
+
+/**
+ * A prévia do editor de questão: o item COMO FICARIA com o que está no
+ * formulário, passado pela mesma porta do Player (`buildRuntimeItem` →
+ * `toRuntime()`). Nada é gravado. O gabarito chega aqui (é a tela do
+ * professor, atrás do guard) e não volta: o que sai é o payload do aluno.
+ */
+export const previaDoItem = query(
+	edicaoDoItemSchema.extend({ activityId: z.string(), itemId: z.string() }),
+	async ({ activityId, itemId, ...edicao }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		const atual = await atividades(teacher).draftItem(activityId, itemId);
+		if (!atual) error(404, 'Item não encontrado neste rascunho');
+
+		const editado = montarItemEditado(atual, edicao);
+		if (!editado.ok) return { ok: false as const, error: editado.error };
+
+		const row = {
+			id: atual.id,
+			prompt: editado.prompt,
+			interaction: editado.interaction,
+			grading: editado.grading,
+			locale: atual.locale
+		};
+		const hashes = itemAudioHashes(row, activity.targetLang);
+		const assets = await playerRepo.mediaUrls(teacher.id, hashes);
+		const urlByHash = new Map(assets.map((asset) => [asset.hash, asset.url]));
+		try {
+			return {
+				ok: true as const,
+				runtime: buildRuntimeItem(row, `previa:${itemId}`, urlByHash),
+				// Texto de áudio novo ainda não tem arquivo: a tela diz isso em vez
+				// de mostrar um player que não toca.
+				audioPendente: hashes.length > 0 && assets.length < hashes.length
+			};
+		} catch {
+			return {
+				ok: false as const,
+				error: 'Os campos desta questão não formam um exercício ainda.'
+			};
+		}
 	}
 );
 

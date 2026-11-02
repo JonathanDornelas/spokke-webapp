@@ -304,7 +304,7 @@
 									activityId: data.activity.id,
 									attemptId: at.id
 								})}
-								class="flex items-center gap-2.75 rounded-[11px] border border-line bg-base-100 px-3.25 py-2.75 no-underline transition-[transform,border-color] duration-200 hover:translate-x-0.75 hover:border-primary"
+								class="flex items-center gap-2.75 rounded-[11px] border border-line bg-base-100 px-3.25 py-2.75 no-underline transition-[transform,border-color,translate,scale] duration-200 hover:translate-x-0.75 hover:border-primary"
 							>
 								<Avatar
 									codigo={at.avatar}

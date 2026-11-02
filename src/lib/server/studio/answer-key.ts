@@ -12,6 +12,11 @@ import type { InteractionKind } from '$lib/kernel/interactions/types';
  */
 export interface AnswerKey {
 	answer: string;
+	/**
+	 * O que é aceito ALÉM da resposta principal — nunca ela de novo. Quando a
+	 * principal vinha repetida aqui, o editor a mostrava como variante, e
+	 * corrigir uma resposta errada ("teh" → "the") deixava a errada aceita.
+	 */
 	variants: string[];
 }
 
@@ -29,7 +34,7 @@ export function readableAnswerKey(kind: InteractionKind, payload: unknown): Answ
 		case 'type':
 		case 'cloze': {
 			const aceitas = textos(p.accepted);
-			return { answer: aceitas[0] ?? '', variants: aceitas };
+			return { answer: aceitas[0] ?? '', variants: aceitas.slice(1) };
 		}
 
 		// A sequência certa (e as variantes de ordem) viram frase de novo.
@@ -37,13 +42,13 @@ export function readableAnswerKey(kind: InteractionKind, payload: unknown): Answ
 			const sequencias = Array.isArray(p.accepted)
 				? p.accepted.map((seq) => textos(seq).join(' ')).filter(Boolean)
 				: [];
-			return { answer: sequencias[0] ?? '', variants: sequencias };
+			return { answer: sequencias[0] ?? '', variants: sequencias.slice(1) };
 		}
 
 		case 'choice': {
 			const opcoes = textos(p.options);
 			const certa = typeof p.correctIndex === 'number' ? opcoes[p.correctIndex] : undefined;
-			return { answer: certa ?? '', variants: certa ? [certa] : [] };
+			return { answer: certa ?? '', variants: [] };
 		}
 
 		case 'select': {
@@ -53,12 +58,12 @@ export function readableAnswerKey(kind: InteractionKind, payload: unknown): Answ
 					? (segmentos[p.correctIndex] as { text?: unknown } | undefined)
 					: undefined;
 			const texto = typeof certo?.text === 'string' ? certo.text : '';
-			return { answer: texto, variants: texto ? [texto] : [] };
+			return { answer: texto, variants: [] };
 		}
 
 		case 'order': {
 			const linhas = textos(p.lines);
-			return { answer: linhas.join(' → '), variants: linhas };
+			return { answer: linhas.join(' → '), variants: [] };
 		}
 
 		case 'match': {
@@ -69,12 +74,12 @@ export function readableAnswerKey(kind: InteractionKind, payload: unknown): Answ
 					return typeof left === 'string' && typeof right === 'string' ? `${left} → ${right}` : '';
 				})
 				.filter(Boolean);
-			return { answer: legiveis.join(' · '), variants: legiveis };
+			return { answer: legiveis.join(' · '), variants: [] };
 		}
 
 		case 'speak': {
 			const alvo = typeof p.target === 'string' ? p.target : '';
-			return { answer: alvo, variants: alvo ? [alvo] : [] };
+			return { answer: alvo, variants: [] };
 		}
 	}
 }

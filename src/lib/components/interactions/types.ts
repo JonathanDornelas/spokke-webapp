@@ -101,3 +101,21 @@ export interface WritingRuntimeItem {
 	instructions: string;
 	maxLength: number;
 }
+
+/**
+ * Uma questão inteira como `buildRuntimeItem` a devolve (`server/player/runtime.ts`)
+ * — o que `PreviaDaQuestao.svelte` desenha. O índice aberto no fim existe porque
+ * cada interação acrescenta campos próprios (`options`, `tokens`, `masked`…);
+ * nunca `any`: o que cada componente exige está tipado acima.
+ */
+export interface RuntimeDaQuestao {
+	dir: Dir;
+	interaction: import('$lib/kernel/interactions/types').InteractionKind;
+	prompt: string;
+	passage?: string;
+	skillLabel: string;
+	audio?: string;
+	audioSlow?: string;
+	gradedLater?: boolean;
+	[extra: string]: unknown;
+}

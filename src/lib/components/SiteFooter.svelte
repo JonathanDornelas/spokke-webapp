@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import Logo from './Logo.svelte';
-	import { empresa } from '$lib/content/institucional';
+	import { empresa, selos } from '$lib/content/institucional';
 
 	// Rodapé público — mesmo desenho na home e nas páginas institucionais.
 	// resolve() roda aqui, na montagem do array, pra cada rota real existir de
@@ -11,7 +11,7 @@
 			t: 'Produto',
 			links: [
 				{ href: '/#habilidades', label: 'Habilidades' },
-				{ href: '/#player', label: 'O Player' },
+				{ href: '/#player', label: 'Para o aluno' },
 				{ href: '/#correcao', label: 'Correção' },
 				{ href: '/#idiomas', label: 'Idiomas' },
 				// A rota, não a âncora da home: aqui o leitor quer comparar, e a
@@ -48,7 +48,7 @@
 			<div class="min-w-0">
 				<div class="mb-2.5"><Logo size={22} /></div>
 				<p class="max-w-[32ch] text-[13px] leading-relaxed text-base-content/65">
-					Atividades de idioma feitas do material que o professor já usa em aula.
+					Exercícios de idiomas com o material da aula, para professores autônomos e escolas.
 				</p>
 			</div>
 
@@ -73,18 +73,38 @@
 			{/each}
 		</div>
 
+		<!-- A identificação da empresa (Decreto 7.962/2013: nome empresarial e CNPJ
+		     em local visível) no lugar do "Todos os sistemas operando", que era um
+		     ponto verde fixo dizendo algo que ninguém media. -->
 		<div class="flex flex-wrap items-center gap-x-[18px] gap-y-2.5 border-t border-line pt-[18px]">
-			<span class="text-[12.5px] text-base-content/65"
-				>© 2026 {empresa.legalName} · {empresa.legalDoc}</span
-			>
-			<div class="flex-1"></div>
-			<a
-				href={resolve('/(site)/status')}
-				class="flex items-center gap-2 text-[12.5px] text-base-content/65 no-underline transition-colors hover:text-primary"
-			>
-				<span class="size-2 rounded-full bg-success"></span>
-				Todos os sistemas operando
-			</a>
+			<span class="text-[12.5px] text-base-content/65">
+				© 2026 {empresa.legalName} · {empresa.legalDoc}
+			</span>
+			{#if selos.length > 0}
+				<div class="flex-1"></div>
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- a verificação é a página EXTERNA do emissor do selo. -->
+				<ul class="flex list-none flex-wrap items-center gap-4 p-0" aria-label="Selos">
+					{#each selos as selo (selo.nome)}
+						<li>
+							<a
+								href={selo.verificacao}
+								target="_blank"
+								rel="noopener noreferrer"
+								title={selo.nome}
+							>
+								<img
+									src="/selos/{selo.imagem}"
+									alt={selo.nome}
+									width={selo.largura}
+									height={selo.altura}
+									loading="lazy"
+								/>
+							</a>
+						</li>
+					{/each}
+				</ul>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+			{/if}
 		</div>
 	</div>
 </footer>

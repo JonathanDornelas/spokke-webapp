@@ -170,7 +170,7 @@ export const ledePadrao =
 export const alunoNaoPaga = {
 	titulo: 'O aluno nunca paga, nem precisa de conta',
 	texto:
-		'Em qualquer plano, quem responde entra pelo link, pelo QR ou pelo código. Se o seu plano vencer, as atividades já publicadas continuam abrindo e recebendo respostas — o que pausa é criar e publicar, do seu lado.'
+		'Em qualquer plano, quem responde entra pelo link, pelo QR ou pelo código. Se o seu plano vencer, as atividades já publicadas continuam abrindo e recebendo respostas. O que pausa é criar e publicar, do seu lado.'
 };
 
 /** No anual, dois meses saem de graça — o selo ao lado do seletor de ciclo. */

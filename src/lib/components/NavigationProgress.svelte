@@ -43,7 +43,7 @@
 {#if visivel}
 	{#if noPainel}
 		<div
-			class="pointer-events-none fixed inset-x-0 top-4 z-[100] flex animate-[en-fade-up_220ms_var(--ease-out-soft)_both] justify-center
+			class="pointer-events-none fixed inset-x-0 top-4 z-[100] flex animate-entrada-curta justify-center
 			       px-4"
 			role="status"
 			aria-label="Carregando a próxima tela"

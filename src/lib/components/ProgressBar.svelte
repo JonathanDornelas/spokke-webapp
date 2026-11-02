@@ -4,7 +4,7 @@
 
 <div class="h-2.5 overflow-hidden rounded-full bg-base-300" role="presentation">
 	<div
-		class="h-full origin-left rounded-full bg-primary transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)]"
+		class="h-full origin-left rounded-full bg-primary transition-transform duration-1000 ease-out-soft"
 		style="transform: scaleX({current / total})"
 	></div>
 </div>

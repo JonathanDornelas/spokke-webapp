@@ -437,7 +437,7 @@
 						<li class="min-w-0">
 							<a
 								href={resolve('/aluno/modulos/[id]', { id: m.id })}
-								class="block min-w-0 rounded-[14px] border border-line px-[17px] py-4 text-base-content no-underline transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary hover:bg-base-200"
+								class="block min-w-0 cartao-interativo rounded-[14px] border border-line px-[17px] py-4 text-base-content no-underline hover:bg-base-200"
 							>
 								<span class="mb-0.75 flex items-baseline gap-2.5">
 									<span class="min-w-0 flex-1 text-[15px] font-bold">{m.nome}</span>

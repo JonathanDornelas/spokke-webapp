@@ -6,8 +6,13 @@
 	// **Só números.** A coordenação vê, por turma, quantos alunos, envios,
 	// tentativas e o acerto médio — nunca o nome de um aluno nem uma resposta
 	// (decisão do dono do repositório). A tela diz isso, para ninguém procurar.
+	//
+	// Convidar abre uma BANDEJA (components.md "Bandeja"), como todo formulário
+	// de criar do Studio; a coluna da direita fica com os assentos e os
+	// convites em aberto, que é o que se confere antes e depois de convidar.
 	import { invalidateAll } from '$app/navigation';
 	import Avatar from '$lib/components/Avatar.svelte';
+	import Bandeja from '$lib/components/Bandeja.svelte';
 	import HeaderCard from '$lib/components/HeaderCard.svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import { fracaoDeUso } from '$lib/billing/resumo';
@@ -20,6 +25,50 @@
 	let papel = $state<'professor' | 'coordenacao'>('professor');
 	let pendente = $state<string | null>(null);
 	let mensagem = $state<{ ok: boolean; texto: string } | null>(null);
+	let convidando = $state(false);
+	let erroConvite = $state<string | null>(null);
+	const emailValido = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+
+	function abrirConvite() {
+		email = '';
+		papel = 'professor';
+		erroConvite = null;
+		convidando = true;
+	}
+	async function convidar(e: SubmitEvent) {
+		e.preventDefault();
+		if (!emailValido || pendente !== null) return;
+		pendente = 'convidar';
+		erroConvite = null;
+		try {
+			const r = await convidarProfessor({ email: email.trim(), role: papel });
+			if (!r.ok) {
+				erroConvite = r.error ?? 'Não deu para convidar.';
+				return;
+			}
+			mensagem = { ok: true, texto: `Convite para ${email.trim()} na fila de e-mail.` };
+			convidando = false;
+			await invalidateAll();
+		} catch {
+			erroConvite = 'Não deu para convidar agora. Tente de novo em instantes.';
+		} finally {
+			pendente = null;
+		}
+	}
+
+	const PAPEIS = [
+		{
+			id: 'professor' as const,
+			titulo: 'Professor',
+			texto: 'Cria e envia as próprias atividades, dentro dos limites do contrato.'
+		},
+		{
+			id: 'coordenacao' as const,
+			titulo: 'Coordenação',
+			texto:
+				'Também vê os números da escola e convida professores. Nunca vê nome de aluno nem resposta.'
+		}
+	];
 
 	async function rodar(
 		qual: string,
@@ -63,11 +112,29 @@
 				? ` · contrato até ${new Date(data.resumo.contratoAte).toLocaleDateString('pt-BR')}`
 				: ''}
 		</p>
+		{#snippet actions()}
+			<button
+				type="button"
+				onclick={abrirConvite}
+				aria-haspopup="dialog"
+				class="btn h-[42px] motion-tap gap-2 btn-primary text-[13.5px] font-bold"
+			>
+				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path
+						d="M12 5v14M5 12h14"
+						stroke="currentColor"
+						stroke-width="2.2"
+						stroke-linecap="round"
+					/>
+				</svg>
+				Convidar
+			</button>
+		{/snippet}
 	</HeaderCard>
 
 	{#if mensagem}
 		<p
-			class="mt-4 text-[13.5px] font-semibold {mensagem.ok ? 'text-success' : 'text-error'}"
+			class="mt-4 text-[13.5px] font-semibold {mensagem.ok ? 'text-primary' : 'text-error'}"
 			role="status"
 		>
 			{mensagem.texto}
@@ -187,48 +254,14 @@
 
 		<aside class="grid content-start gap-4">
 			<section class="rounded-box border border-line bg-card px-4 py-4">
-				<h2 class="mb-1 font-display text-[17px] font-semibold">Convidar</h2>
+				<h2 class="mb-1 font-display text-[20px] font-semibold">Convites em aberto</h2>
 				<p class="mb-3 text-[12.5px] text-base-content/65">
 					{assentosLivres > 0
-						? `${assentosLivres} ${assentosLivres === 1 ? 'assento livre' : 'assentos livres'}. O convite vale 7 dias.`
+						? `${assentosLivres} ${assentosLivres === 1 ? 'assento livre' : 'assentos livres'}. Cada convite vale 7 dias.`
 						: 'Todos os assentos estão ocupados — fale com a equipe para ampliar o contrato.'}
 				</p>
-				<label class="block text-[12.5px] font-semibold">
-					E-mail
-					<input type="email" bind:value={email} class="mt-1 input w-full" />
-				</label>
-				<label class="mt-2 block text-[12.5px] font-semibold">
-					Papel
-					<select bind:value={papel} class="mt-1 select w-full">
-						<option value="professor">professor</option>
-						<option value="coordenacao">coordenação</option>
-					</select>
-				</label>
-				<button
-					type="button"
-					disabled={pendente !== null || !email.includes('@') || assentosLivres <= 0}
-					onclick={() =>
-						rodar(
-							'convidar',
-							async () => {
-								const r = await convidarProfessor({ email, role: papel });
-								if (r.ok) email = '';
-								return r;
-							},
-							'Convite na fila de e-mail.'
-						)}
-					class="mt-3 btn min-h-11 w-full motion-tap gap-2 btn-primary font-bold"
-				>
-					{#if pendente === 'convidar'}<Loading
-							variant="fila"
-							size={10}
-							tone="current"
-							label="Convidando"
-						/>{/if}
-					Convidar
-				</button>
 				{#if data.convites.length > 0}
-					<ul class="mt-4 grid gap-2 text-[12.5px]">
+					<ul class="grid list-none gap-2 p-0 text-[12.5px]">
 						{#each data.convites as c (c.id)}
 							<li class="flex items-center justify-between gap-2">
 								<span class="min-w-0 truncate"
@@ -248,8 +281,84 @@
 							</li>
 						{/each}
 					</ul>
+				{:else}
+					<p class="text-[12.5px] text-base-content/65">Nenhum convite esperando resposta.</p>
 				{/if}
+				<button
+					type="button"
+					onclick={abrirConvite}
+					aria-haspopup="dialog"
+					disabled={assentosLivres <= 0}
+					class="mt-4 btn min-h-11 w-full motion-tap btn-outline font-bold">Convidar alguém</button
+				>
 			</section>
 		</aside>
 	</div>
 </div>
+
+<Bandeja
+	aberta={convidando}
+	onfechar={() => (convidando = false)}
+	titulo="Convidar para a escola"
+	descricao="Quem aceitar passa a usar o plano da escola. O conteúdo de cada professor continua dele."
+	resumo={assentosLivres <= 0
+		? 'Sem assento livre: o convite não pode sair.'
+		: emailValido
+			? `O convite vai para ${email.trim()} e vale 7 dias.`
+			: `${assentosLivres} ${assentosLivres === 1 ? 'assento livre' : 'assentos livres'}. O convite chega por e-mail e vale 7 dias.`}
+	erro={erroConvite}
+>
+	<form id="convite-escola" onsubmit={convidar} class="grid gap-6">
+		<label class="fieldset">
+			<span class="fieldset-legend">E-mail</span>
+			<input
+				type="email"
+				bind:value={email}
+				required
+				placeholder="professora@escola.com.br"
+				class="input w-full text-[15px]"
+				data-autofoco
+			/>
+			<span class="fieldset-label">O link de aceite vai para este endereço.</span>
+		</label>
+
+		<fieldset class="fieldset border-0 p-0">
+			<legend class="mb-1.5 fieldset-legend">Papel</legend>
+			<div class="grid gap-2">
+				{#each PAPEIS as p (p.id)}
+					<label
+						class="flex cursor-pointer items-start gap-3 rounded-box border-[1.5px] border-line bg-base-100 px-3.5 py-3 transition-colors hover:border-primary/60 has-[:checked]:border-primary has-[:checked]:bg-primary/6"
+					>
+						<input type="radio" name="papel" value={p.id} bind:group={papel} class="mt-0.5 radio" />
+						<span class="min-w-0">
+							<span class="block text-[14px] font-bold">{p.titulo}</span>
+							<span class="block text-[12.5px] leading-snug text-base-content/65">{p.texto}</span>
+						</span>
+					</label>
+				{/each}
+			</div>
+		</fieldset>
+	</form>
+
+	{#snippet rodape()}
+		<button
+			type="button"
+			onclick={() => (convidando = false)}
+			class="btn min-h-11 motion-tap btn-plain">Cancelar</button
+		>
+		<button
+			type="submit"
+			form="convite-escola"
+			disabled={pendente !== null || !emailValido || assentosLivres <= 0}
+			class="btn min-h-11 motion-tap gap-2 btn-primary font-bold"
+		>
+			{#if pendente === 'convidar'}<Loading
+					variant="fila"
+					size={10}
+					tone="current"
+					label="Convidando"
+				/>{/if}
+			Enviar convite
+		</button>
+	{/snippet}
+</Bandeja>

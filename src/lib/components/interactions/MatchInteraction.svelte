@@ -69,7 +69,7 @@
 	}
 
 	const cell =
-		'flex min-h-12 items-center rounded-box border-[1.5px] px-3.5 py-3 text-base transition-[transform,border-color] duration-150 hover:-translate-y-0.5';
+		'flex min-h-12 items-center rounded-box border-[1.5px] px-3.5 py-3 text-base transition-[transform,border-color,translate,scale] duration-150 hover:-translate-y-0.5';
 	const badge = 'grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold me-2.5';
 </script>
 

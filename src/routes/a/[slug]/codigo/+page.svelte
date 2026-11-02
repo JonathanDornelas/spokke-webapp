@@ -29,9 +29,7 @@
 >
 	<AmbientShapes edges="both" />
 
-	<div
-		class="relative z-1 mx-auto w-full max-w-[440px] animate-[en-fade-up_560ms_var(--ease-out-soft)_both]"
-	>
+	<div class="relative z-1 mx-auto w-full max-w-[440px] animate-entrada">
 		<span
 			class="mb-5 inline-grid size-[52px] place-items-center rounded-full bg-base-300 text-primary"
 		>

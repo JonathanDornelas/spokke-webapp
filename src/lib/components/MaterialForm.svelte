@@ -10,6 +10,7 @@
 	// `camposMaterial` espera, mais tudo que se calcula no cliente: a prévia
 	// do lote, o rendimento do conjunto, o aviso de repetido e "o que o aluno
 	// vai ver".
+	import Alternador from './Alternador.svelte';
 	import Loading from './Loading.svelte';
 	import IdiomaTag from './IdiomaTag.svelte';
 	import { IDIOMAS, idiomaDe } from '$lib/idiomas';
@@ -607,17 +608,18 @@
 				: 'Sentido'
 	);
 
-	const segmento =
-		'rounded-full px-3.5 py-2 text-[12.5px] font-bold whitespace-nowrap transition-colors';
+	// Os chips de quantidade da IA. O "Como adicionar" é o `Alternador`.
 	const segmentoOn = 'bg-primary text-primary-content';
 	const segmentoOff = 'text-base-content/65 hover:text-base-content';
 </script>
 
 <div class="flex h-full min-h-0 flex-col bg-base-100">
 	<!-- cabeçalho -->
-	<div class="flex shrink-0 items-start gap-3 border-b border-line px-4 py-4 lg:px-[22px]">
+	<div class="flex shrink-0 items-start gap-3 border-b border-line px-5 py-4 lg:px-6 lg:py-5">
 		<div class="min-w-0 flex-1">
-			<p class="mb-1 font-display text-[20px] font-semibold tracking-[-0.02em]">
+			<p
+				class="mb-1 font-display text-[20px] leading-tight font-semibold tracking-[-0.02em] lg:text-[22px]"
+			>
 				{editing ? 'Editar material' : wiz ? 'Adicionar material' : 'Novo material'}
 			</p>
 			<p class="text-[12.5px] leading-normal text-pretty text-base-content/65">
@@ -634,9 +636,9 @@
 			<button
 				type="button"
 				onclick={onfechar}
-				class="btn btn-sm shrink-0 gap-2 btn-neutral {fecharRotulo
-					? ''
-					: 'w-[38px] px-0'} {fecharSoNoCelular ? 'lg:hidden' : ''}"
+				class="btn shrink-0 gap-2 btn-neutral {fecharRotulo
+					? 'btn-sm'
+					: 'size-10 min-h-10 p-0'} {fecharSoNoCelular ? 'lg:hidden' : ''}"
 				aria-label={fecharRotulo ?? (wiz ? 'Voltar para os materiais desta atividade' : 'Fechar')}
 			>
 				<svg class="size-[15px] shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -653,43 +655,13 @@
 	</div>
 
 	<!-- corpo -->
-	<div class="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-[22px]">
-		{#if !wiz}
-			<!-- idioma: a tag do material na biblioteca. No wizard ele é o da atividade. -->
-			<div class="mb-[18px] flex flex-wrap items-center gap-x-3 gap-y-2">
-				<label
-					for="material-idioma"
-					class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
-					>Idioma</label
-				>
-				{#if idiomaTravado}
-					<input type="hidden" name="idioma" value={idioma ?? ''} />
-					<IdiomaTag tag={idioma} />
-					<span class="text-[12px] text-base-content/65"
-						>travado: está em {editando?.usedIn}
-						{editando?.usedIn === 1 ? 'atividade' : 'atividades'} desse idioma</span
-					>
-				{:else}
-					<select
-						id="material-idioma"
-						name="idioma"
-						bind:value={idioma}
-						class="select h-[38px] min-h-[38px] w-auto py-0 text-[13px]"
-					>
-						<option value="">Sem idioma</option>
-						{#each IDIOMAS as i (i.tag)}
-							<option value={i.tag}>{i.rotulo}</option>
-						{/each}
-					</select>
-					<span class="text-[12px] text-base-content/65">a língua que o aluno vai aprender</span>
-				{/if}
-			</div>
-		{/if}
-
+	<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 lg:px-6 lg:py-6">
 		<!-- tipo: cartões que dizem o que o aluno faz -->
-		<p class="mb-2.5 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
-			{editing ? 'Tipo · travado' : 'O que você quer que o aluno faça'}
-		</p>
+		<h3 class="mb-2.5 text-[15px] font-bold">
+			{editing ? 'O que o aluno faz' : 'O que o aluno vai fazer'}
+			{#if editing}<span class="text-[12.5px] font-normal text-base-content/60">· travado</span
+				>{/if}
+		</h3>
 		<input type="hidden" name="kind" value={kernelKind} />
 		<div class="mb-2.5 grid gap-2 sm:grid-cols-2">
 			{#each TIPOS as t (t.id)}
@@ -701,7 +673,7 @@
 					disabled={locked}
 					aria-pressed={sel}
 					title={locked ? 'O tipo de um material não muda depois de criado' : t.title}
-					class="flex items-start gap-2.5 rounded-box border-[1.5px] p-3.5 text-start transition-[border-color,background-color,transform] duration-150 enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45
+					class="flex items-start gap-2.5 rounded-box border-[1.5px] p-3.5 text-start transition-[border-color,background-color,transform,translate,scale] duration-150 enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45
 					       {sel
 						? 'border-primary bg-primary/6'
 						: 'border-line bg-base-100 enabled:hover:border-primary'}"
@@ -774,49 +746,64 @@
 			</p>
 		{/if}
 
-		<!-- modo de entrada -->
-		{#if !editing}
-			<div
-				class="mb-4 flex w-fit max-w-full flex-wrap gap-[3px] rounded-full border border-line bg-base-200 p-[3px]"
-				role="group"
-				aria-label="Como adicionar"
-			>
-				<button
-					type="button"
-					onclick={() => (modo = 'um')}
-					aria-pressed={modoEfetivo === 'um'}
-					class="{segmento} {modoEfetivo === 'um' ? segmentoOn : segmentoOff}"
-					>Um de cada vez</button
-				>
-				{#if podeColar}
-					<button
-						type="button"
-						onclick={() => (modo = 'lista')}
-						aria-pressed={modoEfetivo === 'lista'}
-						class="{segmento} {modoEfetivo === 'lista' ? segmentoOn : segmentoOff}"
-						>Colar uma lista</button
-					>
-				{/if}
-				<button
-					type="button"
-					onclick={() => (modo = 'ia')}
-					aria-pressed={modoEfetivo === 'ia'}
-					class="{segmento} flex items-center gap-1.5 {modoEfetivo === 'ia'
-						? segmentoOn
-						: segmentoOff}"
-				>
-					<svg class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-						<path
-							d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9zM18.5 16.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"
-							stroke="currentColor"
-							stroke-width="1.7"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					Gerar com IA
-				</button>
-			</div>
-		{/if}
+		<!-- idioma e modo: os dois mudam o que os campos abaixo pedem ("Frase em
+		     japonês", um campo ou uma lista), então ficam logo antes deles. -->
+		<div class="mb-5 grid gap-4 border-t border-line pt-5">
+			{#if !wiz}
+				<!-- idioma: a tag do material na biblioteca. No wizard ele é o da atividade. -->
+				<div class="fieldset">
+					<label for="material-idioma" class="fieldset-legend">Idioma</label>
+					{#if idiomaTravado}
+						<input type="hidden" name="idioma" value={idioma ?? ''} />
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+							<IdiomaTag tag={idioma} />
+							<span class="text-[12.5px] text-base-content/65"
+								>travado: está em {editando?.usedIn}
+								{editando?.usedIn === 1 ? 'atividade' : 'atividades'} desse idioma</span
+							>
+						</div>
+					{:else}
+						<select
+							id="material-idioma"
+							name="idioma"
+							bind:value={() => idioma ?? '', (v) => (idioma = v || null)}
+							class="select w-full sm:max-w-[18rem]"
+						>
+							<option value="">Sem idioma</option>
+							{#each IDIOMAS as i (i.tag)}
+								<option value={i.tag}>{i.rotulo}</option>
+							{/each}
+						</select>
+						<span class="fieldset-label"
+							>A língua que o aluno vai aprender. Define a direção do texto e como a frase é
+							dividida.</span
+						>
+					{/if}
+				</div>
+			{/if}
+
+			{#if !editing}
+				<div class="fieldset">
+					<span class="fieldset-legend">Como adicionar</span>
+					<Alternador
+						opcoes={podeColar
+							? [
+									{ id: 'um' as const, label: 'Um de cada vez' },
+									{ id: 'lista' as const, label: 'Colar uma lista' },
+									{ id: 'ia' as const, label: 'Gerar com IA' }
+								]
+							: [
+									{ id: 'um' as const, label: 'Um de cada vez' },
+									{ id: 'ia' as const, label: 'Gerar com IA' }
+								]}
+						valor={modoEfetivo}
+						onmudar={(m) => (modo = m)}
+						rotulo="Como adicionar"
+						largura="cheia"
+					/>
+				</div>
+			{/if}
+		</div>
 
 		<!-- aviso de edição compartilhada -->
 		{#if editing && editando && editando.usedIn > 0}
@@ -1289,7 +1276,7 @@
 							type="button"
 							onclick={() => (fonte = f.id)}
 							aria-pressed={sel}
-							class="flex min-w-[104px] flex-1 items-center gap-2 rounded-field border-[1.5px] px-3 py-2.5 text-start transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5
+							class="flex min-w-[104px] flex-1 items-center gap-2 rounded-field border-[1.5px] px-3 py-2.5 text-start transition-[border-color,background-color,transform,translate,scale] duration-150 hover:-translate-y-0.5
 							       {sel ? 'border-primary bg-primary/6' : 'border-line bg-base-100 hover:border-primary'}"
 						>
 							<span
@@ -1665,10 +1652,8 @@
 		{/if}
 
 		<!-- o que o aluno vai ver -->
-		<div class="mt-[22px]">
-			<p class="mb-2.5 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
-				O que o aluno vai ver
-			</p>
+		<div class="mt-7 border-t border-line pt-5">
+			<h3 class="mb-2.5 text-[15px] font-bold">O que o aluno vai ver</h3>
 			<div class="overflow-hidden rounded-box border border-line">
 				<div
 					class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-base-200 px-3.5 py-2.5"
@@ -1741,14 +1726,19 @@
 
 	<!-- rodapé -->
 	<div
-		class="flex shrink-0 flex-wrap items-center gap-2.5 border-t border-line bg-base-200 px-4 py-3 lg:px-[22px]"
+		class="flex shrink-0 flex-wrap items-center gap-2.5 border-t border-line bg-base-200 px-5 py-3.5 lg:px-6"
 	>
 		<span
 			class="hidden min-w-[180px] flex-1 text-[12px] leading-normal text-base-content/65 lg:block"
 			>{footNote}</span
 		>
 		{#if editing}
-			<button type="button" onclick={limpar} class="btn btn-sm btn-ghost">Cancelar</button>
+			<!-- Na biblioteca a bandeja FECHA; no wizard a coluna volta a "Adicionar". -->
+			<button
+				type="button"
+				onclick={!wiz && onfechar ? onfechar : limpar}
+				class="btn min-h-11 motion-tap btn-plain">Cancelar</button
+			>
 		{/if}
 		<button
 			type={modoEfetivo === 'ia' ? 'button' : 'submit'}

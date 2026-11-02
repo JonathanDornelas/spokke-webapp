@@ -48,6 +48,9 @@ function isPublicPath(pathname: string): boolean {
 	// `/entrar` daria a tela de login do PROFESSOR a um aluno.
 	if (pathname.startsWith('/aluno')) return true;
 	if (pathname.startsWith('/dev')) return true;
+	// A atividade de exemplo e a fala dela: o "Responder um exemplo" da home é
+	// para quem ainda não tem conta.
+	if (pathname === '/exemplo' || pathname.startsWith('/exemplo/')) return true;
 	if (PUBLIC_PATHS.includes(pathname)) return true;
 	return false;
 }

@@ -9,6 +9,8 @@ import { interactionSchema, promptSchema } from '$lib/kernel/item';
 import { getProfile } from '$lib/kernel/language/profiles';
 import { MAX_ITENS } from '$lib/kernel/generators/select';
 import { iconeDoItem, resumoDoItem, ROTULO_DO_MATERIAL } from '$lib/server/atividades/resumo';
+import { ROTULO_DA_INTERACAO } from '$lib/atividades/editor-item';
+import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 
 /**
  * Etapa 3 — o professor revisa um RESUMO LEGÍVEL de cada item gerado.
@@ -80,9 +82,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		group.items.push({
 			id: item.id,
 			icon: iconeDoItem(interaction.type),
-			summary: resumoDoItem(item.generatedBy),
+			summary: resumoDoItem(item.generatedBy, interaction.type),
 			// Habilidade DERIVADA, nunca declarada pelo professor.
-			meta: `${interaction.type} · ${itemSkills(item).join(' + ')}`,
+			meta: `${ROTULO_DA_INTERACAO[interaction.type]} · ${itemSkills(item)
+				.map((skill) => skillLabels[skill].toLocaleLowerCase('pt-BR'))
+				.join(' + ')}`,
 			// O item descartado CONTINUA no rascunho — a tela precisa dele para
 			// oferecer "Restaurar". Ele só não entra na versão publicada.
 			accepted: !item.discarded,

@@ -19,7 +19,7 @@
 	// planos, que é onde o detalhe mora.
 	const defaultNav: NavItem[] = [
 		{ href: '/#habilidades', label: 'Habilidades' },
-		{ href: '/#player', label: 'O Player' },
+		{ href: '/#player', label: 'Para o aluno' },
 		{ href: '/#correcao', label: 'Correção' },
 		{ href: '/#idiomas', label: 'Idiomas' },
 		{ href: '/#planos', label: 'Planos' }

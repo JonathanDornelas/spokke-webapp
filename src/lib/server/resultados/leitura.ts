@@ -154,7 +154,7 @@ export async function tentativaDoProfessor(teacherId: string, attemptId: string)
 			id: linha?.id ?? item.id,
 			answerId: linha?.id ?? null,
 			index: posicao + 1,
-			itemLabel: `${resumoDoItem(item.generatedBy)} · ${interaction.type}`,
+			itemLabel: resumoDoItem(item.generatedBy, interaction.type),
 			instruction: promptInstruction(prompt),
 			given: dada,
 			// O gabarito é do PROFESSOR e esta tela roda atrás do guard — o que

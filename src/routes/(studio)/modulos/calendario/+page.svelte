@@ -466,7 +466,7 @@
 				<aside class="hidden min-w-0 content-start gap-4 lg:grid">
 					{#key selecionado}
 						<div
-							class="animate-[en-fade-up_240ms_var(--ease-out-soft)_both] rounded-[14px] border border-line p-4"
+							class="animate-entrada-curta rounded-[14px] border border-line p-4"
 							aria-live="polite"
 						>
 							<p

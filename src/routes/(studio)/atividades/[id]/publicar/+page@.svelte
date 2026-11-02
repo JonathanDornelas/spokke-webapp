@@ -58,9 +58,9 @@
 		},
 		itemCount: 24,
 		skills: [
-			{ name: 'Reading', count: 14 },
-			{ name: 'Listening', count: 8 },
-			{ name: 'Writing', count: 6 }
+			{ name: 'Leitura', count: 14 },
+			{ name: 'Escuta', count: 8 },
+			{ name: 'Escrita', count: 6 }
 		] as SkillCount[],
 		audio: { done: 8, total: 8 },
 		published: false,
@@ -214,8 +214,8 @@
 		}
 	}
 	const skillTone: Record<string, string> = {
-		Listening: 'text-accent bg-accent/12',
-		Speaking: 'text-accent bg-accent/12'
+		Escuta: 'text-accent bg-accent/12',
+		Fala: 'text-accent bg-accent/12'
 	};
 </script>
 
@@ -503,7 +503,7 @@
 					</div>
 					<div class="mb-3 h-2 overflow-hidden rounded-full bg-base-300">
 						<div
-							class="h-full origin-left animate-[en-grow-x_1.2s_var(--ease-out-soft)_both] rounded-full bg-accent"
+							class="h-full origin-left animate-progresso rounded-full bg-accent"
 							style="width: {(data.audio.done / data.audio.total) * 100}%"
 						></div>
 					</div>

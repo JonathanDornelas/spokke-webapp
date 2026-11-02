@@ -40,7 +40,7 @@
 				id: 'itm_01',
 				index: 1,
 				prompt: 'Monte a frase.',
-				label: 'assemble · reading',
+				label: 'montar frase',
 				given: 'She has been working here since 2019.',
 				state: 'correct'
 			},
@@ -48,7 +48,7 @@
 				id: 'itm_03',
 				index: 3,
 				prompt: 'Complete a frase.',
-				label: 'cloze · reading + writing',
+				label: 'completar lacuna',
 				given: 'has ben',
 				expected: 'has been',
 				state: 'partial'
@@ -90,9 +90,7 @@
 <div class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-gutter py-gutter">
 	<AmbientShapes edges="both" />
 
-	<div
-		class="relative z-1 mx-auto w-full max-w-[620px] animate-[en-fade-up_560ms_var(--ease-out-soft)_both]"
-	>
+	<div class="relative z-1 mx-auto w-full max-w-[620px] animate-entrada">
 		<a
 			href={resolve('/a/[slug]/resultado', { slug: data.activity.slug })}
 			class="mb-4 inline-flex items-center gap-2 py-2 text-[13.5px] font-semibold text-base-content/65 no-underline transition-transform hover:-translate-x-0.5"

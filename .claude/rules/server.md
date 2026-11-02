@@ -45,6 +45,9 @@ alunos e o envio de convite).
 E `aluno/aluno.remote.ts` (`adotarMinhasTentativas` e `gravarMeuAvatar`, as duas escritas da área
 do aluno) — que abre pelo `requireAluno`, não pelo `requireTeacher`: usar o guard errado daria
 acesso de professor a quem não é.
+E `exemplo/exemplo.remote.ts` (`corrigirExemplo`), a única sem guard nenhum, e de propósito: ela
+não lê nem grava dado de ninguém, só corrige contra os itens fixos de `$lib/server/exemplo`. O
+que ela tem é teto por IP, porque corrigir é CPU do mesmo processo que atende os alunos.
 
 Nas duas, **o id vem da SESSÃO, nunca do corpo do pedido**: um `accountId` no input deixaria
 qualquer pessoa adotar tentativas alheias ou trocar o avatar de um aluno — que é o que a turma dele
@@ -308,7 +311,8 @@ fila, storage e a espera da publicação sem subir o serviço de áudio.
 `answerSchema` do `speak` é `{ transcript }`, então deixar o cliente preenchê-lo era deixar o
 aluno digitar a resposta que quisesse: a correção continuaria "no servidor" corrigindo um texto
 que o próprio aluno escolheu (regra inviolável nº 2). Quem recebe o áudio é
-`routes/a/[slug]/fala/+server.ts`.
+`routes/a/[slug]/fala/+server.ts` (e, na atividade de exemplo, `routes/exemplo/fala/+server.ts`,
+com teto por IP no lugar da tentativa e sem guardar nada; paginas.md "Exemplo").
 
 **É um endpoint, não uma remote function** — o único caminho do Player que sobe binário. Remote
 function fala JSON, e áudio em base64 infla 33%. Ele segue todas as regras do Player mesmo

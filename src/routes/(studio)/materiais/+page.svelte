@@ -5,11 +5,13 @@
 	//
 	// O formulário é o MESMO da etapa 2 do wizard (`MaterialForm.svelte`), e
 	// grava o mesmo `ContentUnit` (os dois passam por `montarMaterial`). Aqui
-	// ele é um painel sobre a lista, que é onde o professor confere se o que
-	// acabou de digitar já estava lá.
+	// ele abre numa BANDEJA sobre a lista (`Bandeja.svelte`, a mesma de todo
+	// formulário do Studio), que é onde o professor confere se o que acabou de
+	// digitar já estava lá.
 	import { onMount, tick } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import Bandeja from '$lib/components/Bandeja.svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import MaterialForm, { type Modo } from '$lib/components/MaterialForm.svelte';
 	import MaterialList from '$lib/components/MaterialList.svelte';
@@ -206,17 +208,12 @@
 		}
 	}
 
-	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && painel) fechar();
-	}
-
 	const chip = 'rounded-full px-3.5 py-[7px] text-[12.5px] font-semibold transition-colors';
 	const chipOn = 'border-[1.5px] border-primary bg-primary text-primary-content';
 	const chipOff = 'border-[1.5px] border-line bg-base-100 hover:border-primary';
 </script>
 
 <svelte:head><title>Materiais — entendo</title></svelte:head>
-<svelte:window {onkeydown} />
 
 <div class="pagina-studio">
 	<div class="mb-4 flex flex-wrap items-end gap-x-4 gap-y-3">
@@ -381,50 +378,34 @@
 	{/if}
 </div>
 
-<!-- Painel sobre a lista: cadastrar não tira o professor de onde ele confere.
-     O `<form>` fica montado mesmo FECHADO para o `bind:this` do formulário
-     existir antes do primeiro clique em "Novo material" — por isso a entrada e
-     a saída são por CSS, e não pelas transições do Svelte (que pedem `{#if}`):
-     fechado, ele é `invisible` + `inert` (nem foco nem leitor de tela chegam
-     lá), e a visibilidade só vira no FIM da saída, depois do deslize. Entrar
-     desacelera em 300 ms; sair acelera em 200 (design-system.md "Movimento"). -->
-<div
-	class="fixed inset-0 z-50 flex justify-end transition-[visibility] {painel
-		? 'visible duration-300'
-		: 'invisible duration-200'}"
-	inert={!painel}
+<!-- A bandeja sobre a lista: cadastrar não tira o professor de onde ele confere.
+     Ela fica MONTADA mesmo fechada (`manterMontada`) para o `bind:this` do
+     formulário existir antes do primeiro clique em "Novo material"; fechada, é
+     `invisible` + `inert`. O `MaterialForm` desenha o próprio cabeçalho e
+     rodapé (`moldura={false}`), porque é o mesmo da etapa 2 do wizard. -->
+<Bandeja
+	aberta={painel}
+	onfechar={fechar}
+	rotulo={editando ? 'Editar material' : 'Novo material'}
+	moldura={false}
+	manterMontada
 >
-	<button
-		type="button"
-		onclick={fechar}
-		class="absolute inset-0 bg-overlay transition-opacity {painel
-			? 'opacity-100 duration-300 ease-(--ease-out-soft)'
-			: 'opacity-0 duration-200 ease-in'}"
-		aria-label="Fechar"
-	></button>
-	<aside
-		class="relative flex h-full w-full max-w-[520px] flex-col border-s border-line bg-base-100 shadow-[-24px_0_60px_-30px_rgba(0,0,0,0.35)] transition-transform {painel
-			? 'translate-x-0 duration-300 ease-(--ease-out-soft)'
-			: 'translate-x-full duration-200 ease-in'}"
-		aria-label={editando ? 'Editar material' : 'Novo material'}
-	>
-		<form {...enviar} class="contents">
-			{#if editando}<input type="hidden" name="contentId" value={editando.id} />{/if}
-			<MaterialForm
-				bind:this={formulario}
-				bind:modo
-				bind:editando
-				contexto="biblioteca"
-				conjunto={data.materials}
-				resultado={modo === 'ia' ? resultadoIa : resultado}
-				{salvando}
-				onfechar={fechar}
-				ia={data.ia}
-				ongerarIa={gerarIa}
-				onaceitarIa={aceitarIa}
-				bind:idioma
-				idiomaPadrao={data.idiomaPadrao}
-			/>
-		</form>
-	</aside>
-</div>
+	<form {...enviar} class="contents">
+		{#if editando}<input type="hidden" name="contentId" value={editando.id} />{/if}
+		<MaterialForm
+			bind:this={formulario}
+			bind:modo
+			bind:editando
+			contexto="biblioteca"
+			conjunto={data.materials}
+			resultado={modo === 'ia' ? resultadoIa : resultado}
+			{salvando}
+			onfechar={fechar}
+			ia={data.ia}
+			ongerarIa={gerarIa}
+			onaceitarIa={aceitarIa}
+			bind:idioma
+			idiomaPadrao={data.idiomaPadrao}
+		/>
+	</form>
+</Bandeja>

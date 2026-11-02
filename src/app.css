@@ -90,11 +90,50 @@
 	--spacing-gutter: clamp(1.25rem, 0.55rem + 2.6vw, 2.75rem);
 	--spacing-gutter-sm: clamp(1rem, 0.7rem + 1.1vw, 1.75rem);
 
-	/* movimento */
-	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-	--duration-tap: 120ms;
-	--duration-feedback: 220ms;
-	--duration-progress: 1000ms;
+	/* A largura das BANDEJAS laterais (`Bandeja.svelte`): ~40% da tela, com piso
+	   para o formulário não espremer num notebook e teto para não virar uma
+	   segunda página num monitor largo. Abaixo de `sm` ela ocupa a tela toda. */
+	--largura-bandeja: clamp(28rem, 40vw, 46rem);
+
+	/* movimento — design-system.md "Movimento". O espelho em TS é
+	   `$lib/movimento.ts`, e `movimento.test.ts` falha se os dois divergirem.
+
+	   A DURAÇÃO vai pelo TAMANHO do que se move: dar a mesma duração a tudo faz
+	   o grande parecer leve e o pequeno, lento. */
+	--duration-tap: 120ms; /* o botão afundando */
+	--duration-curta: 200ms; /* micro: cor, hover; a SAÍDA de painel e modal */
+	--duration-media: 300ms; /* a entrada de painel, modal, bloco que abre */
+	--duration-longa: 500ms; /* a entrada de tela e de cartão grande */
+	--duration-grafico: 800ms; /* barra e anel crescendo até o valor */
+	--duration-feedback: 220ms; /* o veredito do item no Player */
+	--duration-progress: 1000ms; /* a barra de progresso andando */
+	--stagger: 60ms; /* entre itens de uma lista em sequência (teto: 6º item) */
+
+	/* A CURVA vai pelo PAPEL. Entra desacelerando, sai acelerando — sair leva
+	   ~2/3 de entrar (curta ÷ media), porque o que vai embora não pode prender
+	   o olho. */
+	--ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1); /* entrada (easeOutQuint) */
+	--ease-in-soft: cubic-bezier(0.55, 0, 0.85, 0.5); /* saída */
+	--ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1); /* de A para B na tela */
+	--ease-out-back: cubic-bezier(0.34, 1.35, 0.64, 1); /* retorno com ~4% de sobra */
+
+	/* Toda `transition`/`transition-colors` sem duração explícita cai AQUI — e
+	   não nos 150 ms com a curva do Material que o Tailwind traria. */
+	--default-transition-duration: var(--duration-curta);
+	--default-transition-timing-function: var(--ease-out-soft);
+
+	/* As animações de entrada e saída, como `animate-*` (o Tailwind gera a
+	   utility do nome). Cada uma tinha a sua duração escrita na tela — a mesma
+	   `en-fade-up` aparecia com treze. */
+	--animate-entrada: en-fade-up var(--duration-longa) var(--ease-out-soft) both;
+	--animate-entrada-curta: en-fade-up var(--duration-media) var(--ease-out-soft) both;
+	--animate-crescer-x: en-grow-x var(--duration-grafico) var(--ease-out-soft) both;
+	--animate-crescer-y: en-grow-y var(--duration-grafico) var(--ease-out-soft) both;
+	--animate-progresso: en-grow-x var(--duration-progress) var(--ease-out-soft) both;
+	--animate-folha: en-sheet var(--duration-media) var(--ease-out-soft) both;
+	--animate-veu: en-veu var(--duration-media) var(--ease-out-soft) both;
+	--animate-veu-saida: en-veu-out var(--duration-curta) var(--ease-in-soft) both;
+	--animate-modal-saida: en-modal-out var(--duration-curta) var(--ease-in-soft) both;
 }
 
 /* ---------------------------------------------------------------------------
@@ -590,6 +629,47 @@
 	}
 }
 
+/* O rádio: a mesma família do `.checkbox`, redondo e com um PONTO no lugar do
+   check. Escolha única e escolha múltipla precisam ter desenhos diferentes —
+   "enviar UMA atividade" e "acrescentar VÁRIAS" moram em bandejas vizinhas. */
+@utility radio {
+	appearance: none;
+	display: inline-grid;
+	place-items: center;
+	width: 1.25rem;
+	height: 1.25rem;
+	border-radius: 999px;
+	border: 1.5px solid var(--color-line);
+	background-color: var(--color-base-100);
+	cursor: pointer;
+	flex-shrink: 0;
+	transition: border-color var(--duration-curta) var(--ease-out-soft);
+
+	&::before {
+		content: '';
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 999px;
+		background-color: var(--color-primary);
+		transform: scale(0);
+		transition: transform var(--duration-tap) var(--ease-out-soft);
+	}
+	&:checked {
+		border-color: var(--color-primary);
+	}
+	&:checked::before {
+		transform: scale(1);
+	}
+	&:focus-visible {
+		outline: 3px solid var(--color-base-300);
+		outline-offset: 2px;
+	}
+	&:disabled {
+		cursor: not-allowed;
+		opacity: 0.45;
+	}
+}
+
 @utility fieldset {
 	display: grid;
 	gap: 0.375rem;
@@ -625,13 +705,56 @@
 /* ---------------------------------------------------------------------------
    Movimento — só transform e opacity. Nenhuma dependência JS no Player.
 --------------------------------------------------------------------------- */
+/* O TOQUE em tudo que se aperta. Afunda RÁPIDO (120 ms) e volta com uma sobra
+   pequena (200 ms, ~4% — o orçamento de feedback): "afundou e soltou", em vez
+   de um encolher e crescer de mesma velocidade, que lia como atraso. A lista
+   cobre também `translate`, cor, borda e sombra: um `transition` curto aqui
+   apagaria o hover e as cores que a tela pôs no mesmo botão. */
 @utility motion-tap {
 	transition:
-		transform var(--duration-tap) ease-out,
-		filter 160ms ease;
+		transform var(--duration-curta) var(--ease-out-back),
+		translate var(--duration-curta) var(--ease-out-soft),
+		background-color var(--duration-curta) var(--ease-out-soft),
+		border-color var(--duration-curta) var(--ease-out-soft),
+		color var(--duration-curta) var(--ease-out-soft),
+		box-shadow var(--duration-curta) var(--ease-out-soft),
+		filter var(--duration-curta) var(--ease-out-soft);
 	&:active {
 		transform: scale(0.97);
+		transition-duration: var(--duration-tap);
+		transition-timing-function: var(--ease-out-soft);
 	}
+}
+
+/* O CARTÃO clicável inteiro (link de área, plano, atividade enviada): sobe 3 px
+   com a borda puxando para o violeta e uma sombra na cor da marca, e afunda
+   um nada ao apertar. Era o mesmo gesto escrito à mão em cada tela, com 2, 3
+   e 5 px e `transition-all`. Controle pequeno (chip, opção) sobe 2 px com
+   `hover:-translate-y-0.5` — cartão grande pede mais para ser notado. */
+@utility cartao-interativo {
+	transition:
+		translate var(--duration-curta) var(--ease-out-soft),
+		scale var(--duration-curta) var(--ease-out-soft),
+		border-color var(--duration-curta) var(--ease-out-soft),
+		background-color var(--duration-curta) var(--ease-out-soft),
+		box-shadow var(--duration-curta) var(--ease-out-soft);
+	&:hover {
+		translate: 0 -3px;
+		border-color: color-mix(in oklab, var(--color-primary) 55%, var(--color-line));
+		box-shadow: 0 20px 40px -30px color-mix(in oklab, var(--color-primary) 60%, transparent);
+	}
+	&:active {
+		translate: 0 0;
+		scale: 0.99;
+	}
+}
+
+/* A lista que entra EM SEQUÊNCIA: cada item `--stagger` depois do anterior, a
+   partir do índice que a tela passa (`style="--i: {i}"`). Para no 6º — com um
+   intervalo fixo, uma lista de vinte itens levaria mais de um segundo para
+   terminar de aparecer. Vai junto de uma `animate-entrada*`. */
+@utility em-sequencia {
+	animation-delay: calc(min(var(--i, 0), 6) * var(--stagger));
 }
 
 /* Correção do item: 220ms, entra uma vez quando o estado muda — ver
@@ -663,17 +786,6 @@
 
 /* Painel que entra pela lateral (o formulário da biblioteca de materiais):
    desliza 18px e aparece, e só isso — o resto da tela não se mexe. */
-@keyframes en-slide-in {
-	from {
-		opacity: 0;
-		transform: translate3d(18px, 0, 0);
-	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
-}
-
 @keyframes en-grow-x {
 	from {
 		transform: scaleX(0);
@@ -829,8 +941,11 @@
 /* Entrada em scroll. A animação é declarada no CSS e nasce rodando: se o JS
    nunca executar, o bloco aparece normalmente. O observer apenas PAUSA e
    despausa via animation-play-state — nada fica preso em opacity: 0. */
+/* A entrada em scroll (`$lib/actions/reveal.ts` pausa e solta): a mesma entrada
+   de tela, já em sequência — a action só passa o `--i`. */
 @utility reveal-row {
-	animation: en-fade-up 620ms var(--ease-out-soft) both;
+	animation: en-fade-up var(--duration-longa) var(--ease-out-soft) both;
+	animation-delay: calc(min(var(--i, 0), 6) * var(--stagger));
 }
 
 @keyframes en-breathe {
@@ -1046,10 +1161,11 @@
    atenção deve pousar. Os dois sentidos com a mesma duração faziam a troca
    parecer um pisca-pisca. */
 @utility q-in {
-	animation: en-q-in 280ms var(--ease-out-soft) both;
+	animation: en-q-in var(--duration-media) var(--ease-out-soft) both;
 }
+/* A espera do JS (`trocarPara`, `q/[n]`) é `DURACAO.curta` de `$lib/movimento.ts` — o mesmo número. */
 @utility q-out {
-	animation: en-q-out 170ms cubic-bezier(0.55, 0, 0.85, 0.5) both;
+	animation: en-q-out var(--duration-curta) var(--ease-in-soft) both;
 }
 
 /* ── Teclado virtual abrindo e fechando ──────────────────────────────────────
@@ -1119,8 +1235,8 @@
 }
 
 @utility teclado-in {
-	animation: en-teclado-in 300ms var(--ease-out-soft) both;
+	animation: en-teclado-in var(--duration-media) var(--ease-out-soft) both;
 }
 @utility teclado-out {
-	animation: en-teclado-out 190ms cubic-bezier(0.55, 0, 0.85, 0.5) both;
+	animation: en-teclado-out var(--duration-curta) var(--ease-in-soft) both;
 }

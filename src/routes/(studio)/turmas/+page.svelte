@@ -2,12 +2,15 @@
 	// Lista de turmas. Quatro colunas, e nenhuma delas é desempenho: a pergunta
 	// aqui é "quem está nesta turma", não "como a turma foi" — nota média,
 	// ranking e gráfico são matéria de Resultados (paginas.md "Turmas e alunos").
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { withMock } from '$lib/dev/with-mock';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
 	import FiltroIdioma from '$lib/components/FiltroIdioma.svelte';
 	import { casaComFiltro } from '$lib/idiomas';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
+	import NovaTurma from './NovaTurma.svelte';
 
 	interface Classroom {
 		id: string;
@@ -24,6 +27,8 @@
 	interface PageData {
 		classrooms: Classroom[];
 		totals: { classrooms: number; students: number; withEmail: number };
+		/** A tag com que a turma nova nasce (null: o professor ensina mais de um idioma). */
+		idiomaPadrao: string | null;
 	}
 
 	const MOCK: PageData = {
@@ -53,7 +58,8 @@
 				lastDelivery: 'há 2 semanas'
 			}
 		] as Classroom[],
-		totals: { classrooms: 2, students: 36, withEmail: 31 }
+		totals: { classrooms: 2, students: 36, withEmail: 31 },
+		idiomaPadrao: 'en-US'
 	};
 
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
@@ -62,6 +68,20 @@
 	// Filtro só de tela: as turmas são do professor e já vieram no loader.
 	let filtroIdioma = $state('');
 	const visiveis = $derived(data.classrooms.filter((t) => casaComFiltro(t.idioma, filtroIdioma)));
+
+	// **Criar turma abre a bandeja AQUI** (paginas.md "Turmas e alunos"). O
+	// `?nova=1` (e o `?nova=lote`, que já abre no colar) é por onde chega quem
+	// vem de fora — o antigo `turmas/nova` redireciona para cá.
+	let novaAberta = $state(false);
+	let modoNova = $state<'um' | 'lote'>('um');
+	function abrirNova(modo: 'um' | 'lote' = 'um') {
+		modoNova = modo;
+		novaAberta = true;
+	}
+	onMount(() => {
+		const pedido = page.url.searchParams.get('nova');
+		if (pedido) abrirNova(pedido === 'lote' ? 'lote' : 'um');
+	});
 
 	// Violeta, teal, azul, magenta e ardósia. Verde e âmbar ficam fora: são a
 	// semântica de correção e não podem virar etiqueta de turma.
@@ -84,7 +104,7 @@
 	     lista vazia de atividades. -->
 	<div class="relative flex min-h-[70vh] items-center overflow-hidden px-4 py-12 lg:px-7 lg:py-14">
 		<AmbientShapes height="230px" />
-		<div class="relative z-1 max-w-[52ch] animate-[en-fade-up_620ms_var(--ease-out-soft)_both]">
+		<div class="relative z-1 max-w-[52ch] animate-entrada">
 			<p class="mb-4 text-xs font-bold tracking-[0.13em] text-primary uppercase">Turmas</p>
 			<h1
 				class="mb-3.5 font-display text-[30px] leading-[1.1] font-semibold tracking-[-0.025em] text-pretty lg:text-4xl"
@@ -103,16 +123,17 @@
 				turma resolve leitura de resultado e distribuição, não acesso.
 			</p>
 			<div class="flex flex-wrap gap-3">
-				<a
-					href={resolve('/(studio)/turmas/nova')}
-					class="btn btn-lg min-h-[50px] motion-tap btn-primary text-base font-bold no-underline"
+				<button
+					type="button"
+					onclick={() => abrirNova('um')}
+					class="btn btn-lg min-h-[50px] motion-tap btn-primary text-base font-bold"
 				>
 					Criar a primeira turma
-				</a>
-				<!-- eslint-disable svelte/no-navigation-without-resolve -- é a rota resolvida mais a query do modo; a regra não enxerga a concatenação. -->
-				<a
-					href={resolve('/(studio)/turmas/nova') + '?modo=lote'}
-					class="btn btn-lg min-h-[50px] motion-tap gap-2 btn-outline text-base font-bold no-underline"
+				</button>
+				<button
+					type="button"
+					onclick={() => abrirNova('lote')}
+					class="btn btn-lg min-h-[50px] motion-tap gap-2 btn-outline text-base font-bold"
 				>
 					<svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 						<path
@@ -123,8 +144,7 @@
 						/>
 					</svg>
 					Colar uma lista de alunos
-				</a>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				</button>
 			</div>
 		</div>
 	</div>
@@ -143,9 +163,10 @@
 			</div>
 			<div class="flex-1"></div>
 			<FiltroIdioma tags={data.classrooms.map((t) => t.idioma)} bind:valor={filtroIdioma} />
-			<a
-				href={resolve('/(studio)/turmas/nova')}
-				class="btn h-[46px] motion-tap gap-2 rounded-[11px] btn-primary px-[19px] text-[15px] font-bold no-underline"
+			<button
+				type="button"
+				onclick={() => abrirNova('um')}
+				class="btn h-[46px] motion-tap gap-2 rounded-[11px] btn-primary px-[19px] text-[15px] font-bold"
 			>
 				<svg class="size-[1.05rem]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 					<path
@@ -156,7 +177,7 @@
 					/>
 				</svg>
 				Nova turma
-			</a>
+			</button>
 		</div>
 
 		<!-- Desktop: quatro colunas, e nenhuma delas é desempenho. Celular: a
@@ -208,7 +229,7 @@
 				<li>
 					<a
 						href={resolve('/(studio)/turmas/[id]', { id: turma.id })}
-						class="block rounded-[14px] border border-line p-4 no-underline transition-[border-color,transform] hover:-translate-y-0.5 hover:border-primary"
+						class="block cartao-interativo rounded-[14px] border border-line p-4 no-underline"
 					>
 						<div class="mb-2.5 flex items-center gap-3">
 							<span
@@ -269,3 +290,10 @@
 		</div>
 	</div>
 {/if}
+
+<NovaTurma
+	aberta={novaAberta}
+	onfechar={() => (novaAberta = false)}
+	idiomaPadrao={data.idiomaPadrao}
+	modoInicial={modoNova}
+/>

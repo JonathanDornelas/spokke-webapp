@@ -24,6 +24,26 @@ export const address2 = 'Pinheiros, São Paulo/SP · 05422-000';
 
 export const empresa = { legalName, legalDoc, address1, address2 };
 
+/**
+ * Selos que aparecem no rodapé. Só entra selo VERIFICÁVEL: o link leva à página
+ * do emissor que prova o selo, e a imagem é um arquivo estático em
+ * `static/selos/` (nada de script de terceiro no site). Vazio, o rodapé não
+ * mostra a faixa. Quais valem a pena e como conseguir cada um:
+ * `docs/selos-e-seguranca.md`.
+ */
+export interface Selo {
+	/** O nome do selo, que vira o `alt` e o `title`. */
+	nome: string;
+	/** A página do EMISSOR que confirma o selo — nunca uma página nossa. */
+	verificacao: string;
+	/** Arquivo em `static/selos/`, servido como `/selos/<arquivo>`. */
+	imagem: string;
+	largura: number;
+	altura: number;
+}
+
+export const selos: Selo[] = [];
+
 export const privacidade: LegalSection[] = [
 	P('Quem somos e o que esta política cobre', [
 		legalName +

@@ -219,10 +219,10 @@
 		return acesso.currentPeriodEnd ? `Renova em ${ddmm(acesso.currentPeriodEnd)}.` : 'Plano ativo.';
 	});
 
-	// O cartão de cada área: a borda acende e ele sobe dois pixels — é um link
-	// inteiro, e precisa parecer um.
+	// O cartão de cada área é um link inteiro, e precisa parecer um: o hover
+	// padrão de cartão (`cartao-interativo`, app.css).
 	const PECA =
-		'flex min-w-0 flex-col gap-3 rounded-[18px] border border-line p-4.5 text-base-content no-underline transition-[border-color,box-shadow,transform] duration-200 ease-(--ease-out-soft) hover:-translate-y-[3px] hover:border-[color-mix(in_oklab,var(--color-primary)_45%,var(--color-line))] hover:text-base-content hover:shadow-[0_20px_40px_-32px_color-mix(in_oklab,var(--color-primary)_60%,transparent)] active:translate-y-[3px] active:scale-[0.985]';
+		'flex min-w-0 flex-col gap-3 rounded-[18px] border border-line p-4.5 text-base-content no-underline cartao-interativo hover:text-base-content';
 </script>
 
 <svelte:head><title>Início — entendo</title></svelte:head>
@@ -312,7 +312,7 @@
 	</div>
 
 	<div
-		class="grid animate-[en-fade-up_320ms_var(--ease-out-soft)_both] grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12 xl:gap-3.5"
+		class="grid animate-entrada-curta grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12 xl:gap-3.5"
 	>
 		<!-- A semana: os três números e as tentativas por dia. Sem formas de
 		     ambiente: o cartão é gráfico e legenda de ponta a ponta, e não há canto
@@ -378,7 +378,7 @@
 							{/if}
 							<span class="font-mono text-[11.5px] text-base-content/65">{b.tentativas}</span>
 							<span
-								class="w-full max-w-12 origin-bottom animate-[en-grow-y_700ms_var(--ease-out-soft)_both] rounded-[7px_7px_3px_3px]
+								class="w-full max-w-12 origin-bottom animate-crescer-y rounded-[7px_7px_3px_3px]
 								       {b.hoje
 									? 'bg-primary'
 									: b.tentativas > 0
@@ -519,7 +519,7 @@
 					<span class="flex h-2 gap-0.5" aria-hidden="true">
 						{#each gruposDeModulo as g (g.classe)}
 							<span
-								class="origin-left animate-[en-grow-x_700ms_var(--ease-out-soft)_both] rounded-[3px] {g.classe}"
+								class="origin-left animate-crescer-x rounded-[3px] {g.classe}"
 								style="width: {(g.n / p.modulos.total) * 100}%"
 							></span>
 						{/each}
@@ -580,7 +580,7 @@
 					<span class="flex h-2 gap-0.5" aria-hidden="true">
 						{#each faixas.filter((f) => f.n > 0) as f (f.texto)}
 							<span
-								class="origin-left animate-[en-grow-x_700ms_var(--ease-out-soft)_both] rounded-[3px] {f.classe}"
+								class="origin-left animate-crescer-x rounded-[3px] {f.classe}"
 								style="width: {f.n}%"
 							></span>
 						{/each}
@@ -626,8 +626,7 @@
 			<span class="grid gap-1.5">
 				<span class="flex h-2 overflow-hidden rounded-full bg-base-300" aria-hidden="true">
 					<span
-						class="origin-left animate-[en-grow-x_800ms_var(--ease-out-soft)_both] rounded-full {barraDoPlano.fracao >=
-						1
+						class="origin-left animate-crescer-x rounded-full {barraDoPlano.fracao >= 1
 							? 'bg-error'
 							: 'bg-primary'}"
 						style="width: {barraDoPlano.fracao * 100}%"

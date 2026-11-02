@@ -165,9 +165,22 @@ export function programacoes(teacher: TeacherScope) {
 			const linhas = await prisma.classroom.findMany({
 				where: { teacherId: teacher.id, modulos: { none: { moduleId } } },
 				orderBy: { name: 'asc' },
-				select: { id: true, name: true, color: true }
+				select: {
+					id: true,
+					name: true,
+					color: true,
+					languageTag: true,
+					_count: { select: { students: true } }
+				}
 			});
-			return linhas.map((t) => ({ ...t, color: corOuPadrao(t.color) }));
+			// O tamanho e o idioma de cada turma: é o que o professor confere antes
+			// de pôr o módulo nela (a bandeja "Adicionar turmas").
+			return linhas.map(({ _count, languageTag, ...t }) => ({
+				...t,
+				color: corOuPadrao(t.color),
+				idioma: languageTag,
+				alunos: _count.students
+			}));
 		},
 
 		/** Aloca turmas ao módulo. Devolve quantas entraram, ou `null` se o módulo não é do professor. */

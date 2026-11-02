@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Alternador from '$lib/components/Alternador.svelte';
 	import { caminhoInterno } from '$lib/caminho-interno';
 	import { goto } from '$app/navigation';
 	import Loading from '$lib/components/Loading.svelte';
@@ -138,24 +139,17 @@
 	       shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)] md:grid-cols-[1fr_240px]"
 >
 	<div class="p-8">
-		<div
-			class="mb-6 grid max-w-[320px] grid-cols-2 gap-1 rounded-full bg-base-200 p-1"
-			role="tablist"
-			aria-label="Criar conta como"
-		>
-			{#each [{ id: 'professor' as const, label: 'Professor' }, { id: 'aluno' as const, label: 'Aluno' }] as opcao (opcao.id)}
-				<button
-					type="button"
-					role="tab"
-					aria-selected={como === opcao.id}
-					onclick={() => trocar(opcao.id)}
-					class="rounded-full px-4 py-2 text-[0.84rem] transition-colors
-					       {como === opcao.id
-						? 'bg-primary font-bold text-primary-content'
-						: 'font-semibold text-base-content/65 hover:text-base-content'}">{opcao.label}</button
-				>
-			{/each}
-		</div>
+		<Alternador
+			opcoes={[
+				{ id: 'professor' as const, label: 'Professor' },
+				{ id: 'aluno' as const, label: 'Aluno' }
+			]}
+			bind:valor={como}
+			rotulo="Criar conta como"
+			largura="cheia"
+			onmudar={trocar}
+			class="mb-6 max-w-[320px]"
+		/>
 
 		<h1 class="mb-1.5 font-display text-[26px] font-semibold tracking-[-0.02em]">Criar conta</h1>
 		{#if como === 'professor'}

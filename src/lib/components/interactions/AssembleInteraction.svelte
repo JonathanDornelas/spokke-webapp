@@ -27,7 +27,7 @@
 
 	const tokenClass =
 		'rounded-field border border-line border-b-[3px] bg-base-100 px-3.5 py-2.5 font-content text-[17px] ' +
-		'transition-[transform,border-color,box-shadow] duration-150 hover:-translate-y-[3px] hover:border-primary ' +
+		'transition-[transform,border-color,box-shadow,translate,scale] duration-150 hover:-translate-y-[3px] hover:border-primary ' +
 		'hover:shadow-[0_10px_18px_-12px_color-mix(in_oklab,var(--color-primary)_70%,transparent)] ' +
 		'active:translate-y-0.5 active:border-b';
 </script>

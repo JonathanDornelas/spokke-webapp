@@ -15,6 +15,7 @@ import { resumoDoItem, tipoDoItem } from '$lib/server/atividades/resumo';
 import { etiquetaDaTurma } from '$lib/server/turmas/etiqueta';
 import { interactionSchema, promptSchema } from '$lib/kernel/item';
 import { labelForTag } from '$lib/kernel/language/profiles';
+import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import type { Skill } from '$lib/kernel/interactions/types';
 
 /**
@@ -28,13 +29,6 @@ import type { Skill } from '$lib/kernel/interactions/types';
  * não o cria: quem clona a versão publicada para edição é a etapa de revisão
  * (`draftFromPublished`), e esta tela é de leitura.
  */
-const ROTULO_HABILIDADE: Record<Skill, string> = {
-	listening: 'Listening',
-	speaking: 'Speaking',
-	reading: 'Reading',
-	writing: 'Writing'
-};
-
 function haQuantoTempo(data: Date): string {
 	const min = Math.round((Date.now() - data.getTime()) / 60000);
 	if (min < 60) return 'há minutos';
@@ -168,15 +162,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 				id: item.id,
 				n: i + 1,
 				tipo: tipoDoItem(prompt.kind, interaction.type),
-				summary: resumoDoItem(item.generatedBy),
+				summary: resumoDoItem(item.generatedBy, interaction.type),
 				// Habilidade DERIVADA, nunca declarada pelo professor.
 				habilidade: itemSkills(item)
-					.map((skill) => ROTULO_HABILIDADE[skill])
+					.map((skill) => skillLabels[skill])
 					.join(' + ')
 			};
 		}),
 		skills: [...habilidades.entries()].map(([skill, count]) => ({
-			name: ROTULO_HABILIDADE[skill],
+			name: skillLabels[skill],
 			count
 		})),
 		deliveries: deliveries.map((envio) => {

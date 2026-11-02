@@ -154,7 +154,7 @@
 <ul class="grid list-none grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-start gap-3.5 p-0">
 	{#each cartoes as p (p.id)}
 		<li
-			class="flex h-full flex-col overflow-hidden rounded-[16px] transition-transform duration-200 ease-[var(--ease-out-soft)] hover:-translate-y-[3px]
+			class="flex h-full flex-col overflow-hidden rounded-[16px] transition-transform duration-200 ease-out-soft hover:-translate-y-[3px]
 			       {p.atual
 				? 'border-[1.5px] border-accent bg-card shadow-[0_18px_40px_-28px_color-mix(in_oklab,var(--color-accent)_60%,transparent)]'
 				: p.herói
@@ -332,7 +332,9 @@
 				{alunoNaoPaga.texto}
 			</p>
 		</div>
-		<ul class="flex shrink-0 list-none flex-wrap gap-2 p-0">
+		<!-- `max-w-full`: com `shrink-0` sozinho a lista ocupava a largura das
+		     pílulas em fila, e no celular a página inteira rolava de lado. -->
+		<ul class="flex max-w-full shrink-0 list-none flex-wrap gap-2 p-0">
 			{#each garantias as g (g)}
 				<li
 					class="inline-flex items-center gap-[7px] rounded-full border border-line bg-base-200 px-3.5 py-[7px] text-[12.5px] font-semibold whitespace-nowrap"

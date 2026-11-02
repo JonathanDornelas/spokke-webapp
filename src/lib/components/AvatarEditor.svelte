@@ -22,6 +22,7 @@
 		trocarCasa
 	} from '$lib/avatar/editar';
 	import { sortearCodigo } from '$lib/avatar/montar';
+	import { DURACAO } from '$lib/movimento';
 
 	let {
 		/** O código em edição. Sobe a cada toque, para a prévia de fora acompanhar. */
@@ -58,7 +59,7 @@
 
 	/**
 	 * Fechar ANIMA antes de fechar: o `close()` nativo some com o diálogo e o
-	 * véu no mesmo quadro, e a tela parecia piscar. A saída (180 ms) roda com o
+	 * véu no mesmo quadro, e a tela parecia piscar. A saída (`--duration-curta`) roda com o
 	 * diálogo ainda aberto; o `close()` vem no fim dela. O `setTimeout` é a rede
 	 * para quando a animação não roda e o `animationend` nunca chega.
 	 */
@@ -71,12 +72,12 @@
 			if (!aberto && el.open) el.close();
 		};
 		el.addEventListener('animationend', terminar, { once: true });
-		setTimeout(terminar, 260);
+		setTimeout(terminar, DURACAO.curta + 60);
 	}
 	const animacao = $derived(
 		fechando
-			? 'animate-[en-modal-out_180ms_ease-in_both] backdrop:animate-[en-veu-out_180ms_ease-in_both]'
-			: 'open:animate-[en-fade-up_300ms_var(--ease-out-soft)_both] backdrop:animate-[en-veu_240ms_var(--ease-out-soft)_both]'
+			? 'animate-modal-saida backdrop:animate-veu-saida'
+			: 'open:animate-entrada-curta backdrop:animate-veu'
 	);
 
 	const atual = $derived<Categoria>(
@@ -239,7 +240,7 @@
 								onclick={() => (codigo = sugestao)}
 								aria-pressed={codigo === sugestao}
 								aria-label="Usar este avatar pronto"
-								class="rounded-[9px] border-2 p-0 transition-transform duration-200 ease-[var(--ease-out-soft)] hover:-translate-y-0.5
+								class="rounded-[9px] border-2 p-0 transition-transform duration-200 ease-out-soft hover:-translate-y-0.5
 								       {codigo === sugestao ? 'border-primary' : 'border-line'}"
 							>
 								<Avatar codigo={sugestao} size={34} radius="rounded-[7px]" />
@@ -284,7 +285,7 @@
 									type="button"
 									onclick={() => tocarPeca(o.i)}
 									aria-pressed={o.ativo}
-									class="grid justify-items-center gap-1.5 rounded-[12px] border-2 px-1.5 pt-2 pb-[7px] transition-transform duration-200 ease-[var(--ease-out-soft)] hover:-translate-y-0.5
+									class="grid justify-items-center gap-1.5 rounded-[12px] border-2 px-1.5 pt-2 pb-[7px] transition-transform duration-200 ease-out-soft hover:-translate-y-0.5
 									       {o.ativo ? 'border-primary bg-base-300' : 'border-line bg-base-200'}"
 								>
 									<Avatar
@@ -317,7 +318,7 @@
 										onclick={() => (codigo = trocarCasa(codigo, atual.iCor, i))}
 										aria-pressed={corEscolhida === i}
 										aria-label="{atual.corLabel}, opção {i + 1}"
-										class="grid size-12 place-items-center rounded-[12px] border-2 transition-transform duration-200 ease-[var(--ease-out-soft)] hover:-translate-y-0.5
+										class="grid size-12 place-items-center rounded-[12px] border-2 transition-transform duration-200 ease-out-soft hover:-translate-y-0.5
 										       {corEscolhida === i ? 'border-primary bg-base-300' : 'border-line bg-base-200'}"
 									>
 										<!-- A cor é conteúdo (é a pele de alguém), não um token de

@@ -638,7 +638,7 @@
 			aria-modal="true"
 			aria-label={folha.titulo}
 			out:modal
-			class="relative w-full animate-[en-sheet_300ms_var(--ease-out-soft)_both] rounded-t-[22px] border border-line bg-base-100 px-4 pt-5 pb-6.5 shadow-[0_30px_60px_-30px_rgba(20,18,31,0.6)] outline-none lg:w-[420px] lg:animate-[en-fade-up_260ms_var(--ease-out-soft)_both] lg:rounded-[18px] lg:p-5.5"
+			class="relative w-full animate-folha rounded-t-[22px] border border-line bg-base-100 px-4 pt-5 pb-6.5 shadow-[0_30px_60px_-30px_rgba(20,18,31,0.6)] outline-none lg:w-[420px] lg:animate-entrada-curta lg:rounded-[18px] lg:p-5.5"
 		>
 			<div class="mb-3.5 flex items-start gap-3">
 				<span class="min-w-0 flex-1">

@@ -28,10 +28,7 @@
 	</p>
 	<div class="mb-[34px] grid gap-3 lg:grid-cols-3">
 		{#each principles as p (p.t)}
-			<div
-				class="min-w-0 rounded-box border border-line bg-base-200 p-5 transition-all
-				       hover:-translate-y-[3px] hover:border-primary"
-			>
+			<div class="min-w-0 cartao-interativo rounded-box border border-line bg-base-200 p-5">
 				<span
 					class="mb-3.5 grid size-[34px] place-items-center rounded-[10px] bg-base-300 text-primary"
 				>

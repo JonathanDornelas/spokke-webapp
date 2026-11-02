@@ -357,7 +357,7 @@
 											<span class="flex h-2 gap-0.5" aria-hidden="true">
 												{#each segmentos(l) as sg, k (k)}
 													<span
-														class="origin-left animate-[en-grow-x_700ms_var(--ease-out-soft)_both] rounded-[3px] {sg.classe}"
+														class="origin-left animate-crescer-x rounded-[3px] {sg.classe}"
 														style:width="{sg.w}%"
 													></span>
 												{/each}

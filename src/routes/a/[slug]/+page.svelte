@@ -147,9 +147,7 @@
 	>
 		<AmbientShapes edges="both" />
 
-		<div
-			class="relative z-1 mx-auto w-full max-w-[560px] animate-[en-fade-up_560ms_var(--ease-out-soft)_both]"
-		>
+		<div class="relative z-1 mx-auto w-full max-w-[560px] animate-entrada">
 			{#if data.concluida}
 				<!-- Já entregou: a tela não pede tudo de novo, mostra o que ele fez.
 				     Vem ANTES da retomada no `{#if}`? Não — o loader já garante que
@@ -171,7 +169,7 @@
 					</div>
 					<div class="h-2 overflow-hidden rounded-full bg-base-300">
 						<div
-							class="h-full origin-left animate-[en-grow-x_1s_var(--ease-out-soft)_both] rounded-full bg-success"
+							class="h-full origin-left animate-progresso rounded-full bg-success"
 							style="width: {(data.concluida.respondidas / data.activity.itemCount) * 100}%"
 						></div>
 					</div>
@@ -210,7 +208,7 @@
 					</div>
 					<div class="mb-2.5 h-2 overflow-hidden rounded-full bg-base-300">
 						<div
-							class="h-full origin-left animate-[en-grow-x_1s_var(--ease-out-soft)_both] rounded-full bg-primary"
+							class="h-full origin-left animate-progresso rounded-full bg-primary"
 							style="width: {(data.resumable.answered / data.activity.itemCount) * 100}%"
 						></div>
 					</div>

@@ -108,19 +108,19 @@
 				n: 1,
 				tipo: 'montar',
 				summary: 'Montar a frase a partir da tradução',
-				habilidade: 'Reading'
+				habilidade: 'Leitura'
 			},
 			{
 				id: 'itm_02',
 				n: 2,
 				tipo: 'escuta',
 				summary: 'Digitar a frase ao ouvir o áudio',
-				habilidade: 'Listening + Writing'
+				habilidade: 'Escuta + Escrita'
 			}
 		] as Item[],
 		skills: [
-			{ name: 'Reading', count: 14 },
-			{ name: 'Writing', count: 8 }
+			{ name: 'Leitura', count: 14 },
+			{ name: 'Escrita', count: 8 }
 		],
 		deliveries: [
 			{

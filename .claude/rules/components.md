@@ -90,7 +90,9 @@ Regras que valem sobre tudo isto: `.claude/rules/design-system.md`.
 {/if}
 ```
 
-`motion-tap` (em `app.css`) dá o press de 120ms com escala 0.97. No Player use sempre
+`motion-tap` (em `app.css`) é o toque: afunda a 0.97 em 120 ms e volta em 200 ms com ~4% de sobra
+(`--ease-out-back`) — "afundou e soltou". A transição dele cobre também `translate`, cor, borda e
+sombra, para não apagar o hover que a tela puser no mesmo elemento. No Player use sempre
 `size="lg"`. `type="button"` por padrão — evita submit acidental dentro de um `<form>`; passe
 `type="submit"` explicitamente quando for o botão de envio.
 
@@ -491,7 +493,7 @@ componente só diz o que foi tocado.
   `blur` antes do `focus`: trocar o `inputmode` para `none` num campo já focado não recolhe o
   teclado do aparelho, só um foco novo lê o valor novo. "Ocultar" tira o foco (`onocultar`),
   senão o teclado do aparelho saltava no lugar do virtual.
-- **Ela SOBE e DESCE, não aparece.** `teclado-in` (300ms, desacelerando) e `teclado-out` (190ms,
+- **Ela SOBE e DESCE, não aparece.** `teclado-in` (`media`, 300 ms, desacelerando) e `teclado-out` (`curta`, 200 ms,
   acelerando), no `app.css`, só `transform` e `opacity`. O painel desliza dentro de uma moldura
   `overflow: hidden`, então nunca passa por cima do rodapé nem do campo; e continua montado até o
   `animationend` da saída (`montado` ≠ `aberto`), senão sumiria de uma vez.
@@ -631,13 +633,59 @@ Modal, painel lateral e gaveta ENTRAM e SAEM — aparecer de uma vez parecia a t
 de uma vez, um travamento. Três transições, as mesmas em toda tela: `veu` (só opacidade),
 `painelLateral` (`lado: 'fim'` para o painel da direita, `'inicio'` para a gaveta) e `modal` (sobe
 18px enquanto aparece). Entrar desacelera (300 ms), sair acelera e some mais rápido (200 ms) — use
-`in:` e `out:` separados, é a direção que escolhe a curva. Dentro de um componente que o PAI monta
-com `{#if}` (o `ProgramacaoPainel`), `|global`: no Svelte 5 a transição é local por padrão e a saída
-não rodaria. `prefers-reduced-motion` zera a duração ali dentro — o Svelte anima pela Web
-Animations API, que a regra global do `app.css` não alcança.
+`in:` e `out:` separados, é a direção que escolhe a curva. `prefers-reduced-motion` zera a duração
+ali dentro — o Svelte anima pela Web Animations API, que a regra global do `app.css` não alcança.
 
-O painel que fica MONTADO fechado (a biblioteca, por causa do `bind:this` do formulário) faz o mesmo
-por CSS: `invisible` + `inert` quando fechado, e a visibilidade só vira no fim da saída.
+**Painel lateral é sempre a `Bandeja` (abaixo)** — nenhuma tela monta o seu. A gaveta do celular é
+a única que usa `painelLateral` direto (`lado: 'inicio'`).
+
+## Bandeja — `Bandeja.svelte`
+
+Todo formulário de CRIAR e EDITAR do Studio que não é atividade abre aqui, pela direita, sobre a
+tela de onde veio: nova turma, editar turma, adicionar aluno, editar cadastro (chamada e ficha do
+aluno), enviar atividade, novo/editar módulo, acrescentar atividades, adicionar turmas, a
+programação, o material da biblioteca e o convite da escola. Antes cada tela tinha o seu jeito —
+painel de 520px, formulário que abria no meio da página empurrando a lista, página inteira para
+criar uma turma. (A atividade continua no wizard: é uma tarefa de quatro etapas, não um formulário.)
+
+Props: `{ aberta; onfechar; titulo?; descricao?; rotulo?; marca?: Snippet; children: Snippet; resumo?; erro?; rodape?: Snippet; moldura?; manterMontada? }`.
+
+- **Largura ~40% da tela**: `--largura-bandeja` (`clamp(28rem, 40vw, 46rem)`, no `@theme`) — piso
+  para não espremer o formulário num notebook, teto para não virar uma segunda página num monitor
+  largo. Abaixo de `sm`, a tela inteira.
+- **Anatomia fixa.** Cabeçalho: a `marca` (a etiqueta do que se cria, na cor escolhida, mudando
+  enquanto se digita — ou o avatar do aluno), o título e UMA frase sobre o que muda e o que não muda,
+  e o X. Corpo: os campos, o único pedaço que rola. Rodapé (`base-200`): o `resumo` — a consequência
+  em texto ("3 alunos · 2 recebem convite") —, o `erro` do servidor escrito com ícone, e as ações, a
+  principal na ponta. No celular as ações dividem a largura.
+- **O rodapé fica FORA do `<form>`**; quem envia é `<button type="submit" form={id}>`. O Enter dentro
+  de um campo continua enviando: o botão ligado pelo atributo conta como o botão padrão do formulário.
+- **Monta só aberta** (padrão): fechar desmonta, então reabrir uma edição começa do que está GRAVADO.
+  Quem guarda o alvo (o aluno, o módulo) o mantém depois de fechar, para a saída mostrar o conteúdo
+  em vez de esvaziar no meio do deslize. As transições são LOCAIS de propósito — com `|global`, uma
+  navegação segurava a página velha na tela pelo tempo da saída. Quem precisa remontar a cada
+  abertura (a programação, cuja cópia local nasce do gravado) usa um `{#key}` e abre no quadro
+  SEGUINTE ao da montagem, senão a entrada não anima.
+- `manterMontada`: o conteúdo existe fechado, `invisible` + `inert` — a biblioteca chama `novo()` e
+  `editar()` do `MaterialForm` por `bind:this`. Ali `moldura={false}`: o formulário desenha o próprio
+  cabeçalho e rodapé (é o mesmo da etapa 2 do wizard), com as mesmas medidas.
+- **Foco**: abre no `[data-autofoco]` (o primeiro campo de digitar; numa lista de escolha, nenhum —
+  no celular ele abriria o teclado à toa) ou no próprio painel, que se anuncia pelo título. O Tab dá a
+  volta dentro, Esc e o clique no véu fecham, e o foco volta a quem abriu.
+- **Campos**: `fieldset` / `fieldset-legend` / `fieldset-label` (o rótulo, o campo e UMA linha
+  dizendo para que ele serve). Opcional é escrito no rótulo (`· opcional`), nunca por asterisco no
+  obrigatório. Um bloco à parte (os alunos da turma nova, as atividades do módulo novo) ganha título
+  de 15px e um filete em cima — e o "opcional" vai no título dele.
+- **Escolher UMA coisa é rádio (`.radio`), escolher VÁRIAS é `.checkbox`**, e a linha inteira é o
+  alvo (`has-[:checked]` pinta a borda). Nada de um botão "Enviar" por linha: a lista escolhe, o
+  rodapé diz o que vai acontecer, e o botão age.
+
+Os seletores que se repetem nas bandejas são componentes: `SeletorDeEtiqueta.svelte` (a cor, ver
+"Etiqueta de cor") e `SeletorDeAtividades.svelte` (`{ atividades; escolhidas: $bindable; vazio? }`) —
+a mesma lista no "Novo módulo" e no "Acrescentar atividades": busca a partir de sete, filtro de
+idioma, e **o número da posição em cada escolhida**, porque a ordem do clique é a ordem do módulo.
+
+Catálogo vivo: `/dev/components#bandeja`.
 
 **O véu é `bg-overlay`, preto translúcido nos dois temas.** Era `bg-base-content/40`, que no escuro
 é um véu BRANCO — a página clareava em vez de recuar. O `::backdrop` do `<dialog>` usa o mesmo token.
@@ -773,12 +821,17 @@ para a semana caber numa linha sem espremer o que importa; no celular a faixa ro
 vazio continua ali — "nada" é informação. Rascunho é contorno tracejado MAIS o aviso escrito, nunca só
 a cor.
 
-## Etiqueta de cor — o seletor
+## Etiqueta de cor — `SeletorDeEtiqueta.svelte`
 
-Turma e módulo escolhem a cor pela ETIQUETA já com a sigla (`CLASSE_DA_ETIQUETA`, quadrado de 46px com
-o de 32px dentro), não por uma bolinha de cor: o professor vê como ela vai aparecer na lista. O nome da
-cor vai no `aria-label` e no `title` (`NOME_DA_COR`, `$lib/etiquetas.ts`) — cor sozinha não se anuncia.
-É o mesmo desenho em "Novo módulo", "Editar módulo", "Editar turma" e "Nova turma".
+Props: `{ cor: $bindable; sigla: string; name?: string; rotulo? }`.
+
+Turma e módulo escolhem a cor pela ETIQUETA já com a sigla (`CLASSE_DA_ETIQUETA`, quadrado de 48px com
+o de 32px dentro), não por uma bolinha de cor: o professor vê como ela vai aparecer na lista. São
+rádios de verdade (as setas andam entre as cores; com `name`, o valor vai no `<form>`), e o nome da
+cor vai no texto escondido e no `title` (`NOME_DA_COR`, `$lib/etiquetas.ts`) — cor sozinha não se
+anuncia. Era o mesmo markup copiado em quatro formulários, cada um num tamanho; agora é o componente
+em "Nova turma", "Editar turma", "Novo módulo" e "Editar módulo" — e a `marca` da bandeja mostra a
+etiqueta grande, mudando junto.
 
 ## Tag de idioma — `IdiomaTag.svelte` + `FiltroIdioma.svelte`
 
@@ -827,7 +880,7 @@ tentativa ou da ligada à ficha); aluno sem conta ganha o `avatarPadrao` do nome
 do elemento, e "sem framework de UI" é razão para usar a plataforma, não para reimplementar o que
 ela já faz à mão (e pela metade). Cancelar — inclusive por Escape ou clique no véu — devolve o
 avatar como estava ao abrir, senão "fechar sem querer" gravava a mudança. **Fechar anima antes de
-fechar** (`en-modal-out` e `en-veu-out`, 180 ms): o `close()` nativo sumia com diálogo e véu no
+fechar** (`animate-modal-saida` e `animate-veu-saida`, `--duration-curta`): o `close()` nativo sumia com diálogo e véu no
 mesmo quadro, então o Escape tem o fechar imediato impedido e o `close()` vem no `animationend`
 (com um `setTimeout` de rede). O clique no véu cai no próprio `<dialog>` — o `<dialog>` modal não
 fecha sozinho por ele. Abre a partir do rosto que a pessoa já vê (o gravado ou o `avatarPadrao`).
@@ -863,9 +916,15 @@ não se anuncia.
 
 ## Material — `MaterialForm.svelte` + `MaterialList.svelte` + `material-form.ts`
 
-O formulário de material é UM, para a biblioteca (`(studio)/materiais`, painel sobre a lista) e
-para a etapa 2 do wizard (`atividades/[id]/materiais`, coluna fixa). O que ele faz e por quê está
-em paginas.md "Studio"; aqui, como se usa.
+O formulário de material é UM, para a biblioteca (`(studio)/materiais`, numa `Bandeja` montada
+sobre a lista) e para a etapa 2 do wizard (`atividades/[id]/materiais`, coluna fixa). O que ele faz
+e por quê está em paginas.md "Studio"; aqui, como se usa.
+
+**A ordem dos campos é a da decisão**: o que o aluno vai fazer (os cartões de tipo, com o rendimento
+logo abaixo), depois idioma e "Como adicionar" (o `Alternador`: um de cada vez, colar uma lista,
+gerar com IA) — os dois mudam o que os campos pedem, então ficam logo antes deles —, os campos, e por
+último "O que o aluno vai ver". Na edição o "Cancelar" FECHA a bandeja da biblioteca; no wizard ele
+devolve a coluna a "Adicionar".
 
 **A PÁGINA é dona do `<form>`**, o componente só desenha os campos com os `name` que
 `camposMaterial` espera (mais os hidden de `kind`, `questions` e `lines`). A página envolve
@@ -977,6 +1036,26 @@ de dois arrays, `AssembleInteraction` é a composição específica de item do P
 
 ---
 
+## Uma questão como o aluno vê — `PreviaDaQuestao.svelte`
+
+Props: `{ runtime: RuntimeDaQuestao; chave: string; compacta?: boolean }`. Desenha UMA questão —
+enunciado, áudio, texto de apoio e a interação — com os componentes do Player, a partir do que
+`buildRuntimeItem` devolveu no servidor. É a mesma na prévia da atividade inteira e no editor de
+questão: duas prévias desenhadas cada uma do seu jeito divergiam do Player no primeiro tipo novo. A
+resposta é estado local (nada é enviado); quem troca de questão remonta com `{#key}`.
+
+## Nomes em português — habilidade e tipo de questão
+
+A tela nunca mostra a chave do kernel. Habilidade sai de `skillLabels`
+(`kernel/interactions/skill-schema.ts`: Escuta, Fala, Leitura, Escrita) e tipo de questão de
+`ROTULO_DA_INTERACAO` (`$lib/atividades/editor-item.ts`: "Digitar a resposta", "Completar a lacuna",
+"Montar a frase"…). Havia quatro mapas com "Listening"/"Writing" espalhados (Player, detalhe,
+publicar, editor), e a revisão e os resultados mostravam "assemble" e "type" crus. O modo de
+correção que o aluno vê no cabeçalho da questão também é em português ("tolerante", "reconhecimento
+de voz", "corrigida pelo professor").
+
+---
+
 ## Casca das páginas públicas — `SiteHeader.svelte`, `SiteFooter.svelte`, `SiteHero.svelte`, `LegalPage.svelte`
 
 A home e as páginas institucionais (`(site)/**`) compartilham cabeçalho e rodapé — é um desenho
@@ -1006,8 +1085,27 @@ prenda um bloco em `opacity: 0` esperando JS.
 
 ```svelte
 {#each cards as card, i (card.id)}
-	<div class="reveal-row" use:reveal={{ delay: i * 90 }}>…</div>
+	<div class="reveal-row" use:reveal={{ ordem: i }}>…</div>
 {/each}
 ```
 
-Bloco de seção entra sem delay; cartões dentro de uma grade escalonam em 90ms.
+Bloco de seção entra sem atraso; cartões dentro de uma grade passam a ORDEM, e o `reveal-row` calcula
+o atraso com o `--stagger` (60 ms, teto no 6º) — a action não escolhe milissegundos.
+
+---
+
+## Seletor em pílula — `Alternador.svelte`
+
+Props: `{ opcoes: { id, label }[]; valor: $bindable; rotulo: string; largura?: 'cheia' | 'auto'; onmudar?; class? }`.
+O controle de poucas opções lado a lado (entrar como professor/aluno, um a um / colar uma lista,
+alunos / envios). **A pílula desliza** até a opção escolhida — é um elemento só, posicionado pelo
+índice entre colunas iguais, andando por `translate` em `--duration-media` com `--ease-in-out-soft`;
+nada de medir largura em JS. Botões com `aria-pressed` num `role="group"` rotulado, e não abas:
+nenhuma das telas tem painel de aba de verdade. Era o mesmo markup copiado em cinco telas.
+
+## Cartão clicável — `cartao-interativo` (utility)
+
+O cartão que é um link inteiro (peça do início, turma, atividade enviada, módulo do aluno, cartões
+da home): sobe 3 px, a borda puxa para o violeta e ganha sombra na cor da marca; ao apertar, afunda
+um nada. Um gesto, uma utility — cada tela tinha o seu, com 2, 3 e 5 px e `transition-all`.
+Controle pequeno (chip, opção, token) não usa: sobe 2 px com `hover:-translate-y-0.5`.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Alternador from '$lib/components/Alternador.svelte';
 	import { caminhoInterno } from '$lib/caminho-interno';
 	import { goto } from '$app/navigation';
 	import Loading from '$lib/components/Loading.svelte';
@@ -98,28 +99,21 @@
 <svelte:head><title>Entrar — entendo</title></svelte:head>
 
 <div
-	class="w-full max-w-[400px] animate-[en-fade-up_600ms_var(--ease-out-soft)_both] rounded-box
+	class="w-full max-w-[400px] animate-entrada rounded-box
 	       border border-line bg-base-100 p-8 shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)]"
 >
 	<!-- O seletor vem ANTES do título: é ele que decide o que a tela promete. -->
-	<div
-		class="mb-6 grid grid-cols-2 gap-1 rounded-full bg-base-200 p-1"
-		role="tablist"
-		aria-label="Entrar como"
-	>
-		{#each [{ id: 'professor' as const, label: 'Professor' }, { id: 'aluno' as const, label: 'Aluno' }] as opcao (opcao.id)}
-			<button
-				type="button"
-				role="tab"
-				aria-selected={como === opcao.id}
-				onclick={() => trocar(opcao.id)}
-				class="rounded-full px-4 py-2 text-[0.84rem] transition-colors
-				       {como === opcao.id
-					? 'bg-primary font-bold text-primary-content'
-					: 'font-semibold text-base-content/65 hover:text-base-content'}">{opcao.label}</button
-			>
-		{/each}
-	</div>
+	<Alternador
+		opcoes={[
+			{ id: 'professor' as const, label: 'Professor' },
+			{ id: 'aluno' as const, label: 'Aluno' }
+		]}
+		bind:valor={como}
+		rotulo="Entrar como"
+		largura="cheia"
+		onmudar={trocar}
+		class="mb-6"
+	/>
 
 	{#if como === 'professor'}
 		<h1 class="mb-1.5 font-display text-[27px] font-semibold tracking-[-0.02em]">
