@@ -73,8 +73,7 @@ export function programacoes(teacher: TeacherScope) {
 			id: a.classroom.id,
 			name: a.classroom.name,
 			color: corOuPadrao(a.classroom.color),
-			alunos: a.classroom._count.students,
-			comEmail: a.classroom.students.length
+			alunos: a.classroom._count.students
 		},
 		envios: a.sends.map((s) => ({
 			activityId: s.activityId,
@@ -327,7 +326,8 @@ export function programacoes(teacher: TeacherScope) {
 					reason: motivoOuNulo(l.reason),
 					emails: l.emails,
 					pausada: l.allocation.pausedAt !== null,
-					porEmail: (lerProgramacao(l.allocation.schedule)?.canal ?? 'email') === 'email',
+					// Módulo LIBERA, não manda e-mail (`modulos/programacao.ts`).
+					porEmail: false,
 					modulo: {
 						id: l.allocation.module.id,
 						name: l.allocation.module.name,
@@ -407,44 +407,6 @@ export function programacoes(teacher: TeacherScope) {
 				};
 			}
 			return resultado;
-		},
-
-		/**
-		 * Os e-mails PROGRAMADOS por dia, por alocação — a prévia soma os das outras
-		 * programações para avisar quando um dia passa do teto de 100 do Resend.
-		 * O dia é o de Brasília, a mesma régua da agenda.
-		 */
-		async cargaPorDia(): Promise<Record<string, Record<string, number>>> {
-			const linhas = await prisma.moduleSend.findMany({
-				where: { status: 'programada', allocation: { ...doProfessor, pausedAt: null } },
-				select: {
-					allocationId: true,
-					dueAt: true,
-					allocation: {
-						select: {
-							schedule: true,
-							classroom: {
-								select: { students: { where: { email: { not: null } }, select: { id: true } } }
-							}
-						}
-					}
-				}
-			});
-			const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' });
-			const carga: Record<string, Record<string, number>> = {};
-			const vistos = new Set<string>();
-			for (const l of linhas) {
-				// "Só disponibilizar" não manda e-mail: não pesa no teto do dia.
-				if (lerProgramacao(l.allocation.schedule)?.canal === 'mapa') continue;
-				const d = dia.format(l.dueAt);
-				// Um e-mail por aluno POR DATA: duas atividades no mesmo dia são um e-mail só.
-				const chave = `${l.allocationId}:${d}`;
-				if (vistos.has(chave)) continue;
-				vistos.add(chave);
-				carga[l.allocationId] ??= {};
-				carga[l.allocationId][d] = l.allocation.classroom.students.length;
-			}
-			return carga;
 		}
 	};
 }

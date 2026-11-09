@@ -156,10 +156,10 @@
 			const quando = a.programacao ? resumoDaProgramacao(a.programacao) : '';
 			const resumo =
 				estado === 'sem'
-					? 'alocada · nada enviado ainda'
+					? 'alocada · nada liberado ainda'
 					: estado === 'falha' && falha
-						? `${quando} · ${enviadas} de ${total} enviadas · ${titulo(falha.activityId)} esperando desde ${rotuloDoInstante(falha.dueAt)}`
-						: `${quando} · ${enviadas} de ${total} enviadas${prox && !a.pausedAt ? ` · próxima ${rotuloDoInstante(prox.dueAt)}` : ''}`;
+						? `${quando} · ${enviadas} de ${total} liberadas · ${titulo(falha.activityId)} esperando desde ${rotuloDoInstante(falha.dueAt)}`
+						: `${quando} · ${enviadas} de ${total} liberadas${prox && !a.pausedAt ? ` · próxima ${rotuloDoInstante(prox.dueAt)}` : ''}`;
 			return { ...a, estado, prox, resumo, falha };
 		})
 	);
@@ -193,22 +193,12 @@
 	const alocacaoAberta = $derived(
 		data.alocacoes.find((a) => a.id === (painel ?? ultimoPainel)) ?? null
 	);
-	/** E-mails já programados nas OUTRAS alocações, por dia — o teto de 100 da prévia. */
-	const cargaOutras = $derived.by(() => {
-		const soma: Record<string, number> = {};
-		for (const [id, porDia] of Object.entries(data.carga)) {
-			if (id === alocacaoAberta?.id) continue;
-			for (const [dia, n] of Object.entries(porDia)) soma[dia] = (soma[dia] ?? 0) + n;
-		}
-		return soma;
-	});
-
 	// Mesmo cuidado do painel: a escolha sobrevive à recarga dos dados.
 	const primeiraTurma = $derived(data.alocacoes[0]?.id ?? '');
 	let previaTurma = $derived(primeiraTurma);
 </script>
 
-<svelte:head><title>{data.modulo.name} — Módulos — entendo</title></svelte:head>
+<svelte:head><title>{data.modulo.name} — Módulos — Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<div>
@@ -295,11 +285,11 @@
 				>
 				<div class="min-w-[220px] flex-1">
 					<p class="mb-1 text-[13.5px] font-bold">
-						O envio de {rotuloDoInstante(f.dueAt)} para {falhaDoTopo.turma.name} não saiu
+						A liberação de {rotuloDoInstante(f.dueAt)} para {falhaDoTopo.turma.name} não aconteceu
 					</p>
 					<p class="text-[12.5px] leading-relaxed text-base-content/65">
 						{atividade?.title ?? 'A atividade'}
-						{f.reason ? TEXTO_DO_MOTIVO[f.reason] : 'não pôde sair'}. O envio espera: {f.reason ===
+						{f.reason ? TEXTO_DO_MOTIVO[f.reason] : 'não pôde abrir'}. A liberação espera: {f.reason ===
 						'audio'
 							? 'ele tenta de novo sozinho em alguns minutos'
 							: 'resolva e ele sai na próxima tentativa'}, sem pular para a seguinte.
@@ -359,7 +349,7 @@
 		<section class="mb-7.5">
 			<div class="mb-2 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
 				<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Atividades, na ordem</h2>
-				<span class="text-[13px] text-base-content/65">a ordem do e-mail e do mapa do aluno</span>
+				<span class="text-[13px] text-base-content/65">a ordem do mapa do aluno</span>
 				<span class="min-w-1 flex-1"></span>
 				<button
 					type="button"
@@ -388,7 +378,7 @@
 							stroke-linejoin="round"
 						/></svg
 					>
-					Reordenar muda só o que ainda não saiu. O que já foi enviado fica onde está.
+					Reordenar muda só o que ainda não abriu. O que já foi liberado fica onde está.
 				</p>
 			{/if}
 
@@ -537,9 +527,7 @@
 		<section class="mb-7.5">
 			<div class="mb-3.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
 				<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Turmas do módulo</h2>
-				<span class="text-[13px] text-base-content/65"
-					>só uma turma daqui recebe envio do módulo</span
-				>
+				<span class="text-[13px] text-base-content/65">só uma turma daqui recebe o módulo</span>
 				<span class="min-w-1 flex-1"></span>
 				<button
 					type="button"
@@ -584,9 +572,7 @@
 										<span class="mb-0.75 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
 											<span class="text-[15px] font-semibold">{t.turma.name}</span>
 											<span class="text-[12.5px] text-base-content/65"
-												>{t.turma.alunos} alunos · {t.turma.comEmail > 0
-													? `${t.turma.comEmail} com e-mail`
-													: 'nenhum com e-mail'}</span
+												>{t.turma.alunos} {t.turma.alunos === 1 ? 'aluno' : 'alunos'}</span
 											>
 										</span>
 										<span class="block text-[12.5px] text-pretty text-base-content/65"
@@ -663,8 +649,8 @@
 								<div class="border-t border-line bg-base-200 px-4.5 py-3.5">
 									<p class="mb-2 text-[13.5px] font-bold">Tirar {t.turma.name} do módulo?</p>
 									<ul class="mb-3 ps-4.5 text-[13px] leading-relaxed text-base-content/65">
-										<li>Os envios futuros desta turma são cancelados.</li>
-										<li>O que já foi enviado continua valendo: o link é da atividade.</li>
+										<li>As liberações futuras desta turma são canceladas.</li>
+										<li>O que já foi liberado continua aberto: o link é da atividade.</li>
 										<li>O módulo some do mapa dos alunos desta turma.</li>
 									</ul>
 									<div class="flex flex-wrap gap-2">
@@ -700,7 +686,7 @@
 		{#if data.historico.length > 0}
 			<section class="mb-7.5">
 				<div class="mb-3.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
-					<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Envios</h2>
+					<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Liberações</h2>
 					<span class="text-[13px] text-base-content/65"
 						>cada linha abre o resultado daquela atividade</span
 					>
@@ -722,16 +708,7 @@
 							<span class="min-w-[150px] flex-1 text-[14px] font-semibold">{h.atividade.title}</span
 							>
 							<span class="flex flex-none gap-4.5 font-mono text-[13px]">
-								{#if h.porEmail}
-									<span
-										><span class="font-sans text-[12px] text-base-content/65"
-											>e-mails
-										</span>{h.emails}</span
-									>
-								{:else}
-									<span class="font-sans text-[12px] text-base-content/65">no mapa, sem e-mail</span
-									>
-								{/if}
+								<span class="font-sans text-[12px] text-base-content/65">liberada no mapa</span>
 								<span
 									><span class="font-sans text-[12px] text-base-content/65"
 										>abriram
@@ -788,7 +765,7 @@
 			<p class="mb-4 max-w-[76ch] text-[13px] leading-relaxed text-pretty text-base-content/65">
 				As {ordem.length} atividades continuam na sua conta: só o agrupamento some.{turmas.length >
 				0
-					? ` Os envios programados que ainda não saíram são cancelados nas ${turmas.length} ${turmas.length === 1 ? 'turma' : 'turmas'}.`
+					? ` As liberações programadas que ainda não aconteceram são canceladas nas ${turmas.length} ${turmas.length === 1 ? 'turma' : 'turmas'}.`
 					: ''} Os que já saíram continuam valendo, porque o link é da atividade, não do módulo.
 			</p>
 			{#if confirmandoApagar}
@@ -831,7 +808,6 @@
 			alocacao={alocacaoAberta}
 			atividades={ordem}
 			hoje={data.hoje}
-			{cargaOutras}
 			outras={data.alocacoes
 				.filter((a) => a.id !== alocacaoAberta.id)
 				.map((a) => ({ id: a.id, nome: a.turma.name, programacao: a.programacao }))}
@@ -892,9 +868,9 @@
 	aberta={adicionando}
 	onfechar={() => (adicionando = false)}
 	titulo="Adicionar turmas"
-	descricao="Só turma daqui recebe envio do módulo. Cada uma ganha a sua programação — tudo de uma vez, toda quinta ou em datas fixas."
+	descricao="Só turma daqui recebe o módulo. Cada uma ganha a sua programação de liberação — tudo de uma vez, toda quinta ou em datas fixas."
 	resumo={turmasEscolhidas.length
-		? 'Nada é enviado agora: depois, abra a Programação de cada turma para dizer quando cada atividade sai.'
+		? 'Nada é liberado agora: depois, abra a Programação de cada turma para dizer quando cada atividade abre.'
 		: 'Marque as turmas que recebem este módulo.'}
 	erro={adicionando ? erro : null}
 >

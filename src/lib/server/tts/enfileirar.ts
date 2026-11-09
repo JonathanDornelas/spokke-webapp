@@ -15,16 +15,16 @@ import type { StoredItemRow } from '$lib/server/player/runtime';
  * - `gerarItens` — o texto do áudio passa a existir ali. É o começo da síntese,
  *   e o que faz a espera acontecer enquanto o professor revisa.
  * - o `load` da etapa 4 — repõe o que mudou depois de gerar (frase editada =
- *   texto novo = hash novo) e o que expirou.
+ *   texto novo = hash novo).
  * - `enviarParaTurmas` — não manda link que não abre.
- * - a entrada do Player — o áudio tem 10 dias de vida (`TTS_DIAS_DE_VIDA`), e
- *   sem reposição a atividade publicada há duas semanas viraria um link
- *   permanentemente travado em "gerando áudio".
+ * - a entrada do Player — a rede de segurança. O áudio de atividade não vence
+ *   mais, mas um job pode ter falhado ou um arquivo ter sido regerado pela
+ *   metade; sem reposição o link ficaria travado em "gerando áudio" para sempre.
  *
- * Idempotente por duas vias: pula o que tem `MediaAsset` não expirado e pula o
- * que já está na fila. A segunda importa porque a entrada do Player é pública —
- * trinta alunos abrindo o mesmo link ao mesmo tempo não podem virar trinta
- * jobs iguais.
+ * Idempotente por duas vias: pula o que tem `MediaAsset` e pula o que já está
+ * na fila. A segunda importa porque a entrada do Player é pública — trinta
+ * alunos abrindo o mesmo link ao mesmo tempo não podem virar trinta jobs
+ * iguais.
  *
  * Devolve quantos jobs entraram.
  */
@@ -59,13 +59,6 @@ export async function enfileirarAudioFaltante(params: {
 	const hashes = [...pendentes.keys()];
 	const prontos = await playerRepo.audiosExistentes(teacherId, hashes);
 	const naFila = await audiosNaFila(teacherId, hashes);
-
-	// Aproveita a passagem para varrer o que venceu. É aqui e não num job de
-	// limpeza porque é aqui que se sabe que existe lixo: linha vencida já conta
-	// como ausente em toda leitura, então ela não serve para mais nada.
-	await prisma.mediaAsset.deleteMany({
-		where: { teacherId, expiresAt: { lt: new Date() } }
-	});
 
 	let enfileirados = 0;
 	for (const [hash, { text, voice, speed }] of pendentes) {

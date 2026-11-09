@@ -5,11 +5,11 @@ import type { CicloDeCobranca, PlanoPago } from '$lib/billing/catalogo';
  * docs/adr-002-billing.md. Nenhum código de produto fala com um gateway direto:
  * fala com isto.
  *
- * **Hoje não existe gateway** (decisão do dono do repositório): o provedor em
- * uso é o MANUAL (`./manual-provider.ts`), que transforma "assinar" num pedido
- * que a equipe atende pelo painel interno. Quando um gateway entrar (Stripe,
- * ou um local com Pix), ele implementa esta mesma interface — e o webhook dele
- * escreve pelo `./assinaturas.ts`, como o painel.
+ * Dois provedores: o MANUAL (`./manual-provider.ts`), que transforma "assinar"
+ * num pedido que a equipe atende pelo painel interno, e o MERCADO PAGO
+ * (`./mercadopago/`), o gateway escolhido — pronto, ligado por
+ * `BILLING_PROVIDER=mercadopago` quando as credenciais existirem. Os dois
+ * escrevem o plano pelo mesmo `./assinaturas.ts`.
  *
  * O resultado é DISCRIMINADO em vez de sempre uma URL: um provedor manual não
  * tem para onde redirecionar, e fingir uma URL faria a tela mandar o professor
@@ -25,11 +25,25 @@ export type ResultadoDeAssinatura =
 export type ResultadoDoPortal = { tipo: 'redirecionar'; url: string } | { tipo: 'indisponivel' };
 
 export interface BillingProvider {
-	readonly nome: 'manual' | 'stripe';
+	readonly nome: 'manual' | 'mercadopago';
+	/**
+	 * "Desfazer cancelamento" existe? No manual, sim (a equipe só não renova). No
+	 * Mercado Pago, assinatura cancelada não volta: o caminho é assinar de novo.
+	 */
+	readonly podeDesfazerCancelamento: boolean;
 	iniciarAssinatura(
 		teacher: { id: string; name: string; email: string },
 		plano: PlanoPago,
-		ciclo: CicloDeCobranca
+		ciclo: CicloDeCobranca,
+		/** A origem do pedido — é para onde o checkout devolve o professor. */
+		contexto: { origem: string }
 	): Promise<ResultadoDeAssinatura>;
 	abrirPortal(teacherId: string): Promise<ResultadoDoPortal>;
+	/**
+	 * Para a PRÓXIMA cobrança — o "Cancelar no fim do período" da Conta. Roda antes
+	 * de marcar o cancelamento na conta: se o provedor recusar, nada muda aqui, e o
+	 * professor não fica achando que cancelou enquanto o cartão continua sendo
+	 * cobrado.
+	 */
+	cancelarRenovacao(teacherId: string): Promise<void>;
 }

@@ -43,7 +43,7 @@ dezoito números**, em SVG com `shape-rendering="crispEdges"`.
 
 | Regra do projeto                                                                | O que significa para o mapa                                                                                                                                                                 |
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Violeta é a marca; verde, âmbar e vermelho são da correção**                  | A fase concluída **não é verde**, e a bandeira do fim também não. "Terminou" não é "acertou" (a mesma regra dos estados da turma). Use violeta, teal e as cores de etiqueta.                |
+| **Azul é a marca; verde, âmbar e vermelho são da correção**                     | A fase concluída **não é verde**, e a bandeira do fim também não. "Terminou" não é "acertou" (a mesma regra dos estados da turma). Use o azul da marca, teal e as cores de etiqueta.        |
 | **Tokens, nunca hex**                                                           | O mapa (caminho, chão, nós) sai dos tokens e muda sozinho com o tema escuro. A única exceção já existente é a paleta do avatar, que é cor de conteúdo.                                      |
 | **Três papéis de fonte**                                                        | Uma fonte pixel seria um quarto papel: **decisão do dono**. Se entrar, só em rótulo decorativo ("FASE 3", "MUNDO 1"), nunca em corpo de texto. Conteúdo no idioma alvo é sempre Noto Sans.  |
 | **Movimento: só `transform` e `opacity`; loop só para gravação e carregamento** | O avatar anda de uma fase para a outra UMA vez, ao chegar do resultado, e para. Nada fica pulando em loop. Com `prefers-reduced-motion` ele aparece direto no lugar.                        |
@@ -198,7 +198,7 @@ Fechadas pelo desenho e pela implementação:
 - **Fonte pixel: sim, a Silkscreen** (`font-pixel`), só nos rótulos decorativos "MUNDO N" e
   "FASE N", sempre `aria-hidden` (design-system.md "Tipografia").
 - **A fase trancada mostra o título e a data** em que abre ("abre qui 15/10").
-- **Estrelas: 3 a partir de 90%, 2 a partir de 60%, 1 para concluída**, em violeta, e só onde o
+- **Estrelas: 3 a partir de 90%, 2 a partir de 60%, 1 para concluída**, em azul, e só onde o
   professor liberou o resultado (`estrelasDe`, `$lib/modulos/mapa.ts`).
 - **O tema fica no mapa e no cartão dele.** O resto de `/aluno` e o Player seguem o sistema de hoje.
 - **"MUNDO N"** é a posição do módulo entre os do aluno, na ordem em que as turmas foram alocadas.

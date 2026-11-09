@@ -1,3 +1,6 @@
-# allow crawling everything by default
+# Páginas públicas abertas à busca. As áreas logadas, a atividade de cada
+# professor (/a/...) e o convite de turma levam "noindex" na própria página —
+# e não ficam bloqueadas aqui, senão o robô da prévia do WhatsApp e do LinkedIn
+# não leria o título e a imagem do link.
 User-agent: *
-Disallow:
+Disallow: /api/

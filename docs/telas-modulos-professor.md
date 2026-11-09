@@ -27,7 +27,7 @@ Três coisas valem em TODAS estas telas:
 
 1. **Estado nunca é comunicado só por cor.** Ícone e texto, sempre.
 2. **Verde, âmbar e vermelho são reservados para a semântica de correção.** "Enviada" não é
-   "acertou". Violeta é a marca, teal é áudio. Vermelho só aparece no estado que pede ação (o
+   "acertou". Azul (#3659CB) é a marca, teal é áudio. Vermelho só aparece no estado que pede ação (o
    envio que não saiu).
 3. **O Studio é desktop com sessão longa** e pode ser denso. Mas toda tela tem versão de celular,
    e ela não pode virar rolagem lateral.
@@ -89,7 +89,7 @@ Vocabulário da interface, para todas as telas falarem igual:
 
 ### Cores de etiqueta
 
-As mesmas cinco das turmas (`$lib/etiquetas.ts`): violeta, teal, azul, magenta e ardósia. Nunca
+As mesmas cinco das turmas (`$lib/etiquetas.ts`): azul, teal, violeta, magenta e ardósia. Nunca
 verde nem âmbar.
 
 ---
@@ -105,7 +105,7 @@ ordem, para quais turmas ele vai, e quando cada coisa sai.
 
 `HeaderCard`: etiqueta, "Módulo", nome, descrição (quando houver) e "Editar módulo".
 
-Números hoje: `atividades` · `no ar` (violeta) · `fora do ar` · `envios`. **Novo**: entram
+Números hoje: `atividades` · `no ar` (azul) · `fora do ar` · `envios`. **Novo**: entram
 `turmas` e `próximo envio` (data curta). `fora do ar` pode sair: o bloco da lista já diz isso
 por linha. Máximo de quatro números.
 
@@ -253,7 +253,7 @@ do outro lado. Não mostra dado de aluno nenhum.
 - O detalhe tem uma coluna principal (a lista) e uma lateral de 340px com "Enviar para turma"
   (escolher turmas + enviar) e "Acrescentar atividades". No celular, tudo empilha.
 - **A confirmação de envio está em verde** (`text-success`). Isso fere a regra 2: "enviado" não é
-  "acertou". Deve ser neutra ou violeta, com ícone.
+  "acertou". Deve ser neutra ou azul, com ícone.
 - A descrição do módulo não é editável pela tela (2.1).
 - "Enviar para turma" hoje escolhe QUALQUER turma e manda tudo de uma vez. No redesenho, ele vira
   o modo "Tudo agora" de uma programação de turma alocada (2.3 e 2.4).

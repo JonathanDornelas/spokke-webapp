@@ -50,7 +50,6 @@ model Teacher {
   subscriptionStatus String?
   currentPeriodEnd   DateTime?
   gracePeriodEnd     DateTime?
-  stripeCustomerId   String?   @unique
 
   /// Fim do trial. A situação "expirada" é DERIVADA desta data na leitura
   /// (`entitlements.ts`), não escrita por um job que pudesse esquecer de rodar.
@@ -62,19 +61,21 @@ model Teacher {
   /// Cancelada "no fim do período": continua valendo até `currentPeriodEnd`.
   cancelAtPeriodEnd Boolean   @default(false)
 
-  sessions         Session[]
-  accounts         Account[]
-  activities       Activity[]
-  contentUnits     ContentUnit[]
-  mediaAssets      MediaAsset[]
-  classrooms       Classroom[]
-  students         Student[]
-  auditEvents      AuditEvent[]
-  planRequests     PlanRequest[]
-  creditEntries    CreditEntry[]
-  modules          Module[]
+  sessions              Session[]
+  accounts              Account[]
+  activities            Activity[]
+  contentUnits          ContentUnit[]
+  mediaAssets           MediaAsset[]
+  classrooms            Classroom[]
+  students              Student[]
+  auditEvents           AuditEvent[]
+  planRequests          PlanRequest[]
+  creditEntries         CreditEntry[]
+  modules               Module[]
+  notifications         Notification[]
+  providerSubscriptions ProviderSubscription[]
   /// A escola de que o professor faz parte, quando faz (uma por vez).
-  schoolMembership SchoolMembership?
+  schoolMembership      SchoolMembership?
 }
 
 model Session {
@@ -247,11 +248,12 @@ model MediaAsset {
 
   createdAt DateTime @default(now())
 
-  /// Quando o objeto some do bucket. O MinIO apaga por regra de ciclo de vida
-  /// (10 dias); esta coluna é a MESMA data do lado de cá, porque o bucket
-  /// apagar o arquivo não apaga a linha — e uma linha apontando para um objeto
-  /// que já foi embora faz o Player servir uma URL morta.
-  expiresAt DateTime
+  /// **O áudio de atividade não vence.** Ele vivia 10 dias (regra de ciclo de
+  /// vida do bucket + uma coluna `expiresAt` espelhando a data), e a entrada do
+  /// Player resintetizava o que tinha vencido. Com o limite de atividades por
+  /// plano o estoque é finito, então o arquivo fica enquanto alguma atividade
+  /// do professor o usa — e sai quando a última delas é apagada
+  /// (`server/tts/limpeza.ts`). A gravação de voz do ALUNO continua com 7 dias.
 
   /// **O áudio não tem dono além do PROFESSOR.**
   ///
@@ -273,7 +275,6 @@ model MediaAsset {
   /// (rodar o job duas vezes reescreve o mesmo objeto) e o reuso automático
   /// (a mesma frase noutra atividade não paga síntese de novo).
   @@unique([teacherId, hash])
-  @@index([expiresAt])
 }
 
 model Activity {
@@ -501,11 +502,64 @@ model Job {
   @@index([status, runAfter])
 }
 
-/// Idempotência do webhook do Stripe — ver billing.md "As três disciplinas". `id` é o `event.id` do Stripe.
-model StripeEvent {
+/// A assinatura do professor NO GATEWAY — hoje, o `preapproval` do Mercado Pago
+/// (docs/adr-002-billing.md, billing.md "Mercado Pago"). Nasce no "Assinar", com
+/// o status `pending` e o link do checkout, e é o que liga o id do provedor ao
+/// professor, ao plano e ao ciclo que ele escolheu: o webhook só traz o id.
+///
+/// `status` é o do PROVEDOR, cru (`pending` | `authorized` | `paused` |
+/// `cancelled`). Não é a situação da conta — essa continua saindo das datas do
+/// `Teacher` (`entitlements.ts`), que só `assinaturas.ts` escreve.
+model ProviderSubscription {
+  id          String   @id
+  provider    String
+  plano       String
+  ciclo       String
+  status      String
+  checkoutUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, createdAt])
+}
+
+/// Idempotência do que o gateway manda — billing.md "As três disciplinas".
+/// `id` é `<provedor>:<tipo>:<id do recurso>` (`mercadopago:fatura:6114264375`):
+/// a cobrança aprovada estende o período UMA vez, por mais que a notificação
+/// chegue repetida.
+model ProviderEvent {
   id        String   @id
   type      String
   createdAt DateTime @default(now())
+}
+
+/// O aviso do SINO do Studio (docs/notificacoes.md). Só entra o que pede uma
+/// ação do professor ou o desfecho de algo que ele começou e não está olhando —
+/// o resto ele vê abrindo a tela, e avisar também seria ruído.
+///
+/// `key` AGRUPA: enquanto a notificação não foi lida, um evento com a mesma
+/// chave a ATUALIZA (`count`, `data`, `updatedAt`) em vez de criar outra —
+/// trinta alunos entrando na turma são um aviso, não trinta. Lida, a próxima
+/// abre uma nova. O texto não é gravado: sai de `kind` + `data` na leitura
+/// (`$lib/notificacoes`), então uma copy corrigida vale para o que já existe.
+model Notification {
+  id        String    @id @default(cuid())
+  kind      String
+  key       String
+  data      Json // validado com Zod ao ler, como todo JSON (db.md)
+  count     Int       @default(1)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, readAt, updatedAt])
+  @@index([teacherId, key])
 }
 
 /// O que mudou na cobrança (e, depois, na escola), quem mudou e quando. Toda
@@ -663,9 +717,9 @@ model Classroom {
   name        String
   /// Tag de LanguageProfile. Só filtra atividades; não muda conteúdo nenhum.
   languageTag String?
-  /// Etiqueta de cor da turma. Violeta/teal/azul/magenta/ardósia — nunca verde
+  /// Etiqueta de cor da turma. Azul/teal/violeta/magenta/ardósia — nunca verde
   /// nem âmbar, que são a semântica de correção (design-system.md).
-  color       String  @default("violeta")
+  color       String  @default("azul")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -705,6 +759,15 @@ model Student {
   accountId String?
   account   StudentAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
+  /// O CONVITE DE CONTA: o link que o professor manda (por e-mail ou ele mesmo)
+  /// para o aluno criar a conta — ou entrar na que já tem — e ligá-la a esta
+  /// ficha. Mesma lógica do link pessoal: o token (192 bits) é a prova de que o
+  /// link chegou a esta pessoa. Nasce na primeira vez que alguém pede o link, e
+  /// "Gerar outro link" o troca (o antigo para de valer).
+  accountInviteToken  String?   @unique
+  /// Quando o e-mail do convite de conta saiu (o worker marca). Nulo: não saiu.
+  accountInviteSentAt DateTime?
+
   invites  Invite[]
   attempts Attempt[]
 
@@ -723,7 +786,7 @@ model Module {
   name        String
   description String?
   /// Etiqueta de cor — a mesma paleta das turmas, nunca verde nem âmbar.
-  color       String  @default("violeta")
+  color       String  @default("azul")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CORES_DE_ETIQUETA } from '$lib/etiquetas';
+import { CORES_DE_ETIQUETA, COR_PADRAO } from '$lib/etiquetas';
 import { nivelOuNulo } from '$lib/atividades/nivel';
 import { command, form, getRequestEvent, query } from '$app/server';
 import { error, redirect } from '@sveltejs/kit';
@@ -12,7 +12,14 @@ import { playerRepo } from '$lib/server/db/repos/player';
 import { itemAudioHashes } from '$lib/server/player/runtime';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
-import { enqueueConvites, type ConviteJob } from '$lib/server/queue';
+import {
+	enqueueConvites,
+	enqueueConvitesDeConta,
+	type ConviteContaJob,
+	type ConviteJob
+} from '$lib/server/queue';
+import { convitesDeConta } from '$lib/server/db/repos/convites-de-conta';
+import { criarLimite } from '$lib/server/limite-por-ip';
 import { labelForTag } from '$lib/kernel/language/profiles';
 import { campoIdioma } from '$lib/idiomas';
 import { alunosValidos, parseAlunos } from '$lib/turmas/parse-alunos';
@@ -52,7 +59,7 @@ export const criarTurma = form(
 		name: z.string().min(1, 'Dê um nome para a turma'),
 		/** A TAG, de um seletor das tags do produto — o mesmo campo de `editarTurma`. */
 		idioma: campoIdioma,
-		color: z.enum(CORES).default('violeta'),
+		color: z.enum(CORES).default(COR_PADRAO),
 		modo: z.string().optional(),
 		/** Bloco colado, um aluno por linha. */
 		colado: z.string().optional(),
@@ -79,7 +86,7 @@ export const editarTurma = form(
 		classroomId: z.string(),
 		name: z.string().trim().min(1, 'Dê um nome para a turma.').max(80),
 		idioma: campoIdioma,
-		color: z.enum(CORES).default('violeta')
+		color: z.enum(CORES).default(COR_PADRAO)
 	}),
 	async ({ classroomId, name, idioma, color }) => {
 		const teacher = teacherOf();
@@ -103,22 +110,139 @@ export const apagarTurma = command(
 	}
 );
 
+/**
+ * O CONVITE DE CONTA (auth.md "A conta do aluno"): o link para o aluno criar a
+ * conta, ou entrar na que já tem, e ligá-la à ficha da chamada. É ele que faz
+ * o mapa dos módulos aparecer: módulo libera no mapa, e o mapa é da conta.
+ *
+ * Dois jeitos de chegar, e o professor escolhe: o Spokke manda por e-mail
+ * (pela fila), ou ele copia o link e manda por onde a turma conversa.
+ */
+function linkDoConviteDeConta(token: string): string {
+	return `${getRequestEvent().url.origin}/aluno/convite/${token}`;
+}
+
+function jobDeConviteDeConta(
+	teacherName: string,
+	aluno: { id: string; accountInviteToken: string }
+): ConviteContaJob {
+	return {
+		studentId: aluno.id,
+		token: aluno.accountInviteToken,
+		link: linkDoConviteDeConta(aluno.accountInviteToken),
+		teacherName,
+		pedidoEm: new Date().toISOString()
+	};
+}
+
+/**
+ * Teto de e-mails de convite de conta por professor, na memória do processo
+ * (`limite-por-ip.ts`). Cada um é um e-mail do plano do provedor — o grátis do
+ * Resend dá 100 por dia —, e um laço de "mandar de novo" gastaria a cota dos
+ * convites de atividade de todo mundo.
+ */
+const limiteDeConviteDeConta = criarLimite({ maximo: 120, janelaMs: 60 * 60_000 });
+
+function cabeNoLimite(teacherId: string, quantos: number): boolean {
+	for (let i = 0; i < quantos; i++) {
+		if (!limiteDeConviteDeConta.permitir(teacherId)) return false;
+	}
+	return true;
+}
+
+const SEM_FOLEGO =
+	'Muitos convites saíram na última hora. Copie o link e mande você mesmo, ou tente mais tarde.';
+
 export const adicionarAluno = form(
 	z.object({
 		classroomId: z.string(),
 		name: z.string().min(1, 'Escreva o nome do aluno'),
-		email: z.string().optional()
+		email: z.string().optional(),
+		/** Como o convite de conta chega: o Spokke manda por e-mail, ou o professor copia o link. */
+		convite: z.enum(['email', 'link']).default('link')
 	}),
-	async ({ classroomId, name, email }) => {
+	async ({ classroomId, name, email, convite }) => {
 		const teacher = teacherOf();
+		const endereco = email?.trim() || null;
+		if (convite === 'email' && !endereco) {
+			return { ok: false as const, error: 'Escreva o e-mail para mandar o convite.' };
+		}
 		const criado = await alunos(teacher).add(classroomId, {
 			name: name.trim(),
 			// Aluno sem e-mail é permitido: ele existe na chamada e nos
-			// resultados, só não recebe convite.
-			email: email?.trim() || null
+			// resultados, e o convite de conta vai pelo link que o professor copia.
+			email: endereco
 		});
 		if (!criado) error(404, 'Turma não encontrada');
-		return { ok: true };
+
+		const aluno = await convitesDeConta(teacher).garantir(criado.id);
+		if (!aluno) error(404, 'Turma não encontrada');
+		let porEmail = false;
+		if (convite === 'email' && cabeNoLimite(teacher.id, 1)) {
+			await enqueueConvitesDeConta([jobDeConviteDeConta(teacher.name, aluno)]);
+			porEmail = true;
+		}
+		return {
+			ok: true as const,
+			studentId: aluno.id,
+			link: linkDoConviteDeConta(aluno.accountInviteToken),
+			porEmail
+		};
+	}
+);
+
+/**
+ * O convite de conta de UM aluno, para a bandeja da chamada: o link (criado na
+ * primeira vez), se e quando o e-mail saiu, e se ele já tem conta. `renovar`
+ * troca o link — o antigo para de abrir.
+ */
+export const conviteDeConta = command(
+	z.object({ studentId: z.string(), renovar: z.boolean().optional() }),
+	async ({ studentId, renovar }) => {
+		const teacher = teacherOf();
+		const aluno = await convitesDeConta(teacher).garantir(studentId, renovar ?? false);
+		if (!aluno) error(404, 'Aluno não encontrado');
+		return {
+			temConta: !!aluno.accountId,
+			email: aluno.email,
+			link: linkDoConviteDeConta(aluno.accountInviteToken),
+			enviadoEm: aluno.accountInviteSentAt?.toISOString() ?? null
+		};
+	}
+);
+
+/** Manda (ou manda de novo) o convite de conta de um aluno por e-mail. */
+export const enviarConviteDeConta = command(
+	z.object({ studentId: z.string() }),
+	async ({ studentId }) => {
+		const teacher = teacherOf();
+		const aluno = await convitesDeConta(teacher).garantir(studentId);
+		if (!aluno) error(404, 'Aluno não encontrado');
+		if (aluno.accountId) return { ok: false as const, error: 'Este aluno já tem conta ligada.' };
+		if (!aluno.email) {
+			return { ok: false as const, error: 'Cadastre o e-mail dele antes, ou copie o link.' };
+		}
+		if (!cabeNoLimite(teacher.id, 1)) return { ok: false as const, error: SEM_FOLEGO };
+		await enqueueConvitesDeConta([jobDeConviteDeConta(teacher.name, aluno)]);
+		return { ok: true as const };
+	}
+);
+
+/**
+ * O convite de conta para a TURMA inteira: quem tem e-mail e ainda não tem
+ * conta. Sempre com a contagem de volta, nunca "para todos" no escuro.
+ */
+export const enviarConvitesDeContaDaTurma = command(
+	z.object({ classroomId: z.string() }),
+	async ({ classroomId }) => {
+		const teacher = teacherOf();
+		const prontos = await convitesDeConta(teacher).daTurmaParaEnviar(classroomId);
+		if (prontos.length === 0) return { ok: true as const, enviados: 0 };
+		if (!cabeNoLimite(teacher.id, prontos.length)) {
+			return { ok: false as const, enviados: 0, error: SEM_FOLEGO };
+		}
+		await enqueueConvitesDeConta(prontos.map((a) => jobDeConviteDeConta(teacher.name, a)));
+		return { ok: true as const, enviados: prontos.length };
 	}
 );
 
@@ -216,8 +340,8 @@ export const enviarParaTurmas = command(
 			return { ok: false, error: 'Publique a atividade antes de enviar.' };
 		}
 
-		// **Não manda link que não abre.** O áudio de uma atividade vive 10 dias
-		// e o link 503 enquanto ele falta — mandar trinta e-mails para uma
+		// **Não manda link que não abre.** O link responde 503 enquanto falta
+		// áudio (síntese na fila, job que falhou) — mandar trinta e-mails para uma
 		// atividade nesse estado é fazer a turma inteira bater numa porta
 		// fechada, e o professor só descobre pelo aluno que reclamou.
 		//

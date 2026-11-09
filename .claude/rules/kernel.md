@@ -144,6 +144,13 @@ Quatro formas, e nenhuma exige conhecimento técnico:
 Áudio nunca é campo de entrada obrigatório: sai do TTS na publicação.
 O professor pode subir áudio próprio para sobrescrever.
 
+**A tradução também não precisa ser digitada** quando há tradutor (server.md "Tradução do
+material"): ela continua OBRIGATÓRIA no schema (`source` e `translation` com `min(1)`), mas quem a
+preenche, quando chega em branco, é o servidor — antes de validar. O kernel segue puro: o único
+reflexo aqui é `parseRawMaterial(kind, raw, { traduzirSemSeparador })`, que deixa a linha sem
+separador entrar com a tradução vazia em vez de descartá-la (e `previewRawLines` a marca como
+`automatica`). Sem a opção, o comportamento é o de sempre.
+
 Os campos opcionais NÃO são decorativos e a etapa 2 os coleta: `Passage.questions` é o que
 `passage-comprehension` consome — sem elas o texto entra na lista e não gera nada. `note` e
 `example` ainda não alimentam gerador nenhum; são contexto do professor, e existem no schema
@@ -190,15 +197,24 @@ não haveria o que revisar). Por isso `runGenerators` devolve `{ groups, closing
 A interação `match` existia no registry desde o começo, com grader, `toRuntime` e componente —
 e **nenhum gerador a produzia**, então nenhum aluno chegou a ver uma.
 
-**Os pares saem SÓ de `VocabItem`** (termo ↔ sentido). Associação é exercício de PALAVRA:
-ligar frases inteiras é outra coisa, e mais fraca — o aluno casa pelo tamanho do cartão antes
-de ler. E recortar palavras de dentro das frases para parear uma a uma é **alinhamento de
-palavras**: saber que "manager" corresponde a "gerente" dentro de duas frases inteiras é
-conhecimento de língua, que o kernel não tem e não pode ter.
+**Associação é exercício de PALAVRA**: ligar frases inteiras é outra coisa, e mais fraca — o
+aluno casa pelo tamanho do cartão antes de ler. (A primeira versão caía para frase ↔ tradução;
+o dono do repositório cortou a queda.) Os pares vêm de duas fontes, nesta ordem:
 
-Consequência aceita de propósito: **sem vocabulário cadastrado, a atividade não ganha o item
-de fecho.** Melhor nenhum do que um exercício que não é o que promete. (A primeira versão caía
-para frase ↔ tradução; o dono do repositório cortou a queda.)
+1. **O vocabulário cadastrado** (`VocabItem`, termo ↔ sentido) — a palavra e o sentido que o
+   professor escreveu. Tem a vez; com cinco termos ou mais, o fecho é todo dele.
+2. **Palavras das frases da atividade, com a tradução do tradutor** (`palavrasTraduzidas`, pedido
+   do dono do repositório quando o tradutor entrou — adr-006). O kernel continua sem saber que
+   "manager" é "gerente": quem escolhe as palavras é `palavrasParaAssociar`
+   (`content/palavras.ts`, puro e agnóstico — segmentador do idioma, sem número, sem nome próprio
+   no meio da frase, sem a palavra que aparece em mais da metade das frases, a mais longa
+   primeiro), e quem traduz é o SERVIDOR (`server/atividades/pares-de-palavras.ts`). **Só fica o
+   par que faz a ida e volta**: palavra solta não tem contexto, e o tradutor errou justamente aí
+   ("working" → "em funcionamento", "です" → "Sim, sim"); traduzido de volta, o sentido precisa
+   dar a mesma palavra. Par que volta igual nos dois idiomas ("hotel" ↔ "hotel") também cai.
+
+Sem tradutor (e sem vocabulário), vale a consequência de antes: **a atividade não ganha o item de
+fecho.** Melhor nenhum do que um exercício que não é o que promete.
 
 Teto de cinco pares (duas colunas num celular; acima disso o aluno rola para achar o par),
 piso de dois (menos que isso não é associação, e o `authoringSchema` recusa), par repetido

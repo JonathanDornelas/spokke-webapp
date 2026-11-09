@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { error } from '@sveltejs/kit';
 import { command, getRequestEvent, query } from '$app/server';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { prisma } from '$lib/server/db/client';
@@ -7,6 +8,7 @@ import { codigoDeAvatarSchema } from '$lib/avatar/schema';
 import { parseContentUnit } from '$lib/kernel/content/parse';
 import type { ContentUnitKind } from '$lib/kernel/content/types';
 import { idiomaOuNulo } from '$lib/idiomas';
+import { notificacoes } from '$lib/server/db/repos/notificacoes';
 
 /**
  * A busca do cabeçalho do Studio: atividades, materiais e turmas numa consulta
@@ -150,4 +152,26 @@ export const gravarMeuAvatar = command(codigoDeAvatarSchema, async (avatar) => {
 	const teacher = requireTeacher(getRequestEvent().locals);
 	await contaProfessor(teacher).gravarAvatar(avatar);
 	return { avatar };
+});
+
+/**
+ * O SINO do cabeçalho (docs/notificacoes.md): a contagem de não lidas e as
+ * últimas notificações, com o texto pronto. Do professor da sessão — o
+ * repositório põe o `teacherId` em todo `where` (regra nº 4).
+ */
+export const notificacoesDoSino = query(async () => {
+	const teacher = requireTeacher(getRequestEvent().locals);
+	return notificacoes(teacher).doSino();
+});
+
+/** Abrir uma notificação a marca como lida. Id de outro professor dá 404, sem dizer por quê. */
+export const marcarNotificacaoLida = command(z.object({ id: z.string() }), async ({ id }) => {
+	const teacher = requireTeacher(getRequestEvent().locals);
+	if (!(await notificacoes(teacher).marcarLida(id))) error(404, 'Notificação não encontrada');
+	return { ok: true };
+});
+
+export const marcarTodasLidas = command(async () => {
+	const teacher = requireTeacher(getRequestEvent().locals);
+	return { lidas: await notificacoes(teacher).marcarTodas() };
 });

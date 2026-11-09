@@ -14,7 +14,7 @@ import { browser } from '$app/environment';
 
 export type Tema = 'light' | 'dark';
 
-export const CHAVE_TEMA = 'entendo-theme';
+export const CHAVE_TEMA = 'spokke-theme';
 
 export function temaGuardado(): Tema {
 	if (!browser) return 'light';

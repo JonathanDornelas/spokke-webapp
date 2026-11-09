@@ -8,7 +8,6 @@
 		{ href: resolve('/(site)/planos'), label: 'Planos' },
 		{ href: resolve('/(site)/sobre'), label: 'Sobre' },
 		{ href: resolve('/(site)/ajuda'), label: 'Ajuda' },
-		{ href: resolve('/(site)/status'), label: 'Status' },
 		{ href: resolve('/(site)/contato'), label: 'Contato' }
 	];
 

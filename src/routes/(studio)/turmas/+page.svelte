@@ -2,6 +2,7 @@
 	// Lista de turmas. Quatro colunas, e nenhuma delas é desempenho: a pergunta
 	// aqui é "quem está nesta turma", não "como a turma foi" — nota média,
 	// ranking e gráfico são matéria de Resultados (paginas.md "Turmas e alunos").
+	import { CLASSE_DA_ETIQUETA, corOuPadrao } from '$lib/etiquetas';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -9,6 +10,7 @@
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
 	import FiltroIdioma from '$lib/components/FiltroIdioma.svelte';
 	import { casaComFiltro } from '$lib/idiomas';
+	import { casaComBusca } from '$lib/busca';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import NovaTurma from './NovaTurma.svelte';
 
@@ -21,6 +23,10 @@
 		idioma: string | null;
 		students: number;
 		withEmail: number;
+		withAccount: number;
+		bounced: number;
+		studentNames: string[];
+		createdAt: string;
 		deliveries: number;
 		lastDelivery: string;
 	}
@@ -37,11 +43,15 @@
 				id: 'tur_01',
 				name: '7º B — inglês',
 				badge: '7B',
-				color: 'violeta',
+				color: 'azul',
 				languageLabel: 'Inglês',
 				idioma: 'en-US',
 				students: 24,
 				withEmail: 22,
+				withAccount: 10,
+				bounced: 1,
+				studentNames: ['Juliana Souza', 'Pedro Lima'],
+				createdAt: '2026-09-01T12:00:00.000Z',
 				deliveries: 6,
 				lastDelivery: 'há 3 dias'
 			},
@@ -54,6 +64,10 @@
 				idioma: 'es-ES',
 				students: 12,
 				withEmail: 9,
+				withAccount: 0,
+				bounced: 0,
+				studentNames: ['Ana Ribeiro'],
+				createdAt: '2026-10-01T12:00:00.000Z',
 				deliveries: 2,
 				lastDelivery: 'há 2 semanas'
 			}
@@ -65,9 +79,64 @@
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
 	const data = $derived(withMock(dataProp, MOCK));
 
-	// Filtro só de tela: as turmas são do professor e já vieram no loader.
+	// Busca, filtros e ordem são de TELA: as turmas são do professor e já vieram
+	// inteiras no loader (uma ida ao servidor por tecla não compraria nada).
 	let filtroIdioma = $state('');
-	const visiveis = $derived(data.classrooms.filter((t) => casaComFiltro(t.idioma, filtroIdioma)));
+	let busca = $state('');
+	type Filtro = 'todas' | 'semConta' | 'voltou' | 'semEnvio';
+	let filtro = $state<Filtro>('todas');
+	type Ordem = 'recentes' | 'nome' | 'alunos';
+	let ordem = $state<Ordem>('recentes');
+
+	const CASA: Record<Filtro, (t: Classroom) => boolean> = {
+		todas: () => true,
+		// Aluno sem conta não vê o mapa dos módulos: é para quem mandar o convite.
+		semConta: (t) => t.students > t.withAccount,
+		voltou: (t) => t.bounced > 0,
+		semEnvio: (t) => t.deliveries === 0
+	};
+	// Só aparece o filtro que tem o que mostrar — chip de "0" é ruído.
+	const filtros = $derived(
+		(
+			[
+				{ id: 'todas', label: 'Todas' },
+				{ id: 'semConta', label: 'Com aluno sem conta' },
+				{ id: 'voltou', label: 'E-mail que voltou' },
+				{ id: 'semEnvio', label: 'Sem envio ainda' }
+			] as { id: Filtro; label: string }[]
+		)
+			.map((f) => ({ ...f, n: data.classrooms.filter(CASA[f.id]).length }))
+			.filter((f) => f.id === 'todas' || f.n > 0)
+	);
+
+	/** O aluno que fez a turma aparecer na busca — dito na linha, para não parecer engano. */
+	function alunoAchado(t: Classroom): string | null {
+		if (!busca.trim() || casaComBusca(t.name, busca)) return null;
+		return t.studentNames.find((n) => casaComBusca(n, busca)) ?? null;
+	}
+
+	const visiveis = $derived(
+		data.classrooms
+			.filter(
+				(t) =>
+					casaComFiltro(t.idioma, filtroIdioma) &&
+					CASA[filtro](t) &&
+					(casaComBusca(t.name, busca) || t.studentNames.some((n) => casaComBusca(n, busca)))
+			)
+			.sort((a, b) =>
+				ordem === 'nome'
+					? a.name.localeCompare(b.name, 'pt-BR')
+					: ordem === 'alunos'
+						? b.students - a.students
+						: b.createdAt.localeCompare(a.createdAt)
+			)
+	);
+	const filtrando = $derived(!!busca.trim() || filtro !== 'todas' || !!filtroIdioma);
+	function limparFiltros() {
+		busca = '';
+		filtro = 'todas';
+		filtroIdioma = '';
+	}
 
 	// **Criar turma abre a bandeja AQUI** (paginas.md "Turmas e alunos"). O
 	// `?nova=1` (e o `?nova=lote`, que já abre no colar) é por onde chega quem
@@ -82,20 +151,9 @@
 		const pedido = page.url.searchParams.get('nova');
 		if (pedido) abrirNova(pedido === 'lote' ? 'lote' : 'um');
 	});
-
-	// Violeta, teal, azul, magenta e ardósia. Verde e âmbar ficam fora: são a
-	// semântica de correção e não podem virar etiqueta de turma.
-	const corDaEtiqueta: Record<string, string> = {
-		violeta: 'bg-base-300 text-primary',
-		teal: 'bg-accent/16 text-accent',
-		azul: 'bg-info/15 text-info',
-		magenta:
-			'bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-error)_10%)] text-primary',
-		ardosia: 'bg-base-300 text-base-content/70'
-	};
 </script>
 
-<svelte:head><title>Turmas — entendo</title></svelte:head>
+<svelte:head><title>Turmas — Spokke</title></svelte:head>
 
 {#if data.classrooms.length === 0}
 	<!-- **O vazio é uma escolha legítima**, não uma pendência: sem turma o
@@ -180,6 +238,78 @@
 			</button>
 		</div>
 
+		<!-- Busca por turma OU por aluno ("em que turma está a Juliana?"), os filtros
+		     de situação e a ordem. Tudo de tela. -->
+		<div class="mb-4 flex flex-wrap items-center gap-2.5">
+			<label class="relative min-w-[220px] flex-[1_1_280px]">
+				<span class="sr-only">Buscar turma ou aluno</span>
+				<svg
+					class="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-base-content/65"
+					viewBox="0 0 24 24"
+					fill="none"
+					aria-hidden="true"
+					><path
+						d="M11 18.5a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM20.5 20.5l-4.2-4.2"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+					/></svg
+				>
+				<input
+					type="search"
+					bind:value={busca}
+					placeholder="Buscar turma ou aluno"
+					class="input h-[38px] min-h-[38px] w-full ps-9 text-[13.5px]"
+				/>
+			</label>
+			<label class="sr-only" for="ordem-turmas">Ordenar turmas</label>
+			<select
+				id="ordem-turmas"
+				bind:value={ordem}
+				class="select h-[38px] min-h-[38px] w-auto py-0 text-[13px]"
+			>
+				<option value="recentes">Mais recentes</option>
+				<option value="nome">Nome (A–Z)</option>
+				<option value="alunos">Mais alunos</option>
+			</select>
+		</div>
+		{#if filtros.length > 1}
+			<div
+				class="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0"
+				role="group"
+				aria-label="Filtrar turmas"
+			>
+				{#each filtros as f (f.id)}
+					<button
+						type="button"
+						aria-pressed={filtro === f.id}
+						onclick={() => (filtro = f.id)}
+						class="inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors {filtro ===
+						f.id
+							? 'border-primary bg-primary text-primary-content'
+							: 'border-line bg-base-100 text-base-content/70 hover:border-primary'}"
+					>
+						{f.label}
+						<span class="font-mono text-[12px] opacity-80">{f.n}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
+
+		{#if visiveis.length === 0}
+			<div
+				class="mb-[22px] rounded-[14px] border border-dashed border-line px-5 py-8 text-center text-[14px] text-base-content/65"
+				role="status"
+			>
+				<p class="mb-3">Nenhuma turma com {busca.trim() ? `“${busca.trim()}”` : 'esse filtro'}.</p>
+				{#if filtrando}
+					<button type="button" onclick={limparFiltros} class="btn btn-sm btn-plain">
+						Limpar busca e filtros
+					</button>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- Desktop: quatro colunas, e nenhuma delas é desempenho. Celular: a
 		     mesma informação em cartões, sem rolagem lateral. -->
 		<div class="mb-[22px] hidden overflow-hidden rounded-[14px] border border-line lg:block">
@@ -196,12 +326,17 @@
 				>
 					<span class="flex min-w-0 items-center gap-3">
 						<span
-							class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {corDaEtiqueta[
-								turma.color
-							] ?? corDaEtiqueta.violeta}">{turma.badge}</span
+							class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {CLASSE_DA_ETIQUETA[
+								corOuPadrao(turma.color)
+							]}">{turma.badge}</span
 						>
 						<span class="min-w-0">
 							<span class="mb-[3px] block truncate font-semibold">{turma.name}</span>
+							{#if alunoAchado(turma)}
+								<span class="mb-1 block truncate text-[12px] text-primary"
+									>aluno: {alunoAchado(turma)}</span
+								>
+							{/if}
 							<IdiomaTag tag={turma.idioma} class="mt-1" />
 						</span>
 					</span>
@@ -212,8 +347,14 @@
 						<span class="block text-xs text-base-content/65">
 							{turma.withEmail === turma.students
 								? 'todos com e-mail'
-								: `${turma.withEmail} com e-mail`}
+								: `${turma.withEmail} com e-mail`} · {turma.withAccount} com conta
 						</span>
+						{#if turma.bounced > 0}
+							<span class="mt-0.5 block text-xs font-semibold text-error">
+								{turma.bounced}
+								{turma.bounced === 1 ? 'e-mail voltou' : 'e-mails voltaram'}
+							</span>
+						{/if}
 					</span>
 					<span class="font-mono text-[13px] text-base-content/65"
 						>{turma.deliveries === 0 ? '—' : turma.deliveries}</span
@@ -233,14 +374,19 @@
 					>
 						<div class="mb-2.5 flex items-center gap-3">
 							<span
-								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {corDaEtiqueta[
-									turma.color
-								] ?? corDaEtiqueta.violeta}">{turma.badge}</span
+								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {CLASSE_DA_ETIQUETA[
+									corOuPadrao(turma.color)
+								]}">{turma.badge}</span
 							>
 							<span class="min-w-0 flex-1">
 								<span class="block truncate text-[0.92rem] font-semibold text-base-content"
 									>{turma.name}</span
 								>
+								{#if alunoAchado(turma)}
+									<span class="block truncate text-[12px] text-primary"
+										>aluno: {alunoAchado(turma)}</span
+									>
+								{/if}
 								<IdiomaTag tag={turma.idioma} class="mt-1" />
 							</span>
 						</div>
@@ -251,6 +397,15 @@
 							<span
 								><strong class="font-mono text-base-content">{turma.withEmail}</strong> com e-mail</span
 							>
+							<span
+								><strong class="font-mono text-base-content">{turma.withAccount}</strong> com conta</span
+							>
+							{#if turma.bounced > 0}
+								<span class="font-semibold text-error"
+									>{turma.bounced}
+									{turma.bounced === 1 ? 'e-mail voltou' : 'e-mails voltaram'}</span
+								>
+							{/if}
 							<span>{turma.deliveries === 0 ? 'nenhum envio' : `${turma.deliveries} enviadas`}</span
 							>
 							<span>{turma.lastDelivery}</span>

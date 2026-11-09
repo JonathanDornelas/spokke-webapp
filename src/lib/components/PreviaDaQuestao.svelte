@@ -89,7 +89,7 @@
 	<WritingInteraction
 		item={{ dir: r.dir, instructions: r.prompt, maxLength: 600 } satisfies WritingRuntimeItem}
 		bind:value={texto}
-		storageKey="entendo:previa:{chave}"
+		storageKey="spokke:previa:{chave}"
 	/>
 {:else if r.interaction === 'type' || r.interaction === 'cloze'}
 	<ClozeInteraction item={comoCloze(r)} bind:value={texto} />

@@ -18,7 +18,12 @@
 	import SeletorDeEtiqueta from '$lib/components/SeletorDeEtiqueta.svelte';
 	import { parseAlunos } from '$lib/turmas/parse-alunos';
 	import { IDIOMAS } from '$lib/idiomas';
-	import { CLASSE_DA_ETIQUETA, etiquetaDaTurma, type CorDeEtiqueta } from '$lib/etiquetas';
+	import {
+		CLASSE_DA_ETIQUETA,
+		COR_PADRAO,
+		etiquetaDaTurma,
+		type CorDeEtiqueta
+	} from '$lib/etiquetas';
 	import { criarTurma } from './turmas.remote';
 
 	let {
@@ -48,7 +53,7 @@
 	const formId = $props.id();
 	let nome = $state('');
 	let idioma = $state('');
-	let cor = $state<CorDeEtiqueta>('violeta');
+	let cor = $state<CorDeEtiqueta>(COR_PADRAO);
 	let modo = $state<'um' | 'lote'>('um');
 	let linhas = $state<LinhaUmAUm[]>(linhasVazias());
 	let colado = $state('');
@@ -62,7 +67,7 @@
 		untrack(() => {
 			nome = '';
 			idioma = idiomaPadrao ?? '';
-			cor = 'violeta';
+			cor = COR_PADRAO;
 			modo = modoInicial;
 			linhas = linhasVazias();
 			colado = '';

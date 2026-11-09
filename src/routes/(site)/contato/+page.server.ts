@@ -20,10 +20,9 @@ import { criarLimite } from '$lib/server/limite-por-ip';
 const ASSUNTOS = [
 	'Dúvida sobre a plataforma',
 	'Problema técnico',
-	'Urgente — turma em aula',
+	'Problema com uma turma em aula agora',
 	'Escolas e redes',
-	'Privacidade e dados',
-	'Imprensa'
+	'Privacidade e dados'
 ] as const;
 
 const ATALHOS: Record<string, (typeof ASSUNTOS)[number]> = { escolas: 'Escolas e redes' };

@@ -31,7 +31,7 @@ type ItemState = 'correct' | 'partial' | 'incorrect' | 'pending';
  * eles são. Antes ele recebia só "enviado", o que é verdade e é pouco.
  */
 export const load: PageServerLoad = async ({ params, cookies, locals }) => {
-	const attemptId = cookies.get(`entendo_attempt_${params.slug}`);
+	const attemptId = cookies.get(`spokke_attempt_${params.slug}`);
 
 	// Sem o cookie da tentativa, procura a que este aparelho (ou esta conta) já
 	// entregou: é o caminho de quem volta pelo link depois, ou de quem abre a
@@ -43,7 +43,7 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 				const publication = await playerRepo.publicationBySlug(params.slug);
 				if (!publication) return null;
 				const anterior = await playerRepo.concludedAttempt(publication.id, {
-					anonId: cookies.get('entendo_anon'),
+					anonId: cookies.get('spokke_anon'),
 					accountId: locals.aluno?.id
 				});
 				return anterior ? playerRepo.attemptById(anterior.id) : null;

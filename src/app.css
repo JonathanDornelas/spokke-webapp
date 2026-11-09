@@ -1,34 +1,34 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   entendo — tema claro (padrão)
+   Spokke — tema claro (padrão)
    Sem framework de componentes: Tailwind puro. Estes tokens geram as
    utilities de cor/raio direto (bg-primary, rounded-field, ...) — é assim
    que o Tailwind 4 funciona, sem plugin nenhum.
 
-   Violeta é a marca. Verde/âmbar/vermelho são RESERVADOS para a semântica de
+   Azul (#3659CB) é a marca. Verde/âmbar/vermelho são RESERVADOS para a semântica de
    correção (correto / parcial / incorreto). Nunca use essas três famílias
    como decoração.
 --------------------------------------------------------------------------- */
 @theme {
 	--color-base-100: #ffffff;
-	--color-base-200: #f5f4fb;
-	--color-base-300: #e7e3f7;
-	--color-base-content: #1a1730;
-	--color-line: #e2def2; /* borda de card/divisor — não confundir com base-300 (fill) */
+	--color-base-200: #f2f5fc;
+	--color-base-300: #dee6f9;
+	--color-base-content: #111a31;
+	--color-line: #d9e1f4; /* borda de card/divisor — não confundir com base-300 (fill) */
 	--color-card: #ffffff; /* superfície de cartão; no escuro fica acima do base-100 */
 	/* O véu atrás de modal, painel lateral e gaveta: PRETO translúcido, o mesmo
 	   nos dois temas. Era `base-content/40`, que no escuro é um véu BRANCO — a
 	   página clareava em vez de recuar. Definido só aqui, de propósito. */
 	--color-overlay: rgb(0 0 0 / 0.55);
 
-	--color-primary: #5a3ff3;
+	--color-primary: #3659cb;
 	--color-primary-content: #ffffff;
-	--color-secondary: #1e1b3c;
+	--color-secondary: #131e3d;
 	--color-secondary-content: #ffffff;
 	--color-accent: #0ea5b7; /* áudio, mídia, gravação */
 	--color-accent-content: #ffffff;
-	--color-neutral: #6b6690;
+	--color-neutral: #5b6b93;
 	--color-neutral-content: #ffffff;
 
 	--color-success: #12855f; /* correto */
@@ -40,14 +40,19 @@
 	--color-info: #2563a8;
 	--color-info-content: #ffffff;
 
+	/* Só ETIQUETA de turma e módulo ($lib/etiquetas.ts), nunca a marca. Foi a
+	   cor da marca até a troca para #3659CB e ficou como uma das cinco cores
+	   de etiqueta. */
+	--color-violeta: #5a3ff3;
+
 	/* Superfícies escuras da home (faixa "O Player", CTA, bezel do celular).
 	   NUNCA use base-content como fundo: no tema escuro isso vira texto claro
 	   sobre fundo claro — ver .claude/rules/home.md "Superfícies escuras". */
-	--color-panel: #1e1b3c;
-	--color-panel-content: #eceaf7;
-	--color-panel-dim: #a9a3c6;
-	--color-panel-line: #443e66;
-	--color-bezel: #1a1730;
+	--color-panel: #131e3d;
+	--color-panel-content: #e7ecf8;
+	--color-panel-dim: #9aa8c9;
+	--color-panel-line: #344369;
+	--color-bezel: #111a31;
 
 	--radius-selector: 999px;
 	--radius-field: 0.625rem;
@@ -137,7 +142,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   entendo — tema escuro
+   Spokke — tema escuro
    Mesma variável, valor diferente: qualquer utility gerada acima (bg-primary,
    text-base-content...) resolve sozinha porque aponta pra var(--color-*), não
    pro valor literal. `data-theme` no <html> força um lado; sem o atributo,
@@ -145,21 +150,21 @@
 --------------------------------------------------------------------------- */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme='light']) {
-		--color-base-100: #14121f;
-		--color-base-200: #1d1a2c;
-		--color-base-300: #292540;
-		--color-base-content: #eceaf7;
-		--color-line: #332e4d;
-		--color-card: #1a1729;
+		--color-base-100: #0f1420;
+		--color-base-200: #161c2d;
+		--color-base-300: #1e2842;
+		--color-base-content: #e7ecf8;
+		--color-line: #26324f;
+		--color-card: #13192a;
 
-		--color-primary: #8b7bff;
-		--color-primary-content: #140f33;
-		--color-secondary: #eceaf7;
-		--color-secondary-content: #14121f;
+		--color-primary: #608aff;
+		--color-primary-content: #081334;
+		--color-secondary: #e7ecf8;
+		--color-secondary-content: #0f1420;
 		--color-accent: #35c4d4;
-		--color-accent-content: #14121f;
-		--color-neutral: #a9a3c6;
-		--color-neutral-content: #14121f;
+		--color-accent-content: #0f1420;
+		--color-neutral: #9aa8c9;
+		--color-neutral-content: #0f1420;
 
 		--color-success: #3ecf98;
 		--color-success-content: #0a2e21;
@@ -169,12 +174,13 @@
 		--color-error-content: #3a0a12;
 		--color-info: #7fb2e8;
 		--color-info-content: #0a2540;
+		--color-violeta: #8b7bff;
 
-		--color-panel: #0e0c18;
-		--color-panel-content: #eceaf7;
-		--color-panel-dim: #a9a3c6;
-		--color-panel-line: #332e4d;
-		--color-bezel: #3a3458;
+		--color-panel: #090e19;
+		--color-panel-content: #e7ecf8;
+		--color-panel-dim: #9aa8c9;
+		--color-panel-line: #26324f;
+		--color-bezel: #2b395b;
 
 		/* triplet RGB cru para rgb(var(--shadow)/alpha) — preto no escuro. */
 		--shadow: 0 0 0;
@@ -182,21 +188,21 @@
 }
 
 :root[data-theme='dark'] {
-	--color-base-100: #14121f;
-	--color-base-200: #1d1a2c;
-	--color-base-300: #292540;
-	--color-base-content: #eceaf7;
-	--color-line: #332e4d;
-	--color-card: #1a1729;
+	--color-base-100: #0f1420;
+	--color-base-200: #161c2d;
+	--color-base-300: #1e2842;
+	--color-base-content: #e7ecf8;
+	--color-line: #26324f;
+	--color-card: #13192a;
 
-	--color-primary: #8b7bff;
-	--color-primary-content: #140f33;
-	--color-secondary: #eceaf7;
-	--color-secondary-content: #14121f;
+	--color-primary: #608aff;
+	--color-primary-content: #081334;
+	--color-secondary: #e7ecf8;
+	--color-secondary-content: #0f1420;
 	--color-accent: #35c4d4;
-	--color-accent-content: #14121f;
-	--color-neutral: #a9a3c6;
-	--color-neutral-content: #14121f;
+	--color-accent-content: #0f1420;
+	--color-neutral: #9aa8c9;
+	--color-neutral-content: #0f1420;
 
 	--color-success: #3ecf98;
 	--color-success-content: #0a2e21;
@@ -206,21 +212,22 @@
 	--color-error-content: #3a0a12;
 	--color-info: #7fb2e8;
 	--color-info-content: #0a2540;
+	--color-violeta: #8b7bff;
 
-	--color-panel: #0e0c18;
-	--color-panel-content: #eceaf7;
-	--color-panel-dim: #a9a3c6;
-	--color-panel-line: #332e4d;
-	--color-bezel: #3a3458;
+	--color-panel: #090e19;
+	--color-panel-content: #e7ecf8;
+	--color-panel-dim: #9aa8c9;
+	--color-panel-line: #26324f;
+	--color-bezel: #2b395b;
 
 	--shadow: 0 0 0;
 }
 
 @layer base {
 	html {
-		/* violeta-tinta no claro, preta no escuro (definida acima) — sombra de
+		/* azul-tinta no claro, preta no escuro (definida acima) — sombra de
 		   cartão/celular via shadow-[...rgb(var(--shadow)/alpha)]. */
-		--shadow: 26 23 48;
+		--shadow: 17 26 49;
 		font-family: var(--font-sans);
 		background-color: var(--color-base-100);
 		color: var(--color-base-content);
@@ -727,7 +734,7 @@
 }
 
 /* O CARTÃO clicável inteiro (link de área, plano, atividade enviada): sobe 3 px
-   com a borda puxando para o violeta e uma sombra na cor da marca, e afunda
+   com a borda puxando para a cor da marca e uma sombra nela, e afunda
    um nada ao apertar. Era o mesmo gesto escrito à mão em cada tela, com 2, 3
    e 5 px e `transition-all`. Controle pequeno (chip, opção) sobe 2 px com
    `hover:-translate-y-0.5` — cartão grande pede mais para ser notado. */
@@ -923,6 +930,44 @@
 	}
 	100% {
 		transform: translate3d(0, 0, 0) rotate(360deg);
+	}
+}
+
+/* O fundo de TELA INTEIRA (`AmbientShapes layout="tela"`, entrar e criar
+   conta): o mesmo vaivém das faixas, com amplitude maior. Numa página quase
+   vazia, os ~30 px a cada 10 s das faixas liam como formas paradas; aqui elas
+   passeiam pela margem. Só `transform`, e o `prefers-reduced-motion` do
+   `@layer base` congela tudo igual. */
+@keyframes en-vagar-a {
+	0%,
+	100% {
+		transform: translate3d(0, 0, 0) rotate(0deg);
+	}
+	33% {
+		transform: translate3d(72px, -54px, 0) rotate(14deg);
+	}
+	66% {
+		transform: translate3d(-40px, 44px, 0) rotate(-8deg);
+	}
+}
+
+@keyframes en-vagar-b {
+	0%,
+	100% {
+		transform: translate3d(0, 0, 0) scale(1);
+	}
+	50% {
+		transform: translate3d(-80px, 62px, 0) scale(1.12);
+	}
+}
+
+@keyframes en-vagar-c {
+	0%,
+	100% {
+		transform: translate3d(0, 0, 0) rotate(0deg);
+	}
+	50% {
+		transform: translate3d(58px, 72px, 0) rotate(-26deg);
 	}
 }
 

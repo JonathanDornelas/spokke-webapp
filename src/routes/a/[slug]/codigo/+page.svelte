@@ -21,7 +21,7 @@
 	}
 </script>
 
-<svelte:head><title>Código da turma — entendo</title></svelte:head>
+<svelte:head><title>Código da turma — Spokke</title></svelte:head>
 
 <div
 	class="relative flex min-h-0 flex-1 flex-col [justify-content:safe_center] overflow-y-auto px-gutter

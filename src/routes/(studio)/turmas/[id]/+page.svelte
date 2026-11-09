@@ -3,7 +3,7 @@
 	// A turma. Três blocos numa rolagem: o cabeçalho com os quatro números que
 	// importam, a chamada com o estado no último envio, e o histórico de envios.
 	//
-	// "22 com e-mail" fica em violeta porque é o número que vai RECEBER convite;
+	// "22 com e-mail" fica em azul porque é o número que vai RECEBER convite;
 	// o total de 24 não é. Cada estado de aluno tem ícone e texto — verde e
 	// âmbar não entram (são a semântica de correção) e vermelho aparece só no
 	// e-mail que voltou, o único que pede ação.
@@ -22,8 +22,15 @@
 	import EnviarAtividade from './EnviarAtividade.svelte';
 	import AdicionarAluno from './AdicionarAluno.svelte';
 	import EditarAluno from '../EditarAluno.svelte';
+	import ConviteDeConta from '../ConviteDeConta.svelte';
 
-	import { apagarTurma, removerAluno, reenviarConvite, reenviarNaoAbertos } from '../turmas.remote';
+	import {
+		apagarTurma,
+		enviarConvitesDeContaDaTurma,
+		removerAluno,
+		reenviarConvite,
+		reenviarNaoAbertos
+	} from '../turmas.remote';
 
 	type EstadoAluno =
 		'terminou' | 'comecou' | 'enviado' | 'disponivel' | 'sem-envio' | 'sem-email' | 'voltou';
@@ -38,6 +45,8 @@
 		inviteId: string | null;
 		/** Já ligou a chamada a uma conta dele, abrindo o convite logado. */
 		temConta: boolean;
+		/** Sem conta, e o convite para a conta já saiu por e-mail. */
+		convidadoParaConta: boolean;
 	}
 	interface Envio {
 		id: string;
@@ -92,7 +101,7 @@
 			id: 'tur_01',
 			name: '7º B — inglês',
 			badge: '7B',
-			color: 'violeta',
+			color: 'azul',
 			languageLabel: 'Inglês',
 			idioma: 'en-US',
 			createdAt: '12 de fevereiro'
@@ -108,7 +117,8 @@
 				email: 'juliana.p@escola.com.br',
 				state: 'enviado',
 				inviteId: 'cnv_01',
-				temConta: true
+				temConta: true,
+				convidadoParaConta: false
 			},
 			{
 				id: 'alu_02',
@@ -118,7 +128,8 @@
 				email: null,
 				state: 'sem-email',
 				inviteId: null,
-				temConta: false
+				temConta: false,
+				convidadoParaConta: false
 			}
 		] as Aluno[],
 		tally: {
@@ -291,6 +302,37 @@
 	}
 
 	/**
+	 * O CONVITE DE CONTA (auth.md "A conta do aluno"): por aluno, a bandeja com o
+	 * link e o e-mail; para a turma, um botão com a contagem — quem tem e-mail e
+	 * ainda não tem conta. É a conta que faz o módulo aparecer no mapa do aluno.
+	 */
+	let alunoDoConvite = $state<Aluno | null>(null);
+	let conviteAberto = $state(false);
+	function abrirConvite(aluno: Aluno) {
+		alunoDoConvite = aluno;
+		confirmandoAluno = null;
+		conviteAberto = true;
+	}
+	const semContaComEmail = $derived(data.students.filter((a) => !a.temConta && a.email).length);
+	let convidandoTurma = $state(false);
+	async function convidarTurma() {
+		convidandoTurma = true;
+		try {
+			const r = await enviarConvitesDeContaDaTurma({ classroomId: data.classroom.id });
+			aviso = !r.ok
+				? (r.error ?? 'Não deu para mandar agora.')
+				: r.enviados === 0
+					? 'Ninguém para convidar: quem tem e-mail já tem conta.'
+					: `${r.enviados} ${r.enviados === 1 ? 'convite para a conta na fila' : 'convites para a conta na fila'} · a fila está andando`;
+			await invalidateAll();
+		} catch {
+			aviso = 'Não deu para mandar agora. Tente de novo em instantes.';
+		} finally {
+			convidandoTurma = false;
+		}
+	}
+
+	/**
 	 * "Exportar antes de apagar": a chamada com o estado de cada aluno, montada no
 	 * navegador com o que a tela já mostra (`$lib/csv.ts`), sem endpoint.
 	 */
@@ -348,7 +390,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.classroom.name} — entendo</title></svelte:head>
+<svelte:head><title>{data.classroom.name} — Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a
@@ -371,7 +413,7 @@
 	<HeaderCard
 		numbers={[
 			{ value: data.totals.students, label: 'alunos na turma' },
-			// É este número que recebe convite, e por isso é o único em violeta —
+			// É este número que recebe convite, e por isso é o único em azul —
 			// o total de alunos não recebe.
 			{ value: data.totals.withEmail, label: 'com e-mail · recebem convite', tone: 'primary' },
 			{ value: data.totals.deliveries, label: 'atividades enviadas' },
@@ -539,6 +581,33 @@
 					</svg>
 					Adicionar aluno
 				</button>
+				{#if semContaComEmail > 0}
+					<!-- Sempre com a contagem, como o reenvio: ninguém manda "para todos" no escuro. -->
+					<button
+						type="button"
+						onclick={convidarTurma}
+						disabled={convidandoTurma}
+						title="Manda o convite para criar a conta a quem tem e-mail e ainda não tem conta"
+						class="btn h-10 motion-tap gap-2 btn-outline text-[13px] font-bold"
+					>
+						{#if convidandoTurma}
+							<Loading variant="fila" size={11} tone="current" label="Convidando" />
+							Convidando…
+						{:else}
+							<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<path
+									d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1 1M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1-1"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+								/>
+							</svg>
+							{semContaComEmail === 1
+								? 'Convidar para a conta quem não tem'
+								: `Convidar os ${semContaComEmail} sem conta`}
+						{/if}
+					</button>
+				{/if}
 				{#if data.lastDelivery && data.lastDelivery.porEmail && data.lastDelivery.unopened > 0}
 					<!-- Reenvio é ação separada e SEMPRE com contagem. -->
 					<button
@@ -651,6 +720,12 @@
 										class="shrink-0 rounded-full bg-base-300 px-1.5 py-0.5 text-[0.68rem] font-bold text-base-content/70"
 										title="Este aluno ligou a chamada a uma conta dele">com conta</span
 									>
+								{:else if aluno.convidadoParaConta}
+									<span
+										class="shrink-0 rounded-full border border-line px-1.5 py-0.5 text-[0.68rem] font-bold text-base-content/65"
+										title="O convite para criar a conta saiu por e-mail; ele ainda não entrou"
+										>convidado</span
+									>
 								{/if}
 							</a>
 							{#if aluno.email}
@@ -744,6 +819,25 @@
 												/>
 											</svg>
 										{/if}
+									</button>
+								{/if}
+								{#if !aluno.temConta}
+									<button
+										type="button"
+										onclick={() => abrirConvite(aluno)}
+										title="Convite para criar a conta (link ou e-mail)"
+										aria-label="Convite para a conta de {aluno.name}"
+										aria-haspopup="dialog"
+										class="grid size-[34px] place-items-center rounded-[9px] text-base-content/65 transition-colors hover:bg-base-300 hover:text-primary"
+									>
+										<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+											<path
+												d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1 1M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1-1"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+											/>
+										</svg>
 									</button>
 								{/if}
 								<button
@@ -883,10 +977,10 @@
 									>
 								{/if}
 								{#if !envio.porEmail}
-									<!-- Envio sem e-mail: "não abriram" falaria de um e-mail que não existiu. -->
+									<!-- Liberação de módulo, sem e-mail: "não abriram" falaria de um e-mail que não existiu. -->
 									<span
 										class="rounded-full border border-line bg-base-200 px-[9px] py-1 text-[11.5px] font-bold whitespace-nowrap text-base-content/65"
-										>no mapa, sem e-mail</span
+										>liberada no mapa</span
 									>
 								{:else if envio.unopened > 0}
 									<span
@@ -1006,6 +1100,12 @@
 	aberta={novoAlunoAberto}
 	onfechar={() => (novoAlunoAberto = false)}
 	turma={data.classroom}
+/>
+<ConviteDeConta
+	aberta={conviteAberto}
+	onfechar={() => (conviteAberto = false)}
+	aluno={alunoDoConvite}
+	onenviado={() => invalidateAll()}
 />
 {#if alunoEmEdicao}
 	<EditarAluno

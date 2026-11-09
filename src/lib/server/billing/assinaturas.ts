@@ -1,5 +1,7 @@
 import { prisma, type Db } from '$lib/server/db/client';
+import { notificar } from '$lib/server/notificacoes';
 import {
+	NOME_DO_PLANO,
 	TRIAL,
 	ehCiclo,
 	ehPlanoPago,
@@ -24,6 +26,35 @@ import type { Prisma } from '../../../../generated/prisma/client.ts';
  */
 
 export type Ator = 'sistema' | 'professor' | 'provedor' | `admin:${string}`;
+
+/**
+ * O sino só ouve o que OUTRA pessoa fez na assinatura dele — a equipe pelo
+ * painel, o provedor pelo webhook. O que ele mesmo fez, ele acabou de ver.
+ */
+export function avisaProfessor(ator: Ator): boolean {
+	return ator === 'provedor' || ator.startsWith('admin:');
+}
+
+export async function avisarPlano(
+	teacherId: string,
+	data: {
+		evento: 'ativado' | 'trial' | 'cancelado' | 'creditos';
+		plano?: string;
+		ate?: Date;
+		creditos?: number;
+	}
+): Promise<void> {
+	await notificar(teacherId, {
+		kind: 'plano',
+		key: `plano:${data.evento}:${crypto.randomUUID()}`,
+		data: {
+			evento: data.evento,
+			plano: data.plano ?? null,
+			ate: data.ate?.toISOString() ?? null,
+			creditos: data.creditos ?? null
+		}
+	});
+}
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -89,7 +120,10 @@ export async function ativarPlano(
 	const ate = pedido.ate ?? fimDoPeriodo(agora, pedido.ciclo);
 	if (ate <= agora) throw new Error('O fim do período precisa estar no futuro.');
 
-	return emTransacao(opcoes.db, async (tx) => {
+	// Dentro da transação de outra função (`atenderPedido`), quem avisa é ela,
+	// DEPOIS do commit: um aviso de plano ativo para uma ativação desfeita mentiria.
+	const avisar = !opcoes.db && avisaProfessor(ator);
+	const feito = await emTransacao(opcoes.db, async (tx) => {
 		const antes = await tx.teacher.findUniqueOrThrow({
 			where: { id: teacherId },
 			select: { plan: true, cycleAnchor: true, subscriptionStatus: true }
@@ -119,6 +153,9 @@ export async function ativarPlano(
 			}
 		});
 	});
+	if (avisar)
+		await avisarPlano(teacherId, { evento: 'ativado', plano: NOME_DO_PLANO[pedido.plano], ate });
+	return feito;
 }
 
 /**
@@ -133,7 +170,8 @@ export async function estenderTrial(
 	opcoes: { db?: Db; agora?: Date } = {}
 ) {
 	const agora = opcoes.agora ?? new Date();
-	return emTransacao(opcoes.db, async (tx) => {
+	let fimDoTeste: Date | null = null;
+	const feito = await emTransacao(opcoes.db, async (tx) => {
 		const antes = await tx.teacher.findUniqueOrThrow({
 			where: { id: teacherId },
 			select: { trialEndsAt: true, subscriptionStatus: true }
@@ -151,7 +189,13 @@ export async function estenderTrial(
 			type: dias >= 0 ? 'trial_estendido' : 'trial_encerrado',
 			data: { de: antes.trialEndsAt?.toISOString() ?? null, para: fim.toISOString(), dias }
 		});
+		fimDoTeste = fim;
 	});
+	// Encerrar antes (dias negativos) é ferramenta de teste do painel: não avisa.
+	if (fimDoTeste && dias > 0 && !opcoes.db && avisaProfessor(ator)) {
+		await avisarPlano(teacherId, { evento: 'trial', ate: fimDoTeste });
+	}
+	return feito;
 }
 
 /**
@@ -166,7 +210,7 @@ export async function cancelar(
 	extra: { db?: Db; agora?: Date } = {}
 ) {
 	const agora = extra.agora ?? new Date();
-	return emTransacao(extra.db, async (tx) => {
+	const feito = await emTransacao(extra.db, async (tx) => {
 		if (opcoes.noFimDoPeriodo) {
 			await tx.teacher.update({ where: { id: teacherId }, data: { cancelAtPeriodEnd: true } });
 		} else {
@@ -182,6 +226,11 @@ export async function cancelar(
 			data: {}
 		});
 	});
+	// Só o cancelamento que vale AGORA: o agendado não muda nada até o fim do período.
+	if (!opcoes.noFimDoPeriodo && !extra.db && avisaProfessor(ator)) {
+		await avisarPlano(teacherId, { evento: 'cancelado' });
+	}
+	return feito;
 }
 
 /** Desfaz um cancelamento agendado. Plano já encerrado volta por `ativarPlano`. */
@@ -203,7 +252,7 @@ export async function atenderPedido(
 	opcoes: { ate?: Date; agora?: Date } = {}
 ) {
 	const agora = opcoes.agora ?? new Date();
-	return prisma.$transaction(async (tx) => {
+	const ativado = await prisma.$transaction(async (tx) => {
 		const { count } = await tx.planRequest.updateMany({
 			where: { id: pedidoId, status: 'pendente' },
 			data: { status: 'atendido', resolvedAt: agora, resolvedBy: adminId }
@@ -220,5 +269,15 @@ export async function atenderPedido(
 			`admin:${adminId}`,
 			{ db: tx, agora }
 		);
+		const depois = await tx.teacher.findUniqueOrThrow({
+			where: { id: pedido.teacherId },
+			select: { currentPeriodEnd: true }
+		});
+		return { teacherId: pedido.teacherId, plano: pedido.plano, ate: depois.currentPeriodEnd };
+	});
+	await avisarPlano(ativado.teacherId, {
+		evento: 'ativado',
+		plano: NOME_DO_PLANO[ativado.plano],
+		ate: ativado.ate ?? undefined
 	});
 }

@@ -39,26 +39,31 @@ componentes, os estados de correção, as seis interações do Player e as telas
 Catálogo vivo, testável em cada estado, com toggle de tema: `/dev/components` (só em `pnpm dev`,
 ver `src/routes/dev/components/`).
 
-**Violeta é a marca. Verde, âmbar e vermelho são reservados para a semântica de correção** —
+**Azul (#3659CB) é a marca. Verde, âmbar e vermelho são reservados para a semântica de correção** —
 nunca aparecem como decoração, gradiente ou destaque de marca.
 
 | Papel              | Token              | Claro                       | Escuro                      |
 | ------------------ | ------------------ | --------------------------- | --------------------------- |
-| Marca, ação, foco  | `primary`          | #5A3FF3                     | #8B7BFF                     |
+| Marca, ação, foco  | `primary`          | #3659CB                     | #608AFF                     |
 | Áudio, mídia, ASR  | `accent`           | #0EA5B7                     | #35C4D4                     |
 | Correto            | `success`          | #12855F                     | #3ECF98                     |
 | Parcial            | `warning`          | #B26A00                     | #F2B23A                     |
 | Incorreto          | `error`            | #C8324A                     | #FF7183                     |
-| Texto              | `base-content`     | #1A1730                     | #ECEAF7                     |
-| Superfícies        | `base-100/200/300` | #FFFFFF / #F5F4FB / #E7E3F7 | #14121F / #1D1A2C / #292540 |
-| Borda de cartão    | `line`             | #E2DEF2                     | #332E4D                     |
-| Superfície de card | `card`             | #FFFFFF                     | #1A1729                     |
+| Texto              | `base-content`     | #111A31                     | #E7ECF8                     |
+| Superfícies        | `base-100/200/300` | #FFFFFF / #F2F5FC / #DEE6F9 | #0F1420 / #161C2D / #1E2842 |
+| Borda de cartão    | `line`             | #D9E1F4                     | #26324F                     |
+| Superfície de card | `card`             | #FFFFFF                     | #13192A                     |
 | Véu de modal       | `overlay`          | preto a 55%                 | preto a 55%                 |
+| Só etiqueta        | `violeta`          | #5A3FF3                     | #8B7BFF                     |
 
 `line` é a borda de cartão, campo e divisor — **não** `base-300`, que é preenchimento (trilha de
 progresso, chip). `card` é a superfície de um cartão — no claro é igual a `base-100`, no escuro
-fica um degrau acima do fundo da página (`card` #1A1729 vs `base-100` #14121F). Confundir os dois
+fica um degrau acima do fundo da página (`card` #13192A vs `base-100` #0F1420). Confundir os dois
 pares é o erro mais comum ao portar um componente.
+
+`violeta` foi a marca até a troca para #3659CB (novembro de 2026) e ficou só como uma das cinco
+cores de etiqueta de turma e módulo (`$lib/etiquetas.ts`). Nunca use em botão, foco ou destaque:
+ali é `primary`.
 
 Raios: `--radius-field: 0.625rem`, `--radius-box: 0.875rem`, seletores em pill
 (`--radius-selector`). Como são tokens `@theme`, viram `rounded-field`/`rounded-box`/
@@ -266,7 +271,7 @@ o mesmo teto de toda lista; o bloco da seção em si entra sem atraso. Estado se
 tela.
 
 Hover: linha de tabela troca para `base-200`; o CARTÃO clicável inteiro usa `cartao-interativo` (sobe
-3 px, borda puxando para o violeta, sombra na cor da marca); controle pequeno — chip, opção — sobe 2 px
+3 px, borda puxando para a cor da marca, sombra na cor da marca); controle pequeno — chip, opção — sobe 2 px
 com `hover:-translate-y-0.5`. **No Tailwind 4, `-translate-y-*` e `scale-*` mexem em `translate` e
 `scale`, não em `transform`**: uma `transition-[transform]` não os anima e o hover PULA — a lista
 precisa dizer `translate` e `scale` (estava errada em dezoito lugares). Botão responde ao toque com

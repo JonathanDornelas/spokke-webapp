@@ -61,7 +61,7 @@
 			conviteVoltou: false,
 			account: null
 		},
-		classroom: { id: 'tur_01', name: '7º B — inglês', badge: '7B', color: 'violeta' },
+		classroom: { id: 'tur_01', name: '7º B — inglês', badge: '7B', color: 'azul' },
 		totals: { attempts: 3, finished: 2, average: 74 },
 		attempts: [
 			{
@@ -110,7 +110,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.student.name} — entendo</title></svelte:head>
+<svelte:head><title>{data.student.name} — Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a
@@ -131,7 +131,7 @@
 		{data.classroom ? data.classroom.name : 'Turmas'}
 	</a>
 
-	<!-- ═══ 1. cabeçalho ═══ O acerto médio é o único em violeta, com a regra
+	<!-- ═══ 1. cabeçalho ═══ O acerto médio é o único em azul, com a regra
 	     escrita embaixo — só das terminadas, senão quem parou na segunda questão
 	     puxa o número para baixo por um motivo que não é desempenho. -->
 	<HeaderCard
@@ -288,7 +288,7 @@
 						/>
 					</svg>
 				</span>
-				<p class="text-[13.5px] font-bold">Criou conta no entendo</p>
+				<p class="text-[13.5px] font-bold">Criou conta no Spokke</p>
 			</div>
 			<div class="grid min-w-[260px] flex-1 grid-cols-2 gap-x-4 gap-y-1 lg:gap-x-6 lg:gap-y-1.5">
 				<span class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"

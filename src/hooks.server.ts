@@ -11,7 +11,7 @@ import { authAluno } from '$lib/server/auth/aluno';
 import { ehAdminDaPlataforma } from '$lib/server/auth/guard';
 
 // Rotas que não exigem professor autenticado: capa pública, Player do aluno
-// (a/[slug]), o webhook do Stripe e o catálogo de componentes de dev. Tudo
+// (a/[slug]), o webhook do Mercado Pago e o catálogo de componentes de dev. Tudo
 // mais é Studio e exige sessão — ver .claude/rules/auth.md "Onde a guarda
 // mora". Isto é defesa em profundidade: a proteção de verdade é o
 // requireTeacher() em cada remote function.
@@ -29,7 +29,6 @@ const PUBLIC_PATHS = [
 	'/contato',
 	'/sobre',
 	'/ajuda',
-	'/status',
 	'/termos',
 	'/cookies',
 	'/acessibilidade'
@@ -41,7 +40,7 @@ function isPublicPath(pathname: string): boolean {
 	// O link pessoal do convite. É a porta do ALUNO: ele não tem conta, então
 	// mandá-lo para `/entrar` seria pedir uma senha que não existe.
 	if (pathname.startsWith('/e/')) return true;
-	if (pathname.startsWith('/api/stripe')) return true;
+	if (pathname.startsWith('/api/mercadopago')) return true;
 	if (pathname.startsWith('/api/auth')) return true;
 	// A área do aluno: conta OPCIONAL, identidade separada da do professor. Ela
 	// tem guard próprio (`requireAluno`) — mandar quem não está logado para
@@ -64,7 +63,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// As duas identidades são resolvidas juntas e guardadas separadas: o mesmo
 	// browser pode ter as duas (o professor testando a própria atividade), e uma
-	// NUNCA vira a outra. Cada instância lê o seu cookie (`entendo-aluno` para o
+	// NUNCA vira a outra. Cada instância lê o seu cookie (`spokke-aluno` para o
 	// aluno) — ver `server/auth/aluno.ts`.
 	const [result, sessaoAluno] = await Promise.all([
 		auth.api.getSession({ headers: event.request.headers }),

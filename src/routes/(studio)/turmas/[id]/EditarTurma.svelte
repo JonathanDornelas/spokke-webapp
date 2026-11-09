@@ -12,6 +12,7 @@
 	import { IDIOMAS } from '$lib/idiomas';
 	import {
 		CLASSE_DA_ETIQUETA,
+		COR_PADRAO,
 		corOuPadrao,
 		etiquetaDaTurma,
 		type CorDeEtiqueta
@@ -31,7 +32,7 @@
 	const formId = $props.id();
 	let nome = $state('');
 	let idioma = $state('');
-	let cor = $state<CorDeEtiqueta>('violeta');
+	let cor = $state<CorDeEtiqueta>(COR_PADRAO);
 	let erro = $state<string | null>(null);
 
 	// Abre sempre com o que está GRAVADO, não com o que ficou digitado e cancelado.

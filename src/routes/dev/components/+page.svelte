@@ -305,38 +305,20 @@
 	let speakRecording = $state(true);
 
 	const phoneFrame =
-		'relative flex h-[720px] w-[366px] flex-col overflow-hidden rounded-[40px] border-[9px] border-base-content bg-base-100 shadow-[0_10px_30px_-18px_rgba(26,23,48,0.35)]';
+		'relative flex h-[720px] w-[366px] flex-col overflow-hidden rounded-[40px] border-[9px] border-base-content bg-base-100 shadow-[0_10px_30px_-18px_rgba(17,26,49,0.35)]';
 
 	const revealCards = [1, 2, 3, 4];
 </script>
 
 <svelte:head>
-	<title>Catálogo de componentes — entendo</title>
+	<title>Catálogo de componentes — Spokke</title>
 </svelte:head>
 
 <div class="min-h-dvh">
 	<header
 		class="sticky top-0 z-50 flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-line bg-base-100 px-6 py-3.5"
 	>
-		<div class="flex items-center gap-2.5">
-			<svg class="size-[26px] text-primary" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-				<rect
-					x="1.5"
-					y="2.5"
-					width="21"
-					height="15"
-					rx="4"
-					stroke="currentColor"
-					stroke-width="2"
-				/>
-				<path d="M7 21.5L11 17.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-				<path d="M7 10h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-				<path d="M7 14h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-			</svg>
-			<span class="font-display text-[19px] font-extrabold tracking-tight">entendo</span>
-			<span class="border-s border-line ps-3 text-[13px] text-base-content/60">Catálogo de dev</span
-			>
-		</div>
+		<Logo size={24} sub="Catálogo de dev" />
 		<div class="flex-1"></div>
 		<nav class="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-base-content/60">
 			{#each sections as [id, label] (id)}
@@ -445,7 +427,7 @@
 			<h2 class="font-display text-2xl">Cores e tokens</h2>
 			<p class="mt-1 max-w-2xl text-sm text-base-content/60">
 				Verde, âmbar e vermelho são reservados para a semântica de correção. Por isso a marca é
-				violeta: nenhum uso decorativo compete com o feedback do exercício.
+				azul: nenhum uso decorativo compete com o feedback do exercício.
 			</p>
 			<div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<div class="overflow-hidden rounded-box border border-line bg-card">
@@ -453,7 +435,7 @@
 					<div class="p-3.5">
 						<div class="text-sm font-bold">primary</div>
 						<div class="mt-1 font-mono text-[11px] text-base-content/60">
-							#5A3FF3 · escuro #8B7BFF
+							#3659CB · escuro #608AFF
 						</div>
 					</div>
 				</div>
@@ -471,7 +453,7 @@
 					<div class="p-3.5">
 						<div class="text-sm font-bold">base-content</div>
 						<div class="mt-1 font-mono text-[11px] text-base-content/60">
-							#1A1730 · escuro #ECEAF7
+							#111A31 · escuro #E7ECF8
 						</div>
 					</div>
 				</div>
@@ -529,13 +511,13 @@
 			</div>
 
 			<pre
-				class="mt-5 overflow-auto rounded-box bg-[#1a1730] p-6 font-mono text-[12.5px] leading-relaxed text-[#dcd8f0]"><code
+				class="mt-5 overflow-auto rounded-box bg-[#111a31] p-6 font-mono text-[12.5px] leading-relaxed text-[#d6dff2]"><code
 					>{`@theme {
-  --color-primary: #5A3FF3;      --color-accent: #0EA5B7;
+  --color-primary: #3659CB;      --color-accent: #0EA5B7;
   --color-success: #12855F;      --color-warning: #B26A00;
-  --color-error: #C8324A;        --color-base-content: #1A1730;
-  --color-base-100: #FFFFFF;     --color-base-200: #F5F4FB;
-  --color-base-300: #E7E3F7;     --color-line: #E2DEF2;
+  --color-error: #C8324A;        --color-base-content: #111A31;
+  --color-base-100: #FFFFFF;     --color-base-200: #F2F5FC;
+  --color-base-300: #DEE6F9;     --color-line: #D9E1F4;
   --radius-field: 0.625rem;      --radius-box: 0.875rem;
 }
 /* dark: mesma variável, valor diferente — data-theme="dark" ou prefers-color-scheme */`}</code
@@ -1447,26 +1429,7 @@
 				</div>
 				<div class="grid grid-cols-1 md:grid-cols-[216px_1fr]">
 					<div class="border-b border-line bg-base-100 p-4 md:border-e md:border-b-0">
-						<div class="mb-5.5 flex items-center gap-2">
-							<svg class="size-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-								<rect
-									x="1.5"
-									y="2.5"
-									width="21"
-									height="15"
-									rx="4"
-									stroke="var(--color-primary)"
-									stroke-width="2"
-								/>
-								<path
-									d="M7 21.5L11 17.5"
-									stroke="var(--color-primary)"
-									stroke-width="2"
-									stroke-linecap="round"
-								/>
-							</svg>
-							<span class="font-display text-base font-extrabold">entendo</span>
-						</div>
+						<div class="mb-5.5"><Logo size={20} /></div>
 						<Button variant="primary" size="sm" class="mb-5 w-full">+ Nova atividade</Button>
 						<div class="grid gap-0.5">
 							<span

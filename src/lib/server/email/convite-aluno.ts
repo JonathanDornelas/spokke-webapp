@@ -76,7 +76,7 @@ export function montarConviteAluno(dados: ConviteAluno): EmailParaEnviar {
 
   <tr><td style="padding:17px 26px;background:${COR.marca};border-radius:13px 13px 0 0;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-      <td valign="middle"><span style="font-family:${DISPLAY};font-size:19px;font-weight:800;letter-spacing:-0.02em;color:${COR.branco};">entendo</span></td>
+      <td valign="middle"><span style="font-family:${DISPLAY};font-size:19px;font-weight:800;letter-spacing:-0.02em;color:${COR.branco};">Spokke</span></td>
       <td align="right" valign="middle"><span style="font-family:${SANS};font-size:12px;font-weight:600;color:${COR.marcaClara};">Atividade de ${h.idioma}</span></td>
     </tr></table>
   </td></tr>
@@ -127,7 +127,7 @@ export function montarConviteAluno(dados: ConviteAluno): EmailParaEnviar {
           <strong style="color:${COR.texto};">Este link é só seu.</strong> É ele que faz o seu nome aparecer certo na lista da ${h.professor}. Quem receber o link responde no seu lugar, então não repasse.
         </p>
         <p style="font-family:${SANS};font-size:12.5px;line-height:1.6;color:${COR.suave};margin:8px 0 0;">
-          Se você tiver uma conta no entendo, entre nela antes de clicar — assim esta turma passa a aparecer no seu histórico. <strong style="color:${COR.texto};">Conta é opcional</strong>: sem ela o link funciona igual.
+          Se você tiver uma conta no Spokke, entre nela antes de clicar — assim esta turma passa a aparecer no seu histórico. <strong style="color:${COR.texto};">Conta é opcional</strong>: sem ela o link funciona igual.
         </p>
       </td></tr>
     </table>
@@ -135,7 +135,7 @@ export function montarConviteAluno(dados: ConviteAluno): EmailParaEnviar {
 
   <tr><td style="padding:18px 26px 24px;">
     <p style="font-family:${SANS};font-size:11.5px;line-height:1.6;color:${COR.suave};margin:0;">
-      Você recebeu este e-mail porque ${h.teacherName} cadastrou seu nome na turma ${h.classroomName}. A entendo não pede senha, telefone, documento nem foto — só o nome e o e-mail que sua professora cadastrou.
+      Você recebeu este e-mail porque ${h.teacherName} cadastrou seu nome na turma ${h.classroomName}. O Spokke não pede senha, telefone, documento nem foto — só o nome e o e-mail que sua professora cadastrou.
     </p>
   </td></tr>
 

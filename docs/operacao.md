@@ -1,23 +1,23 @@
 # Operação
 
-Como subir, configurar e manter o entendo. Para o produto e as regras de código, ver `CLAUDE.md` e
+Como subir, configurar e manter o Spokke. Para o produto e as regras de código, ver `CLAUDE.md` e
 `.claude/rules/`. Para as decisões, os ADRs desta pasta.
 
 ## O que roda
 
-| Peça                | Onde                                 | Ciclo de vida                                    |
-| ------------------- | ------------------------------------ | ------------------------------------------------ |
-| Web (SvelteKit)     | `docker-compose.yml` → serviço `web` | Reconstrói à vontade — não guarda dado           |
-| Worker (fila)       | `docker-compose.yml` → `worker`      | Junto do web; **atualize antes ou junto dele**   |
-| PostgreSQL 16       | `docker/postgres.yml`                | Volume próprio, nunca recriado no deploy do app  |
-| MinIO (dev) / R2    | `docker/minio.yml`                   | Volume próprio; regras de ciclo de vida (abaixo) |
-| Áudio (Whisper+TTS) | `../audiotext-service`               | Compose próprio                                  |
+| Peça             | Onde                                 | Ciclo de vida                                    |
+| ---------------- | ------------------------------------ | ------------------------------------------------ |
+| Web (SvelteKit)  | `docker-compose.yml` → serviço `web` | Reconstrói à vontade — não guarda dado           |
+| Worker (fila)    | `docker-compose.yml` → `worker`      | Junto do web; **atualize antes ou junto dele**   |
+| PostgreSQL 16    | `docker/postgres.yml`                | Volume próprio, nunca recriado no deploy do app  |
+| MinIO (dev) / R2 | `docker/minio.yml`                   | Volume próprio; regras de ciclo de vida (abaixo) |
+| Áudio e tradução | `../audiotext-service`               | Compose próprio; ~5 GB residentes (teto de 7)    |
 
 Quatro composes de propósito: reconstruir a aplicação nunca encosta em dado do professor nem em
 áudio publicado. Eles conversam pelas portas do host (`host.docker.internal`).
 
 **O worker vem primeiro.** Tipo de job que ele não conhece lança erro e vai para `failed`. Os tipos de
-hoje: `tts`, `convite`, `convite-modulo`, `convite-escola`, `aviso-equipe`, `envio-programado` e
+hoje: `tts`, `convite`, `convite-escola`, `aviso-equipe`, `envio-programado` e
 `redefinir-senha` (o link de "esqueci a senha" — sem o worker novo, ele falha e ninguém recupera a senha).
 
 ## Desenvolvimento
@@ -64,9 +64,10 @@ apaga o cenário anterior e o recria recente. Recusa `NODE_ENV=production`.
   `migrate dev` nem `db push` em produção. O Prisma 7 não gera o cliente sozinho: o `postinstall`
   roda `prisma generate`.
 - **Ordem**: migration → worker → web.
-- **Bucket**: duas regras de ciclo de vida precisam existir no R2 — `tts/` expira em **10 dias** e
-  `fala/` em **7**. Em dev o container `init` de `docker/minio.yml` as escreve; no R2, crie-as à
-  mão. Só `tts/` tem leitura pública.
+- **Bucket**: UMA regra de ciclo de vida precisa existir no R2 — `fala/` (a voz do aluno)
+  expira em **7 dias**. `tts/` (o áudio das atividades) NÃO tem prazo: sai quando a atividade é
+  apagada. Em dev o container `init` de `docker/minio.yml` escreve a regra; no R2, crie-a à mão.
+  Só `tts/` tem leitura pública.
 
 ## Variáveis de ambiente
 
@@ -81,6 +82,7 @@ produto:
 | `LLM_PROVIDER`       | `gemini` liga "Gerar com IA"; vazio desliga (adr-003)                         |
 | `GEMINI_API_KEY`     | Chave de projeto **com faturamento** (a política promete não treinar)         |
 | `GEMINI_MODEL`       | Id do modelo — escolha o Flash estável vigente na página de modelos do Gemini |
+| `TRANSLATE_PROVIDER` | `audiotext` liga a tradução automática do material; vazio desliga (adr-006)   |
 | `WORKER_CONCURRENCY` | Jobs em paralelo (padrão 3). Acelera e-mail, não TTS                          |
 
 ## O primeiro admin
@@ -89,6 +91,37 @@ produto:
 2. Pegue o id: `pnpm db:studio` (tabela `Teacher`) ou
    `SELECT id FROM "Teacher" WHERE email = 'voce@exemplo.com';`
 3. Ponha em `PLATFORM_ADMIN_IDS` e reinicie o web. `/admin` responde 404 para todo o resto.
+
+## Mercado Pago — ligar o gateway
+
+O código está pronto e desligado (`BILLING_PROVIDER` vazio = provedor manual). Para ligar:
+
+1. **Credenciais.** No painel do Mercado Pago, "Suas integrações" › a aplicação › Credenciais.
+   Comece pelas de TESTE, com contas de teste de comprador e vendedor (o Mercado Pago não deixa
+   pagar a si mesmo). Ponha o Access Token em `MERCADOPAGO_ACCESS_TOKEN` — no web E no worker.
+2. **Webhook.** Em "Suas integrações" › Webhooks, a URL é `https://<domínio>/api/mercadopago`, com
+   os eventos de **assinaturas** (`subscription_preapproval` e
+   `subscription_authorized_payment`). Copie a assinatura secreta para
+   `MERCADOPAGO_WEBHOOK_SECRET`. Sem ela o endpoint responde 503.
+3. **`BILLING_PROVIDER=mercadopago`** e reinicie web e worker. "Assinar" passa a levar ao checkout
+   do Mercado Pago.
+4. **Os preços** são os de `src/lib/billing/precos.ts` (PLACEHOLDER hoje). É o valor que o checkout
+   cobra — troque antes de usar o token de produção.
+
+O que conferir no sandbox na primeira vez, porque a documentação não fecha estes pontos (billing.md
+"Mercado Pago"): se a notificação de assinatura chega pelo painel de Webhooks (há um trecho dizendo
+que o painel não vale para Assinaturas — se não chegar, a volta do checkout ainda ativa o plano,
+mas a renovação mensal depende do webhook); a grafia que o `PUT` de cancelar aceita (`cancelled`,
+a mesma do status que a API devolve); e o formato do corpo das notificações.
+
+Como acompanhar: os jobs `mercadopago` aparecem na fila (falhados, no painel interno, com "Tentar
+de novo"); o log do worker diz o desfecho de cada notificação (`ativada`, `estendida`,
+`cancelada`, `sem-mudanca`, `ignorada`); e a aba de assinatura do professor mostra o histórico
+(`checkout_iniciado`, `plano_ativado`).
+
+Com o gateway ligado, o painel continua podendo ativar, estender e cancelar à mão — as mesmas
+funções, com o ator `admin:<id>`. Cuidado: cancelar pelo painel NÃO cancela no Mercado Pago (só o
+botão do professor e a própria conta do pagador no Mercado Pago fazem isso).
 
 ## Rotina da equipe (sem gateway de pagamento)
 
@@ -103,5 +136,35 @@ produto:
 ## Antes de abrir para o público
 
 - Verificar um domínio no Resend (sem isso ele só entrega para o e-mail da conta).
-- Preços reais em `src/lib/content/planos.ts`.
-- Dados reais da empresa em `src/lib/content/institucional.ts`.
+- Preços reais em `src/lib/billing/precos.ts` (a vitrine e o checkout leem dali).
+- Dados reais da empresa em `src/lib/content/institucional.ts`. O domínio `spokke.app` dos e-mails
+  e links de exemplo é PLACEHOLDER, como era o `entendo.app`.
+
+## Migração do nome (entendo → Spokke, novembro de 2026)
+
+O projeto se chamava entendo. Na troca, a infra de desenvolvimento foi COPIADA para nomes novos,
+e a antiga ficou parada como cópia de segurança:
+
+| Antes                                   | Depois                                | Como                          |
+| --------------------------------------- | ------------------------------------- | ----------------------------- |
+| `entendo-postgres`, banco `entendo`     | `spokke-postgres`, banco `spokke`     | `pg_dump -Fc` → `pg_restore`  |
+| volume `entendo-postgres-data`          | `spokke-postgres-data`                | volume novo                   |
+| `entendo-minio`, bucket `entendo-midia` | `spokke-minio`, bucket `spokke-midia` | `mc mirror`                   |
+| volume `entendo-minio-data`             | `spokke-minio-data`                   | volume novo                   |
+| `entendo-web` / `entendo-worker`        | `spokke-web` / `spokke-worker`        | imagem `spokke-service:local` |
+
+- **`MediaAsset.url` guarda a URL inteira, com o bucket dentro** — o Player a lê como está. As 92
+  linhas foram reescritas de `/entendo-midia/` para `/spokke-midia/` no banco novo. Se um dia o
+  bucket mudar de novo, é o mesmo `UPDATE`.
+- O bucket antigo estava VAZIO na hora da cópia: todo áudio já tinha vencido pela regra dos 10
+  dias. As linhas de `MediaAsset` continuam lá, vencidas, e a entrada do Player enfileira o áudio
+  de novo quando alguém abrir o link (server.md "TTS").
+- Cookies e chaves de `localStorage` também trocaram de prefixo (`entendo_*` → `spokke_*`): quem
+  estava logado como aluno entra de novo, e o tema e o volume salvos voltam ao padrão uma vez.
+- **Apagar o antigo**, depois de conferir que está tudo certo com o novo:
+
+  ```bash
+  docker rm entendo-postgres entendo-minio entendo-minio-init entendo-web entendo-worker
+  docker volume rm entendo-postgres-data entendo-minio-data
+  docker image rm entendo-service:local
+  ```

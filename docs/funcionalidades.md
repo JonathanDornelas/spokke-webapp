@@ -1,4 +1,4 @@
-# Funcionalidades do entendo
+# Funcionalidades do Spokke
 
 Inventário do que o produto faz hoje, para quem escreve a home, a ajuda e o material de venda.
 **Só entra aqui o que existe no código.** O que é plano ou pendência está na última seção, e não
@@ -12,29 +12,30 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 
 ## Para quem
 
-- **Professor autônomo**: conta própria, trial de 14 dias sem cartão, planos Básico, Pro e Super.
+- **Professor autônomo**: conta própria, teste de 14 dias (vai exigir cartão quando o Mercado Pago for ligado), planos Básico, Pro e Super.
 - **Escola**: plano Scholar por contrato, com coordenação e professores convidados.
 - **Aluno**: não paga, não instala e não cria conta. A conta dele é opcional.
 
 ## Criar (Studio)
 
-| Funcionalidade           | O que faz                                                                                  | Onde                             |
-| ------------------------ | ------------------------------------------------------------------------------------------ | -------------------------------- |
-| Quatro tipos de material | Par de frases, vocabulário, texto com perguntas, diálogo                                   | etapa 2 do wizard, biblioteca    |
-| Colar uma lista          | Frases ou vocabulário colados de uma vez, com prévia linha a linha e o separador escolhido | `MaterialForm`                   |
-| Gerar material com IA    | A IA propõe material a partir de um pedido; o professor marca o que entra (Pro e Super)    | `MaterialForm`, `ia.remote.ts`   |
-| Gerador de questões      | Do material saem os exercícios (7 geradores de frase, 1 de vocabulário, texto e diálogo)   | etapa 3                          |
-| Escolher quantas e quais | Quantidade de questões e habilidades da atividade; teto de 15, fala e escuta até 5 cada    | etapa 1                          |
-| Editor de questão        | Enunciado, resposta certa, respostas aceitas, lacuna pela seleção, como corrigir           | `atividades/[id]/itens/[itemId]` |
-| Prévia como o aluno vê   | A atividade inteira e cada questão, com os componentes do Player                           | `[id]/previa`, editor de questão |
-| Áudio gerado do texto    | Voz sintética em duas velocidades, voz variando por frase                                  | worker `tts`                     |
-| Biblioteca de materiais  | Tudo que foi cadastrado, com busca, filtro por tipo e idioma, "trazer" em lote             | `materiais`                      |
-| Repetido avisado         | "Você já tem esta frase" enquanto digita; igual é reaproveitado, não duplicado             | `MaterialForm`, `findEquivalent` |
-| Módulos                  | Coleção ordenada de atividades; uma atividade pode estar em vários                         | `modulos`                        |
-| Nível CEFR               | Rótulo A1 a C2 na atividade, com filtro                                                    | etapa 1, detalhe                 |
-| Tag de idioma            | Em atividade, turma e material, com filtro em toda lista                                   | `IdiomaTag`, `FiltroIdioma`      |
-| Arquivar e apagar        | Arquivar fecha o link para novos e libera a vaga; apagar pede o título                     | detalhe da atividade             |
-| Busca no cabeçalho       | Atividades, materiais e turmas numa caixa só                                               | `StudioSearch`                   |
+| Funcionalidade           | O que faz                                                                                   | Onde                             |
+| ------------------------ | ------------------------------------------------------------------------------------------- | -------------------------------- |
+| Quatro tipos de material | Par de frases, vocabulário, texto com perguntas, diálogo                                    | etapa 2 do wizard, biblioteca    |
+| Colar uma lista          | Frases ou vocabulário colados de uma vez, com prévia linha a linha e o separador escolhido  | `MaterialForm`                   |
+| Tradução automática      | Escreve só no idioma que ensina; a tradução para a língua do aluno vem pronta para conferir | `MaterialForm`, adr-006          |
+| Gerar material com IA    | A IA propõe material a partir de um pedido; o professor marca o que entra (Pro e Super)     | `MaterialForm`, `ia.remote.ts`   |
+| Gerador de questões      | Do material saem os exercícios (7 geradores de frase, 1 de vocabulário, texto e diálogo)    | etapa 3                          |
+| Escolher quantas e quais | Quantidade de questões e habilidades da atividade; teto de 15, fala e escuta até 5 cada     | etapa 1                          |
+| Editor de questão        | Enunciado, resposta certa, respostas aceitas, lacuna pela seleção, como corrigir            | `atividades/[id]/itens/[itemId]` |
+| Prévia como o aluno vê   | A atividade inteira e cada questão, com os componentes do Player                            | `[id]/previa`, editor de questão |
+| Áudio gerado do texto    | Voz sintética em duas velocidades, voz variando por frase                                   | worker `tts`                     |
+| Biblioteca de materiais  | Tudo que foi cadastrado, com busca, filtro por tipo e idioma, "trazer" em lote              | `materiais`                      |
+| Repetido avisado         | "Você já tem esta frase" enquanto digita; igual é reaproveitado, não duplicado              | `MaterialForm`, `findEquivalent` |
+| Módulos                  | Coleção ordenada de atividades; uma atividade pode estar em vários                          | `modulos`                        |
+| Nível CEFR               | Rótulo A1 a C2 na atividade, com filtro                                                     | etapa 1, detalhe                 |
+| Tag de idioma            | Em atividade, turma e material, com filtro em toda lista                                    | `IdiomaTag`, `FiltroIdioma`      |
+| Arquivar e apagar        | Arquivar fecha o link para novos e libera a vaga; apagar pede o título                      | detalhe da atividade             |
+| Busca no cabeçalho       | Atividades, materiais e turmas numa caixa só                                                | `StudioSearch`                   |
 
 ## Enviar
 
@@ -47,7 +48,7 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 | Reenviar e consertar         | Reenvio para quem não abriu, por aluno, e "Corrigir e-mail e reenviar" no que voltou | chamada da turma             |
 | Estados do aluno             | Vai receber, Enviado, Disponível, Começou, Terminou, Sem e-mail, Voltou              | chamada da turma             |
 | Programação de módulo        | Tudo agora, por semana, por intervalo ou datas escolhidas, por turma                 | `ProgramacaoPainel`          |
-| Só disponibilizar            | O módulo abre no mapa do aluno sem mandar e-mail                                     | programação                  |
+| Liberação no mapa            | Na data, a atividade do módulo abre no mapa do aluno; módulo não manda e-mail        | programação                  |
 | Próximos 7 dias e calendário | Os envios da semana e do mês, por módulo e turma                                     | `SemanaDeEnvios`, calendário |
 | Aviso de envio que não saiu  | Vermelho com o motivo e o atalho para resolver                                       | lista de módulos, menu       |
 | Qualquer idioma              | Dez idiomas hoje, com direita para a esquerda no árabe                               | `LanguageProfile`            |
@@ -99,14 +100,14 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 
 - Trial de 14 dias com os limites do Básico; acabou, pausa criar e publicar e os links seguem no ar.
 - Limites de estoque (atividades, materiais) e créditos de IA por mês, com o uso na aba Assinatura.
-- Pedir, trocar e cancelar plano no fim do período (sem gateway: a equipe ativa no painel interno).
+- Pedir, trocar e cancelar plano no fim do período. Com o Mercado Pago desligado, a equipe ativa no painel interno; ligado, o professor paga no checkout dele e o plano libera quando o pagamento é confirmado.
 - Trocar senha e "esqueci a senha" para professor e aluno.
 - Tema claro e escuro, com a escolha guardada.
 - Atividade de exemplo pública em `/exemplo`.
 
 ## Não existe ainda (não prometa)
 
-- Gateway de pagamento (Stripe ou Pix); preços da vitrine são placeholder.
+- Mercado Pago ligado de verdade (o código está pronto; faltam as credenciais e o teste no sandbox); preços da vitrine são placeholder.
 - Upload de áudio próprio, de imagem e de vídeo; IA a partir de imagem ou vídeo.
 - Oito geradores da tabela do kernel (`vocab-image-choice`, `speak-vocab` e outros).
 - Correção de escrita livre por IA (a rubrica é do professor).

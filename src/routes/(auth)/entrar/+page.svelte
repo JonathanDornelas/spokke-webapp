@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	import Alternador from '$lib/components/Alternador.svelte';
 	import { caminhoInterno } from '$lib/caminho-interno';
 	import { goto } from '$app/navigation';
@@ -96,7 +97,12 @@
 	}
 </script>
 
-<svelte:head><title>Entrar — entendo</title></svelte:head>
+<Metadados
+	titulo="Entrar no Spokke"
+	descricao="Entre como professor, para montar as atividades, ou como aluno, para ver o que já respondeu."
+	tituloDaAba="Entrar · Spokke"
+	indexar={false}
+/>
 
 <div
 	class="w-full max-w-[400px] animate-entrada rounded-box
@@ -119,15 +125,20 @@
 		<h1 class="mb-1.5 font-display text-[27px] font-semibold tracking-[-0.02em]">
 			Bom te ver de novo
 		</h1>
-		<p class="mb-6 text-sm text-base-content/65">Entre para continuar de onde parou.</p>
+		<p class="mb-6 text-sm text-base-content/65">
+			Suas atividades e turmas estão onde você deixou.
+		</p>
 	{:else}
-		<h1 class="mb-1.5 font-display text-[27px] font-semibold tracking-[-0.02em]">Entrar</h1>
+		<h1 class="mb-1.5 font-display text-[27px] font-semibold tracking-[-0.02em]">
+			Entre na sua conta
+		</h1>
 		<!-- A conta do aluno é opcional e a tela diz isso: ela guarda o histórico,
 		     nunca destrava a atividade (auth.md "A conta do aluno"). -->
 		<p class="mb-6 text-sm leading-relaxed text-base-content/65">
-			A conta guarda o que você já respondeu e te reencontra em outro aparelho.
-			<strong class="font-semibold text-base-content">Você não precisa dela para responder</strong>
-			— é só se quiser.
+			Sua conta guarda o que você já respondeu, em qualquer aparelho.
+			<strong class="font-semibold text-base-content"
+				>Para responder uma atividade, você não precisa dela.</strong
+			>
 		</p>
 	{/if}
 
@@ -216,7 +227,9 @@
 	<!-- eslint-disable svelte/no-navigation-without-resolve -- é a rota resolvida mais a query do modo; a regra não enxerga a concatenação. -->
 	<p class="mt-[22px] text-center text-[13.5px] text-base-content/65">
 		Ainda não tem conta?
-		<a href={resolve('/(auth)/cadastro') + queryDoCadastro} class="font-bold">Criar conta</a>
+		<a href={resolve('/(auth)/cadastro') + queryDoCadastro} class="font-bold"
+			>{como === 'professor' ? 'Teste grátis por 14 dias' : 'Criar conta'}</a
+		>
 	</p>
 	{#if como === 'aluno' && voltar}
 		<p class="mt-2 text-center text-[13px]">

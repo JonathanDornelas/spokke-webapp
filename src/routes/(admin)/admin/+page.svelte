@@ -27,7 +27,7 @@
 		d ? new Date(d).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }) : '—';
 </script>
 
-<svelte:head><title>Painel interno — entendo</title></svelte:head>
+<svelte:head><title>Painel interno — Spokke</title></svelte:head>
 
 <h1 class="mb-5 font-display text-title font-semibold tracking-[-0.022em]">Visão geral</h1>
 

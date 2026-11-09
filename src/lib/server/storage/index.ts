@@ -1,4 +1,9 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+	DeleteObjectCommand,
+	GetObjectCommand,
+	PutObjectCommand,
+	S3Client
+} from '@aws-sdk/client-s3';
 
 /**
  * Object storage S3-compatível, chave por hash — ver .claude/rules/server.md
@@ -43,6 +48,19 @@ export async function putObject(
 
 export function publicUrl(key: string): string {
 	return `${process.env.STORAGE_PUBLIC_URL}/${key}`;
+}
+
+/**
+ * Apaga UM objeto. Objeto que já não existe não é erro — o S3 responde
+ * sucesso, e quem chama quer o mesmo resultado: o arquivo fora do bucket.
+ *
+ * Um por vez, e não `DeleteObjects` em lote: o lote exige `Content-MD5`, e os
+ * SDKs novos mandam outro checksum por padrão — combinação que já quebrou o
+ * apagar em lote em storages S3-compatíveis. Aqui são dezenas de arquivos, não
+ * milhares.
+ */
+export async function apagarObjeto(key: string): Promise<void> {
+	await s3().send(new DeleteObjectCommand({ Bucket: process.env.STORAGE_BUCKET, Key: key }));
 }
 
 /**

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	import { untrack } from 'svelte';
 	// Entrada do aluno. Único dado de identificação é o nome — sem e-mail, sem
 	// senha (auth.md "Dados do aluno e LGPD"). Ao confirmar, a tentativa é criada
@@ -92,7 +93,14 @@
 	};
 </script>
 
-<svelte:head><title>{data.activity.title} — entendo</title></svelte:head>
+<Metadados
+	titulo={data.activity.title}
+	descricao={`${data.activity.itemCount} ${data.activity.itemCount === 1 ? 'questão' : 'questões'} de ${data.activity.targetLabel.toLowerCase()}, uns ${data.activity.minutes} minutos. Abra o link, digite seu nome e responda pelo celular, sem criar conta.`}
+	tituloDaAba={`${data.activity.title} · Spokke`}
+	imagem="/og/atividade.png"
+	imagemAlt="Atividade de idioma no Spokke: abra o link, digite seu nome e responda."
+	indexar={false}
+/>
 
 <header
 	class="flex shrink-0 items-center gap-3.5 border-b border-line px-5 py-4 lg:px-10 lg:py-[18px]"

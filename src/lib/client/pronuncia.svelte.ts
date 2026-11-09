@@ -10,7 +10,7 @@ import { browser } from '$app/environment';
  * para aprender. A escolha vale por aparelho, como o volume (`sons.svelte.ts`),
  * e é uma só para o teclado e para o campo: as duas coisas dizem a mesma.
  */
-export const CHAVE_PRONUNCIA = 'entendo-pronuncia';
+export const CHAVE_PRONUNCIA = 'spokke-pronuncia';
 
 class Pronuncia {
 	ligada = $state(true);

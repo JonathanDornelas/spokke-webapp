@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '$lib/server/db/client';
+import { notificar } from '$lib/server/notificacoes';
 import { registrar, type Ator } from '$lib/server/billing/assinaturas';
 import { enqueueConviteEscola } from '$lib/server/queue';
 
@@ -164,7 +165,7 @@ export async function aceitarConviteDaEscola(
 	token: string,
 	teacherId: string
 ): Promise<ResultadoDoAceite> {
-	return prisma.$transaction(async (tx) => {
+	const resultado = await prisma.$transaction(async (tx): Promise<ResultadoDoAceite> => {
 		const convite = await tx.schoolInvite.findUnique({ where: { token } });
 		if (!convite) return { ok: false, motivo: 'invalido' };
 
@@ -200,6 +201,36 @@ export async function aceitarConviteDaEscola(
 		});
 		return { ok: true, escola: escola.name, jaEraMembro: false };
 	});
+	if (resultado.ok && !resultado.jaEraMembro) await avisarCoordenacao(token, teacherId);
+	return resultado;
+}
+
+/**
+ * "Ana entrou na escola", para a coordenação — o nome do PROFESSOR, que é o que
+ * ela já vê no painel; nenhum dado de aluno (auth.md "Coordenação"). Depois do
+ * commit: o aviso de uma entrada desfeita mentiria.
+ */
+async function avisarCoordenacao(token: string, teacherId: string): Promise<void> {
+	const convite = await prisma.schoolInvite.findUnique({
+		where: { token },
+		select: { school: { select: { id: true, name: true } } }
+	});
+	const professor = await prisma.teacher.findUnique({
+		where: { id: teacherId },
+		select: { name: true }
+	});
+	if (!convite || !professor) return;
+	const coordenacao = await prisma.schoolMembership.findMany({
+		where: { schoolId: convite.school.id, role: 'coordenacao', teacherId: { not: teacherId } },
+		select: { teacherId: true }
+	});
+	for (const membro of coordenacao) {
+		await notificar(membro.teacherId, {
+			kind: 'escola',
+			key: `escola-entrou:${convite.school.id}`,
+			data: { escola: convite.school.name, nomes: [professor.name] }
+		});
+	}
 }
 
 /**

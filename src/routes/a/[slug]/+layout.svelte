@@ -5,6 +5,9 @@
 	let { children }: { children: import('svelte').Snippet } = $props();
 </script>
 
+<!-- A atividade é do professor e vai pelo link dele: fora da busca. A PRÉVIA do link continua (Metadados na entrada). -->
+<svelte:head><meta name="robots" content="noindex" /></svelte:head>
+
 <!-- `h-dvh` e não `min-h-dvh`: a PÁGINA não rola. Quando a questão não cabe,
      quem rola é a área da questão dentro do cartão — o cabeçalho com o progresso
      e o rodapé com a ação principal ficam onde estão (design-system.md: "ação

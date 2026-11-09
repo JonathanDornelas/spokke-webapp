@@ -25,12 +25,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!modulo) error(404, 'Módulo não encontrado');
 
 	const repo = programacoes(teacher);
-	const [todas, alocacoes, livres, historico, carga, eventos] = await Promise.all([
+	const [todas, alocacoes, livres, historico, eventos] = await Promise.all([
 		atividades(teacher).list(),
 		repo.doModulo(modulo.id),
 		repo.livres(modulo.id),
 		repo.historico(modulo.id),
-		repo.cargaPorDia(),
 		eventosDaAgenda(teacher, { moduleId: modulo.id })
 	]);
 	const hoje = hojeEmBrasilia();
@@ -59,7 +58,6 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		alocacoes,
 		livres,
 		historico,
-		carga,
 		// O que sai deste módulo nos próximos 7 dias, em todas as turmas.
 		semana: proximosDias(eventos, hoje),
 		painelInicial: alocacoes.some((a) => a.id === pedida) ? pedida : null

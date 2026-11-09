@@ -57,7 +57,7 @@
 	}
 </script>
 
-<svelte:head><title>Recuperar acesso — entendo</title></svelte:head>
+<svelte:head><title>Recuperar a senha · Spokke</title></svelte:head>
 
 <div
 	class="w-full max-w-[384px] animate-entrada rounded-box
@@ -86,11 +86,11 @@
 					/>
 				</svg>
 			</span>
-			<h1 class="mb-2 font-display text-xl font-semibold tracking-[-0.02em]">
-				Verifique seu e-mail
-			</h1>
+			<h1 class="mb-2 font-display text-xl font-semibold tracking-[-0.02em]">Confira seu e-mail</h1>
+			<!-- Neutro de propósito: "se houver uma conta" não revela quem tem. -->
 			<p class="mb-4 text-[13.5px] leading-relaxed text-base-content/65">
-				Se esse e-mail existir, enviamos um link. O link vale por 1 hora.
+				Se houver uma conta com esse e-mail, o link chega em instantes e vale por 1 hora. Não achou?
+				Olhe também a caixa de spam.
 			</p>
 			<div class="border-t border-line pt-3.5 text-[12.5px] text-base-content/65">
 				Não chegou?
@@ -113,12 +113,12 @@
 			class="mb-6"
 		/>
 		<h1 class="mb-1.5 font-display text-[22px] font-semibold tracking-[-0.02em]">
-			Recuperar acesso
+			Esqueceu a senha?
 		</h1>
 		<p class="mb-[18px] text-[13.5px] leading-snug text-base-content/65">
 			{como === 'aluno'
-				? 'Digite o e-mail da sua conta de aluno. Enviamos um link para criar uma senha nova.'
-				: 'Digite o e-mail da sua conta. Enviamos um link para criar uma senha nova.'}
+				? 'Digite o e-mail da sua conta de aluno e mandamos um link para você criar uma senha nova.'
+				: 'Digite o e-mail da sua conta e mandamos um link para você criar uma senha nova.'}
 		</p>
 		<form class="grid gap-3.5" onsubmit={onSubmit}>
 			<label class="block">

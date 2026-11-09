@@ -26,6 +26,7 @@
 	} from '$lib/components/material-form';
 	import { withMock } from '$lib/dev/with-mock';
 	import { aceitarPropostasIa, gerarPropostasIa } from '../../../materiais/ia.remote';
+	import { sugerirTraducao } from '../../../materiais/traducao.remote';
 	import type { ResultadoMaterial } from '$lib/components/MaterialForm.svelte';
 	import type { EstadoDaIa, RespostaDaGeracao } from '$lib/billing/ia';
 	import type { ContentUnitKind } from '$lib/kernel/content/types';
@@ -48,9 +49,11 @@
 			tag: string;
 			targetLabel: string;
 			sourceLabel: string;
+			sourceTag: string;
 		};
 		materials: MaterialRow[];
 		ia: EstadoDaIa;
+		traducaoAutomatica: boolean;
 	}
 
 	const MOCK: PageData = {
@@ -60,7 +63,8 @@
 			dir: 'ltr',
 			tag: 'en-US',
 			targetLabel: 'Inglês',
-			sourceLabel: 'Português'
+			sourceLabel: 'Português',
+			sourceTag: 'pt-BR'
 		},
 		materials: [
 			{
@@ -103,7 +107,8 @@
 			saldo: 0,
 			custoPorProposta: 1,
 			idiomas: null
-		}
+		},
+		traducaoAutomatica: false
 	};
 
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
@@ -141,6 +146,17 @@
 			activityId: data.activity.id
 		});
 		return r.ok ? { ok: true, propostas: r.propostas, saldo: r.saldo } : r;
+	}
+
+	// A sugestão de tradução enquanto o professor digita. Falhar é normal (o
+	// tradutor pode estar carregando): a tela diz e o servidor traduz ao salvar.
+	async function sugerir(texto: string, de: string, para: string): Promise<string | null> {
+		try {
+			const r = await sugerirTraducao({ texto, de, para });
+			return r.ok ? r.traducao : null;
+		} catch {
+			return null;
+		}
 	}
 
 	async function aceitarIa(kind: ContentUnitKind, dados: Record<string, unknown>[]) {
@@ -289,7 +305,7 @@
 	);
 </script>
 
-<svelte:head><title>Materiais — entendo</title></svelte:head>
+<svelte:head><title>Materiais — Spokke</title></svelte:head>
 
 <WizardShell
 	step={2}
@@ -327,6 +343,9 @@
 				ia={data.ia}
 				ongerarIa={gerarIa}
 				onaceitarIa={aceitarIa}
+				traducaoAutomatica={data.traducaoAutomatica}
+				linguaDoAluno={data.activity.sourceTag}
+				onsugerirTraducao={sugerir}
 				onfechar={() => (formAberto = false)}
 				fecharRotulo="Ver os {statusTexto}"
 				fecharSoNoCelular

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	import Alternador from '$lib/components/Alternador.svelte';
 	import { caminhoInterno } from '$lib/caminho-interno';
 	import { goto } from '$app/navigation';
@@ -14,9 +15,10 @@
 	// contas são separadas por baixo (auth.md); o que muda aqui é a copy, o
 	// painel do lado e para onde a pessoa vai depois.
 	//
-	// Professor: a linha sob o botão está reservada para o texto de trial —
-	// duração e exigência de cartão ainda não definidas (billing.md).
-	// Aluno: a conta é OPCIONAL e a tela diz isso — ela guarda o histórico,
+	// Professor: o cadastro É o começo do teste de 14 dias (`TRIAL` no catálogo),
+	// e a tela diz isso no título e no botão. O teste vai exigir cartão quando o
+	// gateway existir (billing.md "Trial"); até lá, nada aqui fala de cartão.
+	// Aluno: a conta é OPCIONAL e a tela diz isso: ela guarda o histórico,
 	// nunca destrava a atividade.
 	type Como = 'professor' | 'aluno';
 
@@ -54,17 +56,28 @@
 	const strength = $derived(Math.min(4, Math.floor(password.length / 4)));
 	const strengthLabel = $derived(['', 'Fraca', 'Razoável', 'Boa', 'Ótima'][strength]);
 
-	const destaques: Record<Como, string[]> = {
-		professor: [
-			'Aluno responde sem criar conta',
-			'Quatro habilidades, não só múltipla escolha',
-			'Resultado por item, não só nota final'
-		],
-		aluno: [
-			'Reencontre o que respondeu em qualquer aparelho',
-			'Não é obrigatória para responder',
-			'Só nome, e-mail e senha — nada além disso'
-		]
+	// O painel da direita: um título, o que a conta traz e, embaixo, a condição.
+	// Cada linha confere com `docs/funcionalidades.md`.
+	const painel: Record<Como, { titulo: string; itens: string[]; nota: string }> = {
+		professor: {
+			titulo: 'O que vem na sua conta',
+			itens: [
+				'Exercícios de escuta, fala, leitura e escrita feitos com o seu material',
+				'Seus alunos respondem pelo link, sem criar conta',
+				'Correção na hora, com o quase separado do erro',
+				'O que a turma errou, questão por questão'
+			],
+			nota: '14 dias grátis. Depois, você escolhe o plano.'
+		},
+		aluno: {
+			titulo: 'Para que serve a conta',
+			itens: [
+				'Seu histórico de respostas em qualquer aparelho',
+				'Os módulos da sua turma num mapa de fases',
+				'Só nome, e-mail e senha. Nada além disso.'
+			],
+			nota: 'É opcional. Toda atividade abre sem conta.'
+		}
 	};
 
 	function trocar(novo: Como) {
@@ -132,11 +145,16 @@
 	}
 </script>
 
-<svelte:head><title>Criar conta — entendo</title></svelte:head>
+<Metadados
+	titulo="Crie sua conta no Spokke"
+	descricao="Monte a primeira atividade com o material da sua aula. Toda conta começa com 14 dias de teste grátis."
+	tituloDaAba="Criar conta · Spokke"
+/>
 
+<!-- `animate-entrada`: o cartão sobe ao abrir, como o de entrar. -->
 <div
-	class="grid w-full max-w-[840px] overflow-hidden rounded-box border border-line bg-base-100
-	       shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)] md:grid-cols-[1fr_240px]"
+	class="grid w-full max-w-[860px] animate-entrada overflow-hidden rounded-box border border-line
+	       bg-base-100 shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)] md:grid-cols-[1fr_280px]"
 >
 	<div class="p-8">
 		<Alternador
@@ -151,25 +169,26 @@
 			class="mb-6 max-w-[320px]"
 		/>
 
-		<h1 class="mb-1.5 font-display text-[26px] font-semibold tracking-[-0.02em]">Criar conta</h1>
 		{#if como === 'professor'}
+			<h1 class="mb-1.5 font-display text-[26px] font-semibold tracking-[-0.02em] text-balance">
+				Teste o Spokke por 14 dias
+			</h1>
 			<p class="mb-[22px] text-sm text-base-content/65">
-				Você precisa de uma conta. Seus alunos, não.
+				Seus alunos não precisam de conta, só do link.
 			</p>
 		{:else}
+			<h1 class="mb-1.5 font-display text-[26px] font-semibold tracking-[-0.02em]">
+				Crie sua conta de aluno
+			</h1>
 			<p class="mb-[22px] text-sm leading-relaxed text-base-content/65">
-				A conta guarda o que você já respondeu e te reencontra em outro aparelho.
-				<strong class="font-semibold text-base-content">Você não precisa dela para responder</strong
-				>
-				— é só se quiser.
+				Ela guarda o que você responde e te acompanha em qualquer aparelho.
+				<strong class="font-semibold text-base-content">É opcional:</strong> as atividades abrem sem conta.
 			</p>
 		{/if}
 
 		<form class="grid gap-3.5" onsubmit={onSubmit}>
 			<label class="block">
-				<span class="mb-1.5 block text-[13px] font-semibold"
-					>{como === 'aluno' ? 'Seu nome' : 'Nome'}</span
-				>
+				<span class="mb-1.5 block text-[13px] font-semibold">Seu nome</span>
 				<input
 					name="name"
 					autocomplete="name"
@@ -262,7 +281,7 @@
 						{/each}
 					</div>
 					<span class="mt-1.5 block text-[12px] text-base-content/65"
-						>Vira o idioma padrão das suas atividades e turmas. Dá para mudar depois.</span
+						>Eles viram o padrão das suas atividades e turmas. Dá para mudar depois.</span
 					>
 				</fieldset>
 			{/if}
@@ -283,17 +302,16 @@
 			>
 				{#if loading}
 					<Loading variant="fila" size={13} tone="current" label="Criando" />
-					Criando…
+					Criando sua conta…
 				{:else}
-					Criar conta
+					{como === 'professor' ? 'Começar o teste grátis' : 'Criar conta'}
 				{/if}
 			</button>
 		</form>
 
 		<p class="mt-4 text-center text-xs leading-relaxed text-base-content/65">
-			Ao criar a conta você aceita a <a href={resolve('/(site)/privacidade')}
-				>política de privacidade</a
-			>.
+			Ao criar a conta, você concorda com os <a href={resolve('/(site)/termos')}>Termos de uso</a> e
+			a <a href={resolve('/(site)/privacidade')}>Política de privacidade</a>.
 		</p>
 		<!-- eslint-disable svelte/no-navigation-without-resolve -- rota resolvida mais a query do modo; `voltar` é validado contra redirect aberto. -->
 		<p class="mt-3 text-center text-[13.5px] text-base-content/65">
@@ -310,38 +328,55 @@
 		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 	</div>
 
-	<div class="relative overflow-hidden bg-panel p-7">
-		<div aria-hidden="true" class="pointer-events-none absolute inset-0">
+	<!-- O painel acompanha a altura do formulário: o conteúdo em cima, alinhado
+	     com o seletor, a condição embaixo, e as formas no vão do meio. Antes a
+	     lista ficava colada no topo de uma coluna vazia, com uma forma por trás
+	     da primeira linha. No celular o painel vai para baixo do formulário,
+	     sem vão no meio, e as formas saem: cairiam atrás da nota. -->
+	<div class="relative flex flex-col justify-between gap-8 overflow-hidden bg-panel p-7">
+		<div aria-hidden="true" class="pointer-events-none absolute inset-0 hidden md:block">
 			<div
-				class="absolute top-[4%] -right-[20%] size-[140px] animate-[en-float-a_16s_ease-in-out_infinite] rounded-full bg-primary/60 blur-[1px]"
+				class="absolute top-[52%] -right-[22%] size-[150px] animate-[en-float-a_16s_ease-in-out_infinite] rounded-full bg-primary/50 blur-[1px]"
 			></div>
 			<div
-				class="absolute bottom-[8%] -left-[14%] h-[84px] w-24 animate-[en-drift-spin_24s_ease-in-out_infinite] bg-accent/30 [clip-path:polygon(50%_0%,100%_100%,0%_100%)]"
+				class="absolute top-[62%] -left-[12%] h-[84px] w-24 animate-[en-drift-spin_24s_ease-in-out_infinite] bg-accent/25 [clip-path:polygon(50%_0%,100%_100%,0%_100%)]"
 			></div>
 			<div
-				class="absolute right-[24%] bottom-[22%] size-11 animate-[en-breathe_7s_ease-in-out_infinite] rounded-full bg-warning/40"
+				class="absolute top-[74%] right-[34%] size-9 animate-[en-breathe_7s_ease-in-out_infinite] rounded-full bg-warning/35"
 			></div>
 		</div>
-		<ul class="relative z-1 grid list-none gap-4 p-0">
-			{#each destaques[como] as line (line)}
-				<li class="flex items-start gap-2.5">
-					<svg
-						class="mt-0.5 size-[17px] shrink-0 text-accent"
-						viewBox="0 0 24 24"
-						fill="none"
-						aria-hidden="true"
-					>
-						<path
-							d="M4 12.5l5 5L20 6.5"
-							stroke="currentColor"
-							stroke-width="2.6"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					<span class="text-[13.5px] leading-snug text-panel-content">{line}</span>
-				</li>
-			{/each}
-		</ul>
+
+		<div class="relative z-1">
+			<p class="mb-4 text-[11px] font-bold tracking-[0.12em] text-panel-dim uppercase">
+				{painel[como].titulo}
+			</p>
+			<ul class="grid list-none gap-3.5 p-0">
+				{#each painel[como].itens as line (line)}
+					<li class="flex items-start gap-2.5">
+						<svg
+							class="mt-0.5 size-[17px] shrink-0 text-accent"
+							viewBox="0 0 24 24"
+							fill="none"
+							aria-hidden="true"
+						>
+							<path
+								d="M4 12.5l5 5L20 6.5"
+								stroke="currentColor"
+								stroke-width="2.6"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						<span class="text-[13.5px] leading-snug text-panel-content">{line}</span>
+					</li>
+				{/each}
+			</ul>
+		</div>
+
+		<p
+			class="relative z-1 border-t border-panel-line pt-4 text-[13px] leading-snug font-semibold text-panel-content"
+		>
+			{painel[como].nota}
+		</p>
 	</div>
 </div>

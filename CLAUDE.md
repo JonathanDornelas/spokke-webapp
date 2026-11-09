@@ -16,20 +16,21 @@ não apenas múltipla escolha. A referência de experiência é o Duolingo, não
 
 ## Stack
 
-| Camada    | Escolha                                          |
-| --------- | ------------------------------------------------ |
-| Framework | SvelteKit (Svelte 5, runes) + `adapter-node`     |
-| Server    | Remote functions (`.remote.ts`), sem API à parte |
-| Estilo    | Tailwind 4 puro — sem framework de componentes   |
-| ORM       | Prisma 7 (ESM, sem engine Rust, driver adapter)  |
-| Banco     | PostgreSQL 16 — **fixo, decisão de infra**       |
-| Schemas   | Zod                                              |
-| Auth      | Better Auth (adapter Prisma)                     |
-| Cobrança  | `BillingProvider` próprio; manual hoje (ADR-002) |
-| IA        | Gemini (`@google/genai`), atrás de interface     |
-| Fila      | Tabela Postgres + `FOR UPDATE SKIP LOCKED`       |
-| Mídia     | Object storage S3-compatível (preferir R2)       |
-| Testes    | Vitest + Playwright                              |
+| Camada    | Escolha                                           |
+| --------- | ------------------------------------------------- |
+| Framework | SvelteKit (Svelte 5, runes) + `adapter-node`      |
+| Server    | Remote functions (`.remote.ts`), sem API à parte  |
+| Estilo    | Tailwind 4 puro — sem framework de componentes    |
+| ORM       | Prisma 7 (ESM, sem engine Rust, driver adapter)   |
+| Banco     | PostgreSQL 16 — **fixo, decisão de infra**        |
+| Schemas   | Zod                                               |
+| Auth      | Better Auth (adapter Prisma)                      |
+| Cobrança  | `BillingProvider` próprio: manual ou Mercado Pago |
+| IA        | Gemini (`@google/genai`), atrás de interface      |
+| Tradução  | MADLAD-400 3B no serviço de áudio (ADR-006)       |
+| Fila      | Tabela Postgres + `FOR UPDATE SKIP LOCKED`        |
+| Mídia     | Object storage S3-compatível (preferir R2)        |
+| Testes    | Vitest + Playwright                               |
 
 Deploy exige processo Node de longa duração (worker + fila). Nada de edge-only.
 
@@ -44,7 +45,7 @@ src/
   routes/
     (studio)/     professor, autenticado
     a/[slug]/     player, aluno anônimo
-    api/stripe/   webhook (precisa do body cru)
+    api/mercadopago/  webhook (precisa do body cru)
 worker/           processo separado, consome a fila
 prisma/
 docs/             ADRs e decisões de produto
@@ -105,8 +106,9 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
 
 ## Pendências
 
-- TTS e ASR são o `audiotext-service` — o outro projeto do workspace (Whisper large-v3 +
-  Kokoro-82M em Docker), ligado por `TTS_PROVIDER=audiotext` / `ASR_PROVIDER=audiotext`. A
+- TTS, ASR e a tradução do material são o `audiotext-service` — o outro projeto do workspace
+  (Whisper + Kokoro-82M + MADLAD-400 em Docker), ligado por `TTS_PROVIDER=audiotext` /
+  `ASR_PROVIDER=audiotext` / `TRANSLATE_PROVIDER=audiotext`. A
   regra de omitir continua valendo e é o que sustenta rodar sem ele: sem TTS não há item de
   escuta, sem ASR não há item de fala. `TTS_PROVIDER=stub` ainda gera um WAV silencioso para
   exercitar a fila sem subir o serviço. Falta decidir o provedor de PRODUÇÃO (o de hoje é
@@ -114,11 +116,12 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
 - O áudio é identificado pelo **conteúdo** — `hash(texto, voz, velocidade)`, escopado por
   professor (`tts/<teacherId>/<hash>.mp3`). Material é FACILITADOR de montagem: apagar um não
   alcança atividade nenhuma. A voz também sai do texto (`kernel/language/voice.ts`).
-- **Dois prazos, duas regras de ciclo de vida no bucket.** `tts/` são 10 dias (áudio de
-  atividade, se regenera do texto); `fala/` são 7 (a gravação do aluno, que não se recria e só
-  existe com autorização dele — auth.md). Em dev as duas vivem em `docker/minio.yml`; em
-  produção o storage continua sendo o R2 preferido de server.md, e as duas precisam ser
-  recriadas lá.
+- **Um prazo só no bucket: `fala/`, 7 dias** (a gravação do aluno, que não se recria e só
+  existe com autorização dele — auth.md). **O áudio de atividade (`tts/`) não vence**: ele vivia
+  10 dias e passou a ficar enquanto alguma atividade do professor o usa — com o limite de
+  atividades por plano o estoque é finito. Apagar a atividade apaga o que só ela usava
+  (`server/tts/limpeza.ts`). Em dev a regra vive em `docker/minio.yml`; em produção o storage
+  continua sendo o R2 preferido de server.md, e ela precisa ser recriada lá.
 - **O alvo de produção é CPU, não GPU**: 4 vCPU, 16 GB, 200 GB NVMe. Por isso o Whisper roda
   `small` em `int8` com teto de 2 núcleos (`audiotext-service/app/config.py`) e todo container
   tem limite de CPU e memória no compose. Medido nessa configuração: TTS de uma frase em ~0,9 s,
@@ -161,11 +164,13 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   para o e-mail da própria conta, e o remetente é o compartilhado `onboarding@resend.dev`.
 - **Planos: Básico, Pro, Super e Scholar**, com limites de ESTOQUE (atividades e materiais) e
   créditos de IA por ciclo mensal — os números em `src/lib/billing/catalogo.ts`, a decisão em
-  `can()` (billing.md, `docs/adr-002-billing.md`). **Sem gateway de pagamento por enquanto**:
-  "Assinar" vira um pedido que a equipe atende no painel interno (`/admin`). Falta escolher o
-  gateway (Stripe ou um local com Pix) e ligar o webhook dormente de `routes/api/stripe` a
-  `assinaturas.ts`.
-- **Os PREÇOS da tela de planos são PLACEHOLDER** (`src/lib/content/planos.ts`). Os limites não:
+  `can()` (billing.md, `docs/adr-002-billing.md`). **O gateway é o Mercado Pago, pronto e
+  desligado**: com `BILLING_PROVIDER` vazio, "Assinar" vira um pedido que a equipe atende no painel
+  interno (`/admin`); com `mercadopago` + `MERCADOPAGO_ACCESS_TOKEN` + `MERCADOPAGO_WEBHOOK_SECRET`,
+  vira o checkout do Mercado Pago e o webhook ativa o plano (`docs/operacao.md` "Mercado Pago").
+  Falta pôr as credenciais e conferir no sandbox o que a documentação não fecha (billing.md).
+- **Os PREÇOS são PLACEHOLDER** (`src/lib/billing/precos.ts`, o mesmo valor que o checkout cobra e
+  a vitrine mostra). Os limites não:
   eles saem do catálogo, e `catalogo.test.ts` garante que a vitrine não promete outra coisa.
 - **O avatar da conta são dezoito números, não uma imagem** (`src/lib/avatar/`) — coluna de texto
   em `Teacher` e `StudentAccount`, sem bucket e sem prazo de validade. Vale para professor e
@@ -174,9 +179,10 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   aparece como iniciais**: toda conta nasce com um avatar sorteado (hook de cadastro das duas
   instâncias), e quem não tem um gravado — conta antiga, aluno da chamada sem conta — é desenhado
   pelo `avatarPadrao` do nome, o mesmo rosto em toda tela.
-- **Trial**: cadastro novo entra em trial de 14 dias com os limites do básico, sem cartão
-  (`TRIAL` no catálogo); acabou, pausa criar e publicar — links seguem no ar. Rever quando o
-  gateway existir.
+- **Trial**: cadastro novo entra em trial de 14 dias com os limites do básico (`TRIAL` no
+  catálogo); acabou, pausa criar e publicar — links seguem no ar. **O teste vai exigir cartão**
+  (decisão de 2026-11-02, billing.md "Trial"), e isso espera o gateway: até ele existir o cadastro
+  não pede cartão, e nenhuma tela promete "sem cartão".
 - **Teclado virtual** em toda questão de escrever no idioma alvo, e só nela: grade para japonês
   (kana), mandarim (pinyin com tom), árabe e híndi, encaixada acima do rodapé do Player; barra de
   acentos para pt/es/fr/it; nada para inglês (`LanguageProfile.input`, kernel.md "Entrada"). O
@@ -196,16 +202,30 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   (estornado se não servir). Só o modo "prompt" existe — imagem e vídeo pedem leitura de arquivo.
   **A chave precisa ser de projeto com faturamento**: a política de privacidade promete que os
   dados não treinam modelos, o que não vale na camada gratuita.
+- **A tradução do material é automática** (`TRANSLATE_PROVIDER=audiotext`,
+  `docs/adr-006-traducao.md`): o professor cadastra no idioma que ensina e a frase do aluno sai do
+  **MADLAD-400 3B** (Apache 2.0), o terceiro motor do serviço de áudio. Ela só preenche o que vem em
+  BRANCO — a do professor nunca é trocada — e a lista colada aceita linha sem tradução. Custou
+  **2,9 GB** de memória: o teto do container de áudio subiu para 7 GB, e a conta da máquina de
+  produção ainda fecha (11,75 de 16). O tradutor é opcional no serviço: falhar ao carregar não tira
+  voz e fala do ar. **O PyAV do serviço está fixado abaixo do 19** (o 19 quebrou a transcrição com o
+  `/health` dizendo "ok") — subir só quando o faster-whisper acompanhar.
 - **Módulos e nível** (`docs/adr-004-modulos-e-nivel.md`): módulo é coleção ordenada N:N de
   atividades; nível é rótulo CEFR, não muda os exercícios. Só **turma alocada** recebe envio do
   módulo, cada uma com a sua **programação** (tudo agora, por semana, por intervalo, datas), que
-  dispara por job `envio-programado` com `runAfter` — sem cron. A programação escolhe também COMO
-  chega: por e-mail ou **só disponibilizar** (abre no mapa, sem e-mail). O aluno com conta vê o módulo
+  dispara por job `envio-programado` com `runAfter` — sem cron. **Módulo não manda e-mail: ele
+  LIBERA** — na data a atividade abre no mapa de quem tem conta ligada à turma (houve um "por e-mail";
+  saiu a pedido do dono). Mandar UMA atividade por e-mail continua existindo, fora do módulo. O aluno com conta vê o módulo
   como um **mapa de fases** em 8 bits (`/aluno/modulos/[id]`). Falta decidir o que o aluno que
   entra na turma depois recebe do que já saiu.
 - **Escola (Scholar)** (`docs/adr-005-escola.md`): organização com coordenação e professores; o
   contrato vence o plano próprio; a coordenação vê **só números**, nunca nome de aluno nem resposta.
   Falta: material compartilhado entre professores e o faturamento da escola (hoje por fora).
+- **Notificações**: o sino do Studio avisa o que pede ação ou o desfecho de algo que o professor
+  começou — resposta para corrigir, liberação de módulo que não aconteceu, áudio que a fila não
+  gerou, aluno que entrou na turma com a conta, o que a equipe fez na assinatura, professor que
+  entrou na escola, fim do teste (`docs/notificacoes.md`). Fica de fora o e-mail que voltou: SMTP
+  não devolve aviso de devolução, e nada marca `Invite.bouncedAt` hoje.
 - Não existe mais fila de correção: comentar e dar nota de rubrica acontecem na tela da
   tentativa, em cima da resposta (paginas.md "Resultados").
 - `conta` é real: salva o nome, pede plano, cancela no fim do período, sai da escola e mostra o

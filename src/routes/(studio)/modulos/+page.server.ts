@@ -153,7 +153,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				e.dia <= somarDias(hoje, 6)
 		);
 		alerta = {
-			titulo: `O envio de ${rotuloDoInstante(envio.dueAt)} para ${alocacao.turma.name} não saiu.`,
+			titulo: `A liberação de ${rotuloDoInstante(envio.dueAt)} para ${alocacao.turma.name} não aconteceu.`,
 			detalhe: `${nome} ${envio.reason ? TEXTO_DO_MOTIVO[envio.reason] : 'não pôde sair'}${
 				tambem
 					? `, e ${tambem.turma.nome} também a recebe ${tambem.dia === hoje ? 'hoje' : `em ${rotuloDaData(tambem.dia)}`}`

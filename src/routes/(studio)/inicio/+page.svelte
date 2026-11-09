@@ -114,7 +114,7 @@
 			},
 			{
 				n: p.modulos.grupos.erro,
-				texto: () => 'com envio que não saiu',
+				texto: () => 'com liberação que não aconteceu',
 				classe: 'bg-error'
 			},
 			{
@@ -134,8 +134,8 @@
 		if (total === 0) return 'Junte atividades numa sequência e programe o envio para uma turma.';
 		if (grupos.erro > 0)
 			return grupos.erro === 1
-				? 'Um módulo tem envio que não saiu. Abra Módulos para resolver.'
-				: `${grupos.erro} módulos têm envio que não saiu. Abra Módulos para resolver.`;
+				? 'Um módulo tem liberação que não aconteceu. Abra Módulos para resolver.'
+				: `${grupos.erro} módulos têm liberação que não aconteceu. Abra Módulos para resolver.`;
 		if (proximo)
 			return `Próximo envio: ${proximo.quando}, ${proximo.atividade} para ${proximo.turma}.`;
 		return 'Nenhum envio programado.';
@@ -225,7 +225,7 @@
 		'flex min-w-0 flex-col gap-3 rounded-[18px] border border-line p-4.5 text-base-content no-underline cartao-interativo hover:text-base-content';
 </script>
 
-<svelte:head><title>Início — entendo</title></svelte:head>
+<svelte:head><title>Início — Spokke</title></svelte:head>
 
 {#snippet icone(d: string, classe = 'size-4', traco = '2')}
 	<svg class="{classe} flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"

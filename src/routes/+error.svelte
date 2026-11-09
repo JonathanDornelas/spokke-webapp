@@ -6,7 +6,7 @@
 	const is404 = $derived(page.status === 404);
 </script>
 
-<svelte:head><title>{is404 ? 'Página não encontrada' : 'Erro'} — entendo</title></svelte:head>
+<svelte:head><title>{is404 ? 'Página não encontrada' : 'Erro'} — Spokke</title></svelte:head>
 
 <div class="flex min-h-screen flex-col bg-base-200">
 	<header class="px-8 py-5"><Logo /></header>

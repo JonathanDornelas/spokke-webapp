@@ -51,7 +51,7 @@ function conexao(): Transporter {
  * assunto e no corpo (`convite-aluno.ts`).
  */
 function remetente(): string {
-	return process.env.EMAIL_FROM || 'entendo <nao-responda@localhost>';
+	return process.env.EMAIL_FROM || 'Spokke <nao-responda@localhost>';
 }
 
 export const smtpEmailProvider: EmailProvider = {

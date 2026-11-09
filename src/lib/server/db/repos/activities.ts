@@ -364,9 +364,11 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 		 * que impedem que apagar um professor, ou uma versão, leve junto respostas
 		 * de aluno por acidente.
 		 *
-		 * O áudio (`MediaAsset`) fica — é do professor, identificado pelo conteúdo, e
-		 * vence sozinho. As gravações de fala do aluno (`fala/`) vencem pela regra de
-		 * ciclo de vida do bucket, como em `apagarTentativa`.
+		 * O áudio (`MediaAsset`) não sai aqui: é do professor, identificado pelo
+		 * conteúdo, e outra atividade pode usar o mesmo arquivo. Quem chama roda
+		 * `limparAudioSemUso` depois (`server/tts/limpeza.ts`). As gravações de fala
+		 * do aluno (`fala/`) vencem pela regra de ciclo de vida do bucket, como em
+		 * `apagarTentativa`.
 		 */
 		async apagarDeVez(id: string): Promise<boolean> {
 			const dono = { id, teacherId: teacher.id };

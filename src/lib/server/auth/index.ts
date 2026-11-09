@@ -39,7 +39,6 @@ export const auth = betterAuth({
 			trialEndsAt: { type: 'date', required: false, input: false },
 			// Identificador do cliente no gateway: nunca atravessa para o browser
 			// (auth.md "Serialização") — `returned: false` o tira da sessão.
-			stripeCustomerId: { type: 'string', required: false, input: false, returned: false },
 			// O avatar entra aqui para viajar na SESSÃO: o cabeçalho do Studio o
 			// desenha em toda tela, e sem isto cada `load` precisaria de uma
 			// consulta só para buscar dezoito números que a sessão já poderia

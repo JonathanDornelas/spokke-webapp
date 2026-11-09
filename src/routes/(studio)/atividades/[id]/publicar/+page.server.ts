@@ -72,7 +72,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const slug = publicacao?.slug ?? linkDaAtividade(activity.id);
 	// O QR sai pronto do servidor: é uma imagem estática do link, e gerar no
 	// cliente só acrescentaria JS a uma tela que não precisa dele. A origem vem
-	// do request — em dev o link é localhost, não "entendo.app".
+	// do request — em dev o link é localhost, não "spokke.app".
 	const linkPublico = publicacao ? `${url.origin}/a/${slug}` : null;
 	const qr = linkPublico
 		? await toDataURL(linkPublico, { margin: 1, width: 264, errorCorrectionLevel: 'M' })

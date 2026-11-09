@@ -10,6 +10,7 @@
 	// `camposMaterial` espera, mais tudo que se calcula no cliente: a prévia
 	// do lote, o rendimento do conjunto, o aviso de repetido e "o que o aluno
 	// vai ver".
+	import { untrack } from 'svelte';
 	import Alternador from './Alternador.svelte';
 	import Loading from './Loading.svelte';
 	import IdiomaTag from './IdiomaTag.svelte';
@@ -56,6 +57,8 @@
 				added: number;
 				reused: number;
 				ignored: number;
+				/** Linhas cuja tradução veio do tradutor automático. */
+				traduzidas?: number;
 				foraDoLimite?: number;
 				aviso?: string | null;
 				motivo?: MotivoDoBloqueio | null;
@@ -80,7 +83,10 @@
 		ongerarIa,
 		onaceitarIa,
 		idioma = $bindable(null),
-		idiomaPadrao = null
+		idiomaPadrao = null,
+		traducaoAutomatica = false,
+		linguaDoAluno = null,
+		onsugerirTraducao
 	}: {
 		/** Muda o título, o rendimento e o rótulo de salvar — nunca os campos. */
 		contexto: 'biblioteca' | 'wizard';
@@ -122,6 +128,16 @@
 		idioma?: string | null;
 		/** O idioma com que um material NOVO nasce na biblioteca — o que o professor mais usa. */
 		idiomaPadrao?: string | null;
+		/**
+		 * O servidor tem tradutor (`TRANSLATE_PROVIDER`). Ligado, a tradução de par
+		 * de frases e de vocabulário sai sozinha: sugerida enquanto o professor
+		 * digita, e feita no servidor para o que chegar em branco (adr-006).
+		 */
+		traducaoAutomatica?: boolean;
+		/** Para onde a tradução vai: a língua do aluno (da atividade, ou a da biblioteca). */
+		linguaDoAluno?: string | null;
+		/** Pede a sugestão — a PÁGINA chama a remote function. `null` é "não deu agora". */
+		onsugerirTraducao?: (texto: string, de: string, para: string) => Promise<string | null>;
 	} = $props();
 
 	const wiz = $derived(contexto === 'wizard');
@@ -161,10 +177,78 @@
 	// Texto e diálogo não têm "um por linha"; editar é sempre um de cada vez.
 	const modoEfetivo = $derived<Modo>(editing ? 'um' : modo === 'lista' && !podeColar ? 'um' : modo);
 
+	// ── tradução automática ─────────────────────────────────────────────────
+	// O campo da tradução vem preenchido enquanto o professor escreve a frase, e
+	// ele confere. A regra que segura tudo: **o que ELE escreveu nunca é
+	// sobrescrito.** `traducaoAuto` é o último texto que veio do tradutor; se o
+	// campo é diferente dele (e não está vazio), o campo é do professor.
+	const podeTraduzir = $derived(
+		traducaoAutomatica &&
+			!!linguaDoAluno &&
+			tagConteudo !== 'und' &&
+			tagConteudo !== linguaDoAluno &&
+			(kind === 'pair' || kind === 'vocab')
+	);
+	let traducaoAuto = $state<string | null>(null);
+	let traduzindo = $state(false);
+	let semTradutor = $state(false);
+	/** Cada pedido ganha um número; resposta de pedido velho é descartada. */
+	let pedidoDaTraducao = 0;
+	const traducaoEhAutomatica = $derived(!!traducaoAuto && traducao === traducaoAuto);
+
+	async function pedirTraducao(texto: string, forcar = false) {
+		if (!onsugerirTraducao || !linguaDoAluno) return;
+		const meu = ++pedidoDaTraducao;
+		traduzindo = true;
+		const sugestao = await onsugerirTraducao(texto, tagConteudo, linguaDoAluno);
+		if (meu !== pedidoDaTraducao) return;
+		traduzindo = false;
+		semTradutor = sugestao === null;
+		if (sugestao === null || alvo.trim() !== texto) return;
+		// O professor pode ter começado a escrever a tradução enquanto esperava.
+		const doProfessor = traducao.trim() !== '' && traducao !== traducaoAuto;
+		if (doProfessor && !forcar) return;
+		traducao = sugestao;
+		traducaoAuto = sugestao;
+	}
+
+	/** "Traduzir de novo": troca a tradução atual pela do tradutor, a pedido. */
+	function traduzirDeNovo() {
+		const texto = alvo.trim();
+		if (texto) void pedirTraducao(texto, true);
+	}
+
+	// Depende SÓ da frase (e de a tradução estar ligada): ler `traducao` aqui
+	// faria a própria sugestão disparar outra, em laço.
+	$effect(() => {
+		const texto = alvo.trim();
+		if (!podeTraduzir || modoEfetivo !== 'um') return;
+		return untrack(() => {
+			const doProfessor = traducao.trim() !== '' && traducao !== traducaoAuto;
+			if (doProfessor) return;
+			if (!texto) {
+				// Apagou a frase: a tradução automática dela sai junto.
+				pedidoDaTraducao++;
+				traduzindo = false;
+				if (traducaoEhAutomatica) traducao = '';
+				traducaoAuto = null;
+				return;
+			}
+			// Uma pausa na digitação, não uma tecla: cada pedido é CPU do serviço
+			// que também transcreve a fala dos alunos.
+			const espera = setTimeout(() => void pedirTraducao(texto), 650);
+			return () => clearTimeout(espera);
+		});
+	});
+
 	export function limpar() {
 		editando = null;
 		alvo = '';
 		traducao = '';
+		traducaoAuto = null;
+		semTradutor = false;
+		pedidoDaTraducao++;
+		traduzindo = false;
 		raw = '';
 		nota = '';
 		exemplo = '';
@@ -188,6 +272,10 @@
 		modo = 'um';
 		alvo = m.target;
 		traducao = m.source;
+		// A tradução gravada é do professor (ou ele já a conferiu): editar a frase
+		// não a troca sozinha — "Traduzir de novo" está ali se ele quiser.
+		traducaoAuto = null;
+		semTradutor = false;
 		raw = m.raw;
 		nota = m.note;
 		exemplo = m.example;
@@ -304,8 +392,13 @@
 	});
 
 	// ── colar uma lista ─────────────────────────────────────────────────────
-	const linhasLote = $derived(modoEfetivo === 'lista' ? previewRawLines(lote) : []);
+	// Com o tradutor ligado a linha sem separador ENTRA — o mesmo parser do
+	// servidor, com a mesma opção, então a prévia continua sendo o que é gravado.
+	const linhasLote = $derived(
+		modoEfetivo === 'lista' ? previewRawLines(lote, { traduzirSemSeparador: podeTraduzir }) : []
+	);
 	const loteOk = $derived(linhasLote.filter((l) => l.ok).length);
+	const loteAutomatico = $derived(linhasLote.filter((l) => l.automatica).length);
 	const loteRuim = $derived(linhasLote.length - loteOk);
 
 	/** Leva o cursor até a linha sem separador — é onde o conserto acontece. */
@@ -565,7 +658,8 @@
 					? alvo.trim().length > 0 && raw.trim().length > 0
 					: kind === 'dialogue'
 						? falas.filter((f) => f.text.trim()).length >= 2
-						: alvo.trim().length > 0 && traducao.trim().length > 0;
+						: // Com o tradutor ligado, a tradução em branco é feita ao salvar.
+							alvo.trim().length > 0 && (traducao.trim().length > 0 || podeTraduzir);
 		}
 	});
 	const saveLabel = $derived(
@@ -663,6 +757,11 @@
 				>{/if}
 		</h3>
 		<input type="hidden" name="kind" value={kernelKind} />
+		{#if !wiz}
+			<!-- Para onde vai a tradução automática na biblioteca; no wizard o
+			     servidor usa a língua do aluno da própria atividade. -->
+			<input type="hidden" name="linguaDoAluno" value={linguaDoAluno ?? ''} />
+		{/if}
 		<div class="mb-2.5 grid gap-2 sm:grid-cols-2">
 			{#each TIPOS as t (t.id)}
 				{@const sel = t.id === kind}
@@ -906,16 +1005,55 @@
 						{/if}
 					</div>
 					<div>
-						<label for="mf-trad" class="mb-1.5 block text-[12.5px] font-bold"
-							>{rotuloTraducao}</label
-						>
+						<label for="mf-trad" class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
+							{rotuloTraducao}
+							{#if podeTraduzir}
+								<span class="text-[11.5px] font-medium text-base-content/65"
+									>sai sozinha, você confere</span
+								>
+							{/if}
+						</label>
 						<input
 							id="mf-trad"
 							name="source"
 							bind:value={traducao}
+							aria-describedby={podeTraduzir ? 'mf-trad-status' : undefined}
 							class="input w-full font-content text-[14.5px]"
-							placeholder={kind === 'pair' ? EXEMPLO.pair.trad : EXEMPLO.vocab.trad}
+							placeholder={podeTraduzir
+								? 'A tradução aparece aqui'
+								: kind === 'pair'
+									? EXEMPLO.pair.trad
+									: EXEMPLO.vocab.trad}
 						/>
+						{#if podeTraduzir}
+							<!-- O estado da tradução em TEXTO: quem usa leitor de tela ouve
+							     "traduzindo", e o "Traduzir de novo" só aparece quando a
+							     tradução do campo é do professor, não a sugerida. -->
+							<div
+								id="mf-trad-status"
+								class="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-base-content/65"
+								role="status"
+							>
+								{#if traduzindo}
+									<Loading variant="fila" size={10} label="Traduzindo" />
+									<span>Traduzindo…</span>
+								{:else if semTradutor && !traducao.trim()}
+									<span>O tradutor não respondeu agora. Escreva a tradução.</span>
+								{:else if traducaoEhAutomatica}
+									<span>Tradução automática. Confira e ajuste se precisar.</span>
+								{:else if !traducao.trim()}
+									<span>Ela aparece quando você terminar de escrever.</span>
+								{/if}
+								{#if alvo.trim() && !traduzindo && traducao.trim() && !traducaoEhAutomatica}
+									<button
+										type="button"
+										onclick={traduzirDeNovo}
+										class="font-semibold text-primary underline-offset-2 hover:underline"
+										>Traduzir de novo</button
+									>
+								{/if}
+							</div>
+						{/if}
 					</div>
 					{#if kind === 'pair'}
 						<div>
@@ -1155,8 +1293,16 @@
 			<!-- ══ colar uma lista ══ -->
 		{:else if modoEfetivo === 'lista'}
 			<div>
-				<label for="mf-lote" class="mb-1.5 block text-[12.5px] font-bold">
+				<label
+					for="mf-lote"
+					class="mb-1.5 flex flex-wrap items-baseline gap-x-2 text-[12.5px] font-bold"
+				>
 					{kind === 'vocab' ? 'Um termo por linha' : 'Uma frase por linha'}
+					{#if podeTraduzir}
+						<span class="text-[11.5px] font-medium text-base-content/65"
+							>a tradução depois do separador é opcional: sem ela, sai sozinha</span
+						>
+					{/if}
 				</label>
 				<textarea
 					id="mf-lote"
@@ -1192,6 +1338,12 @@
 								{plural(linhasLote.length, 'linha', 'linhas')} · {loteOk}
 								{loteOk === 1 ? 'vira' : 'viram'} material
 							</span>
+							{#if loteAutomatico > 0}
+								<span class="text-[12px] text-base-content/65">
+									{loteAutomatico}
+									{loteAutomatico === 1 ? 'ganha' : 'ganham'} tradução automática ao adicionar
+								</span>
+							{/if}
 							<div class="min-w-1 flex-1"></div>
 							{#if loteRuim > 0}
 								<span
@@ -1231,7 +1383,13 @@
 											dir={direcao}
 											data-content-lang={tagConteudo}>{l.left}</span
 										>
-										<span class="text-[12.5px] text-base-content/65">{l.right}</span>
+										{#if l.automatica}
+											<span class="text-[12.5px] text-base-content/65 italic"
+												>tradução automática</span
+											>
+										{:else}
+											<span class="text-[12.5px] text-base-content/65">{l.right}</span>
+										{/if}
 									</span>
 									<svg
 										class="size-[15px] shrink-0 text-success"
@@ -1608,6 +1766,11 @@
 				{resultado.added} adicionados{resultado.ignored
 					? `, ${resultado.ignored} sem separador ${resultado.ignored === 1 ? 'ignorada' : 'ignoradas'}`
 					: ''}{resultado.reused ? `, ${resultado.reused} você já tinha` : ''}.
+				{#if resultado.traduzidas}
+					{resultado.traduzidas === 1
+						? 'Uma tradução veio do tradutor automático: confira na lista.'
+						: `${resultado.traduzidas} traduções vieram do tradutor automático: confira na lista.`}
+				{/if}
 			</p>
 			{#if resultado.aviso}
 				<!-- As linhas que não couberam no estoque do plano: dizer QUANTAS, e o

@@ -9,7 +9,7 @@
 	// - **Pixel art como DADO** (o molde de `$lib/avatar/`): cada sprite é uma
 	//   grade de letras, cada letra uma cor por TOKEN, e vira `path` com
 	//   `crispEdges`. Nenhuma imagem, e o tema escuro troca as cores sozinho.
-	// - **Concluída é violeta, não verde**: terminou não é acertou. As estrelas só
+	// - **Concluída é azul, não verde**: terminou não é acertou. As estrelas só
 	//   existem onde o professor liberou o resultado.
 	// - **O mapa não tranca o link**: toda fase liberada abre, mesmo fora da
 	//   ordem. Quem tranca é só a programação do professor.
@@ -141,7 +141,7 @@
 
 	const arte = $derived.by(() => {
 		const { H, pos } = geo;
-		// A trilha: quadradinhos a cada 14px, violeta até onde ele chegou.
+		// A trilha: quadradinhos a cada 14px, azul até onde ele chegou.
 		let feito = '';
 		let falta = '';
 		for (let i = 0; i < seqN - 1; i++) {
@@ -278,7 +278,7 @@
 			.join(', ');
 
 	// ── avatar e festa: uma vez, lembrado no aparelho ──
-	const chave = $derived(`entendo-mapa-${mapa.id}`);
+	const chave = $derived(`spokke-mapa-${mapa.id}`);
 	let de = $state<number | null>(null);
 	let andando = $state(false);
 	let festa = $state(false);
@@ -638,7 +638,7 @@
 			aria-modal="true"
 			aria-label={folha.titulo}
 			out:modal
-			class="relative w-full animate-folha rounded-t-[22px] border border-line bg-base-100 px-4 pt-5 pb-6.5 shadow-[0_30px_60px_-30px_rgba(20,18,31,0.6)] outline-none lg:w-[420px] lg:animate-entrada-curta lg:rounded-[18px] lg:p-5.5"
+			class="relative w-full animate-folha rounded-t-[22px] border border-line bg-base-100 px-4 pt-5 pb-6.5 shadow-[0_30px_60px_-30px_rgba(15,20,32,0.6)] outline-none lg:w-[420px] lg:animate-entrada-curta lg:rounded-[18px] lg:p-5.5"
 		>
 			<div class="mb-3.5 flex items-start gap-3">
 				<span class="min-w-0 flex-1">

@@ -11,6 +11,7 @@
 	// **Adotar tentativas é a única escrita desta área**, e aparece como convite
 	// pontual no topo: some quando não há nada solto neste aparelho. Nada é
 	// adotado sozinho — o aluno decide se aquelas respostas eram dele.
+	import { CLASSE_DA_ETIQUETA, corOuPadrao } from '$lib/etiquetas';
 	import { goto, invalidateAll } from '$app/navigation';
 	import Loading from '$lib/components/Loading.svelte';
 	import { resolve } from '$app/paths';
@@ -87,14 +88,6 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const corDaEtiqueta: Record<string, string> = {
-		violeta: 'bg-base-300 text-primary',
-		teal: 'bg-accent/16 text-accent',
-		azul: 'bg-info/15 text-info',
-		magenta:
-			'bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-error)_10%)] text-primary',
-		ardosia: 'bg-base-300 text-base-content/70'
-	};
 	const tagTone: Record<Habilidade['tag'], string> = {
 		firme: 'bg-success/13 text-success',
 		'quase lá': 'bg-warning/15 text-warning',
@@ -210,7 +203,10 @@
 	});
 </script>
 
-<svelte:head><title>Minhas atividades — entendo</title></svelte:head>
+<svelte:head>
+	<title>Minhas atividades · Spokke</title>
+	<meta name="robots" content="noindex" />
+</svelte:head>
 
 <div class="min-h-dvh bg-base-100">
 	<header class="flex items-center gap-3 border-b border-line px-gutter py-3">
@@ -402,9 +398,9 @@
 							class="flex min-w-[230px] flex-1 items-center gap-3 rounded-[14px] border border-line px-4 py-3.5"
 						>
 							<span
-								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {corDaEtiqueta[
-									ficha.color
-								] ?? corDaEtiqueta.violeta}">{ficha.badge}</span
+								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {CLASSE_DA_ETIQUETA[
+									corOuPadrao(ficha.color)
+								]}">{ficha.badge}</span
 							>
 							<span class="min-w-0">
 								<span class="mb-[3px] block truncate text-sm font-semibold">{ficha.classroom}</span>

@@ -8,6 +8,9 @@ import { contaProfessor } from '$lib/server/db/repos/teachers';
 import { textoDoEvento } from '$lib/billing/auditoria';
 import { NOME_DO_PLANO, ehPlanoPago } from '$lib/billing/catalogo';
 import { prisma } from '$lib/server/db/client';
+import { nomeDoProvedor } from '$lib/server/billing';
+import { sincronizarPendentes } from '$lib/server/billing/mercadopago/sincronizar';
+import { tokenDoMercadoPago } from '$lib/server/billing/mercadopago/cliente';
 
 /**
  * Conta E assinatura, numa tela só com duas abas. Precisa de loader próprio
@@ -16,7 +19,7 @@ import { prisma } from '$lib/server/db/client';
  * aquela e mostraria o e-mail vazio.
  *
  * DTO explícito — nunca a entidade inteira do professor (auth.md
- * "Serialização"): `stripeCustomerId` fica aqui.
+ * "Serialização"): os campos de cobrança e as assinaturas no gateway ficam aqui.
  *
  * O estado da assinatura sai de `acessoDoProfessor` → `can()`, a MESMA decisão
  * que barra criar e publicar (billing.md "Entitlements"). Antes havia aqui um
@@ -26,6 +29,17 @@ import { prisma } from '$lib/server/db/client';
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const teacher = requireTeacher(locals);
 	const repo = minhaAssinatura(teacher);
+	const provedor = nomeDoProvedor();
+
+	// A volta do checkout do Mercado Pago (`back_url`). O redirect não é a
+	// verdade (billing.md): aqui só se RELÊ no provedor, e a tela diz o que ele
+	// respondeu — "confirmando" enquanto ele não autoriza. Antes do resto, para o
+	// estado da conta já sair com a ativação, se ela aconteceu.
+	const checkout =
+		url.searchParams.get('checkout') === 'mercadopago' && tokenDoMercadoPago()
+			? await sincronizarPendentes(teacher.id)
+			: null;
+
 	const [estado, pedido, eventos, perfil, turmas, alunos] = await Promise.all([
 		acessoDoProfessor(teacher),
 		repo.pedidoPendente(),
@@ -54,6 +68,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		},
 		contagens: { turmas, alunos },
 		acesso: resumoDoAcesso(estado),
+		cobranca: {
+			provedor,
+			// No Mercado Pago, cancelada é cancelada: o caminho de volta é assinar de novo.
+			podeDesfazerCancelamento: provedor === 'manual'
+		},
+		checkout: checkout
+			? {
+					status: checkout.status,
+					plano: ehPlanoPago(checkout.plano) ? NOME_DO_PLANO[checkout.plano] : checkout.plano
+				}
+			: null,
 		pedido: pedido
 			? {
 					plano: ehPlanoPago(pedido.plano) ? NOME_DO_PLANO[pedido.plano] : pedido.plano,

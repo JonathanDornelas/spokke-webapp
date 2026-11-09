@@ -4,6 +4,7 @@ import { programacoes } from '$lib/server/db/repos/programacoes';
 import { prisma } from '$lib/server/db/client';
 import { acessoDoProfessor, resumoDoAcesso } from '$lib/server/billing/acesso';
 import { ehCoordenacao } from '$lib/server/escola/guard';
+import { avisarFimDoTrial } from '$lib/server/notificacoes';
 
 // Só carrega dado de exibição — a barreira de verdade já rodou em
 // hooks.server.ts antes deste load existir (auth.md: layout nunca é guarda).
@@ -26,6 +27,12 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		// Só para MOSTRAR a entrada "Escola" — a barreira é `requireCoordenacao`.
 		ehCoordenacao(teacher.id)
 	]);
+
+	// O aviso do fim do teste no sino (docs/notificacoes.md): três dias antes e no
+	// último. Escrever num load é deliberado e idempotente — a chave é a data.
+	if (acesso.origem === 'trial' && acesso.trialEndsAt && acesso.trialEndsAt > new Date()) {
+		await avisarFimDoTrial(teacher.id, acesso.trialEndsAt, acesso.diasDeTrial ?? 99);
+	}
 
 	// Badge de "Resultados": respostas de escrita esperando o retorno do
 	// professor. O critério é `reviewedAt` nulo, não `score: 0` — zero numa

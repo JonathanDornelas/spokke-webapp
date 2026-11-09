@@ -3,6 +3,7 @@ import { command, form, getRequestEvent, query } from '$app/server';
 import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { requireTeacher } from '$lib/server/auth/guard';
+import { resolverNotificacoes } from '$lib/server/notificacoes';
 import { motivoDoBloqueio } from '$lib/server/billing/entitlements';
 import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { comCota, motivoDeCriar } from '$lib/server/billing/cota';
@@ -19,6 +20,7 @@ import { playerRepo } from '$lib/server/db/repos/player';
 import { buildRuntimeItem, itemAudioHashes } from '$lib/server/player/runtime';
 import { edicaoDoItemSchema, montarItemEditado } from '$lib/server/atividades/item-editado';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
+import { limparAudioSemUso } from '$lib/server/tts/limpeza';
 import { isAsrConfigured } from '$lib/server/asr';
 import { gerarCodigoAcesso, normalizarCodigoAcesso } from '$lib/server/player/access-code';
 import { linkDaAtividade } from '$lib/server/player/slug';
@@ -27,7 +29,14 @@ import { MAX_ITENS, selectItems } from '$lib/kernel/generators/select';
 import { skillSchema } from '$lib/kernel/interactions/skill-schema';
 import { parseContentUnit } from '$lib/kernel/content/parse';
 import { parseRawMaterial } from '$lib/kernel/content/parse-raw';
-import { camposMaterial, montarMaterial } from '$lib/server/atividades/material-form';
+import {
+	camposMaterial,
+	montarMaterial,
+	preencherTraducao,
+	traduzirLote
+} from '$lib/server/atividades/material-form';
+import { getTradutor } from '$lib/server/traducao';
+import { paresDasFrases } from '$lib/server/atividades/pares-de-palavras';
 import { getProfile, tagForLabel } from '$lib/kernel/language/profiles';
 import { interactionSchema } from '$lib/kernel/item';
 import type { Skill } from '$lib/kernel/interactions/types';
@@ -109,7 +118,12 @@ export const apagarAtividade = command(
 		if (confirmacao.trim() !== activity.title.trim()) {
 			return { ok: false as const, error: 'Digite o título exatamente como está para apagar.' };
 		}
-		return { ok: await atividades(teacher).apagarDeVez(activityId) };
+		const apagada = await atividades(teacher).apagarDeVez(activityId);
+		// O áudio de atividade não vence: o que só ela usava sai AGORA, e o que
+		// outra atividade do professor também usa fica (server/tts/limpeza.ts).
+		// Falhar aqui não desfaz o apagar — o que sobrar sai na próxima limpeza.
+		if (apagada) await limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
+		return { ok: apagada };
 	}
 );
 
@@ -205,8 +219,16 @@ export const criarAtividade = form(
 export const adicionarMaterial = form(
 	z.object({ activityId: z.string(), ...camposMaterial }),
 	async ({ activityId, ...campos }) => {
-		const { teacher } = await activityOr404(activityId);
-		const montado = montarMaterial(campos);
+		const { teacher, activity } = await activityOr404(activityId);
+		// Tradução em branco sai do tradutor, do idioma da atividade para a
+		// língua do aluno dela (docs/adr-006-traducao.md).
+		const comTraducao = await preencherTraducao(
+			campos,
+			{ de: activity.targetLang, para: activity.sourceLang },
+			getTradutor()
+		);
+		if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
+		const montado = montarMaterial(comTraducao.campos);
 		if ('error' in montado) return { ok: false as const, error: montado.error };
 
 		// Material igual a um que o professor já tem é REAPROVEITADO, não
@@ -242,23 +264,34 @@ export const adicionarMateriaisEmLote = form(
 		raw: z.string()
 	}),
 	async ({ activityId, kind, raw }) => {
-		const { teacher } = await activityOr404(activityId);
+		const { teacher, activity } = await activityOr404(activityId);
+		const tradutor = getTradutor();
 
 		const linhas = raw.split('\n').filter((linha) => linha.trim()).length;
-		const unidades = parseRawMaterial(kind, raw);
-		if (unidades.length === 0) {
+		// Com tradutor, a linha sem separador ENTRA e a tradução vem dele.
+		const lidas = parseRawMaterial(kind, raw, { traduzirSemSeparador: !!tradutor });
+		if (lidas.length === 0) {
 			return {
 				ok: false as const,
 				error: 'Nenhuma linha tem o separador. Use "alvo · tradução", um por linha.'
 			};
 		}
 
-		if (unidades.length > MAX_LINHAS_POR_LOTE) {
+		if (lidas.length > MAX_LINHAS_POR_LOTE) {
 			return {
 				ok: false as const,
 				error: `Cole até ${MAX_LINHAS_POR_LOTE} linhas por vez.`
 			};
 		}
+
+		const traduzido = await traduzirLote(
+			kind,
+			lidas,
+			{ de: activity.targetLang, para: activity.sourceLang },
+			tradutor
+		);
+		if ('error' in traduzido) return { ok: false as const, error: traduzido.error };
+		const unidades = traduzido.unidades;
 
 		const r = await gravarMateriais(teacher, { kind, unidades, activityId });
 		if (r.criados === 0 && r.reaproveitados === 0) {
@@ -272,6 +305,8 @@ export const adicionarMateriaisEmLote = form(
 			ok: true as const,
 			added: r.criados + r.reaproveitados,
 			ignored: linhas - unidades.length,
+			// Quantas traduções vieram do tradutor — é o que o professor confere.
+			traduzidas: traduzido.traduzidas,
 			// Colar a lista da aula passada de novo é comum — dizer quantas linhas
 			// já existiam evita o professor achar que duplicou tudo.
 			reused: r.reaproveitados,
@@ -286,8 +321,14 @@ export const adicionarMateriaisEmLote = form(
 export const editarMaterial = form(
 	z.object({ activityId: z.string(), contentId: z.string(), ...camposMaterial }),
 	async ({ activityId, contentId, ...campos }) => {
-		const { teacher } = await activityOr404(activityId);
-		const montado = montarMaterial(campos);
+		const { teacher, activity } = await activityOr404(activityId);
+		const comTraducao = await preencherTraducao(
+			campos,
+			{ de: activity.targetLang, para: activity.sourceLang },
+			getTradutor()
+		);
+		if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
+		const montado = montarMaterial(comTraducao.campos);
 		if ('error' in montado) return { ok: false as const, error: montado.error };
 
 		const atualizado = await materiais(teacher).update(contentId, campos.kind, montado.dados);
@@ -391,14 +432,22 @@ export const gerarItens = command(z.object({ activityId: z.string() }), async ({
 	if (units.length === 0) error(400, 'Adicione ao menos um material antes de gerar itens.');
 
 	const targetProfile = getProfile(activity.targetLang);
+	const sourceProfile = getProfile(activity.sourceLang);
 	const { groups, closing } = runGenerators(units, {
 		targetProfile,
-		sourceProfile: getProfile(activity.sourceLang),
+		sourceProfile,
 		seed: activity.id,
 		capabilities: { asr: isAsrConfigured(), tts: isTtsConfigured() },
 		// A leitura da frase (kana, pinyin) entra no gabarito das questões de
 		// digitar — e fica visível e editável no editor de item.
-		transcrever: await transcritorPara(targetProfile)
+		transcrever: await transcritorPara(targetProfile),
+		// Palavras das frases, traduzidas, para o "ligue os pares" do fecho quando
+		// o vocabulário cadastrado não o enche (vazio sem tradutor).
+		palavrasTraduzidas: await paresDasFrases(
+			units,
+			{ alvo: targetProfile, origem: sourceProfile },
+			getTradutor()
+		)
 	});
 
 	// O que os geradores produziram é a matéria-prima; o que vira rascunho é o
@@ -457,13 +506,12 @@ export const aceitarTodosItens = command(
 /**
  * Sintetiza os áudios da atividade de novo, do zero.
  *
- * O caso de uso é o prazo: o áudio vive 10 dias, e o professor que vai reenviar
- * o link de uma atividade de duas semanas atrás precisa de um caminho de UM
- * clique — não de descobrir que precisa republicar.
+ * O caso de uso é o áudio que FALTA — um job que esgotou as tentativas, um
+ * arquivo que não chegou ao bucket. O áudio de atividade não vence mais, então
+ * isto é conserto, não rotina: a tela só oferece o botão quando falta algo.
  *
- * Apaga as linhas antes de enfileirar porque o worker pula o que já existe, e
- * porque a regra de ciclo de vida do bucket conta a partir da última gravação
- * do objeto: sem reescrever o arquivo, o relógio não recomeça.
+ * Apaga as linhas antes de enfileirar porque o worker pula o que já existe; a
+ * síntese nova grava na mesma chave do bucket.
  *
  * Enquanto a fila não drena a atividade fica com áudio pendente — ou seja, o
  * link não responde. É honesto: por alguns minutos ela realmente não tem o
@@ -489,6 +537,7 @@ export const regerarAudio = command(
 		if (hashes.length === 0) return { ok: true, enfileirados: 0 };
 
 		await playerRepo.esquecerAudios(teacher.id, hashes);
+		await resolverNotificacoes(teacher.id, [`audio:${activityId}`]);
 		const enfileirados = await enfileirarAudioFaltante({
 			teacherId: teacher.id,
 			targetTag: activity.targetLang,

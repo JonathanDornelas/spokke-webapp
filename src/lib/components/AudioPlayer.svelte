@@ -129,7 +129,7 @@
 	}
 
 	/**
-	 * O arquivo lento sumiu (o áudio tem 10 dias de vida — server.md "TTS") ou
+	 * O arquivo lento não carregou (a síntese ainda na fila, um job que falhou) ou
 	 * nunca existiu: cai para o normal desacelerado no browser, em vez de deixar
 	 * o aluno com um player mudo. É a mesma reserva que já valia quando o
 	 * profile não gerava a segunda velocidade.

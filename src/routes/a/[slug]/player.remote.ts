@@ -5,6 +5,7 @@ import { resolve } from '$app/paths';
 import { playerRepo } from '$lib/server/db/repos/player';
 import { itemAudioHashes } from '$lib/server/player/runtime';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
+import { atualizarCorrecao } from '$lib/server/notificacoes';
 import { codigoConfere } from '$lib/server/player/access-code';
 import { convitePorToken } from '$lib/server/db/repos/deliveries';
 import { fichaDaConta } from '$lib/server/db/repos/student-accounts';
@@ -26,8 +27,8 @@ import type { Prisma } from '../../../../generated/prisma/client.ts';
  * contato.
  */
 
-const ANON_COOKIE = 'entendo_anon';
-const CODE_COOKIE_PREFIX = 'entendo_code_';
+const ANON_COOKIE = 'spokke_anon';
+const CODE_COOKIE_PREFIX = 'spokke_code_';
 
 function anonId(): string {
 	const { cookies } = getRequestEvent();
@@ -98,7 +99,7 @@ export const iniciarTentativa = form(
 		// Quem chegou pelo link pessoal já está identificado e não digitou nome:
 		// o nome do cadastro é melhor do que qualquer coisa que ele escrevesse,
 		// e é isso que faz o professor ver "Juliana Pereira" e não "ju".
-		const studentId = cookies.get(`entendo_aluno_${slug}`) ?? null;
+		const studentId = cookies.get(`spokke_aluno_${slug}`) ?? null;
 		const conta = getRequestEvent().locals.aluno;
 		// Logado sem o cookie do convite (o QR da sala, outro aparelho): a ficha
 		// dele com ESTE professor ainda o identifica — senão o professor via um
@@ -135,7 +136,7 @@ export const iniciarTentativa = form(
 			guardarAudio !== undefined
 		);
 
-		cookies.set(`entendo_attempt_${slug}`, attempt.id, {
+		cookies.set(`spokke_attempt_${slug}`, attempt.id, {
 			path: '/',
 			httpOnly: true,
 			sameSite: 'lax',
@@ -159,7 +160,7 @@ export const retomarTentativa = form(z.object({ slug: z.string() }), async ({ sl
 	const anterior = await playerRepo.resumableAttempt(publication.id, anonId());
 	if (!anterior) redirect(303, resolve('/a/[slug]', { slug }));
 
-	cookies.set(`entendo_attempt_${slug}`, anterior.id, {
+	cookies.set(`spokke_attempt_${slug}`, anterior.id, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
@@ -181,7 +182,7 @@ export const recomecarTentativa = form(z.object({ slug: z.string() }), async ({ 
 	const { cookies } = getRequestEvent();
 
 	await playerRepo.discardResumable(publication.id, anonId());
-	cookies.delete(`entendo_attempt_${slug}`, { path: '/' });
+	cookies.delete(`spokke_attempt_${slug}`, { path: '/' });
 
 	redirect(303, resolve('/a/[slug]', { slug }));
 });
@@ -192,7 +193,7 @@ export const recomecarTentativa = form(z.object({ slug: z.string() }), async ({ 
  * e responder no lugar de outro é pior do que responder sem nome.
  */
 export const naoSouEu = form(z.object({ slug: z.string() }), async ({ slug }) => {
-	getRequestEvent().cookies.delete(`entendo_aluno_${slug}`, { path: '/' });
+	getRequestEvent().cookies.delete(`spokke_aluno_${slug}`, { path: '/' });
 	redirect(303, resolve('/a/[slug]', { slug }));
 });
 
@@ -257,6 +258,10 @@ export const responderItem = command(
 		// professor (kernel.md "Correção", nível 4).
 		if (grading.mode === 'rubric') {
 			await playerRepo.recordAnswer(attemptId, itemId, paraGravar, 0, ms);
+			// O sino do professor (docs/notificacoes.md). Sem `await`: o aluno não
+			// espera o aviso de outra pessoa, e uma falha ali não custa a resposta.
+			const atividade = attempt.publication.activityVersion.activity;
+			void atualizarCorrecao(atividade.teacherId, atividade, { criar: true });
 			return { state: 'pending' as const };
 		}
 

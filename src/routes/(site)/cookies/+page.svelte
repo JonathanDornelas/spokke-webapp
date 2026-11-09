@@ -1,14 +1,19 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	import LegalPage from '$lib/components/LegalPage.svelte';
-	import { cookies } from '$lib/content/institucional';
+	import { cookies, atualizadoEm } from '$lib/content/institucional';
 </script>
 
-<svelte:head><title>Quais cookies usamos e por quê — entendo</title></svelte:head>
+<Metadados
+	titulo="Cookies do Spokke"
+	descricao="Cada cookie e cada dado guardado no navegador, com prazo e finalidade. Nenhum é de publicidade ou de análise."
+	tituloDaAba="Cookies · Spokke"
+/>
 
 <LegalPage
 	eyebrow="Cookies"
 	title="Quais cookies usamos e por quê"
-	lede="Lista completa, um por um, com prazo de validade e finalidade. Nenhum cookie de publicidade."
-	updated="Atualizado em 12 de março de 2026"
+	lede="Um por um, com prazo e finalidade. Nenhum é de publicidade ou de análise."
+	updated={`Atualizada em ${atualizadoEm}`}
 	sections={cookies}
 />

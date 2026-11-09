@@ -1,9 +1,10 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	// Contato: formulário + canais diretos. O consentimento fica junto do botão,
 	// não escondido no rodapé (paginas.md "Grupo (site)").
 	import { resolve } from '$app/paths';
 	import SiteHero from '$lib/components/SiteHero.svelte';
-	import { canais, empresa } from '$lib/content/institucional';
+	import { canais } from '$lib/content/institucional';
 
 	let {
 		data,
@@ -14,12 +15,16 @@
 	} = $props();
 </script>
 
-<svelte:head><title>Contato — entendo</title></svelte:head>
+<Metadados
+	titulo="Fale com o Spokke"
+	descricao="Dúvida de uso, problema com uma turma ou conversa sobre a escola: a mensagem chega direto para a equipe."
+	tituloDaAba="Contato · Spokke"
+/>
 
 <SiteHero
 	eyebrow="Contato"
-	title="Fale com quem constrói a entendo"
-	lede="Não temos central de atendimento com script. Quem responde é a mesma equipe que escreve o produto."
+	title="Fale com a gente"
+	lede="Dúvida de uso, problema com uma turma ou conversa sobre a escola: a mensagem chega direto para a equipe."
 />
 
 <div
@@ -30,12 +35,12 @@
 			Escreva pra gente
 		</h2>
 		<p class="mb-[22px] text-sm leading-relaxed text-base-content/65">
-			Respondemos em até um dia útil. Se for sobre uma turma em aula agora, marque como urgente.
+			Se for sobre uma turma em aula agora, escolha esse assunto na lista: a mensagem chega marcada.
 		</p>
 
 		{#if form?.ok}
 			<p
-				class="mb-5 rounded-box border border-success/40 bg-success/10 px-4 py-3.5 text-sm text-success"
+				class="mb-5 rounded-box border border-primary/40 bg-primary/8 px-4 py-3.5 text-sm text-primary"
 			>
 				Mensagem enviada. Você recebe a resposta no e-mail informado.
 			</p>
@@ -101,7 +106,7 @@
 					class="mt-0.5 checkbox checkbox-primary"
 				/>
 				<span class="min-w-0 text-[13px] leading-snug text-base-content/65">
-					Concordo que a entendo trate meus dados para responder este contato, conforme a
+					Concordo que o Spokke trate meus dados para responder este contato, conforme a
 					<a
 						href={resolve('/(site)/privacidade')}
 						class="text-primary underline underline-offset-2 hover:no-underline"
@@ -151,12 +156,5 @@
 			{/each}
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		</div>
-
-		<p class="mb-2.5 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
-			Endereço
-		</p>
-		<p class="text-[13.5px] leading-[1.7] text-base-content/65">
-			{empresa.legalName}<br />{empresa.legalDoc}<br />{empresa.address1}<br />{empresa.address2}
-		</p>
 	</aside>
 </div>

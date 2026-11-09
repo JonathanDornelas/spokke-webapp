@@ -23,6 +23,11 @@
 	// VIEWPORT —, então dentro de uma moldura pequena (a prévia de celular do
 	// editor de item) elas saíam do tamanho de uma tela inteira. Só quem
 	// desenha uma tela DENTRO de outra precisa disto; a tela real fica em 1.
+	// 'tela' espalha as formas pela página INTEIRA, nas margens do conteúdo: é
+	// a composição das telas de entrar e criar conta, onde o cartão fica no meio
+	// de uma página vazia e duas faixas deixavam o meio chapado. O cartão é
+	// opaco, então o que passa por trás dele some, e nenhuma forma fica atrás de
+	// texto.
 	// `edges`: 'both' repete a faixa espelhada no rodapé — é a composição das
 	// telas do Player, onde o conteúdo fica no meio do cartão e uma faixa só no
 	// topo deixa a metade de baixo chapada. 'bottom' é só a de baixo, para painel
@@ -37,7 +42,7 @@
 	}: {
 		height?: string;
 		tone?: 'primary' | 'success';
-		layout?: 'band' | 'column' | 'corner';
+		layout?: 'band' | 'column' | 'corner' | 'tela';
 		edges?: 'top' | 'bottom' | 'both';
 		scale?: number;
 	} = $props();
@@ -146,6 +151,47 @@
 		></div>
 		<!-- ponto -->
 		<div class="absolute end-[20%] top-[44%] size-3 rounded-full bg-accent/28"></div>
+	</div>
+{:else if layout === 'tela'}
+	<!-- Página inteira: sete famílias, nenhuma repetida, nas margens e em
+	     alturas diferentes. O canto de cima à esquerda fica livre para a marca.
+	     O movimento é o `en-vagar-*` (app.css), de amplitude maior que o das
+	     faixas: com o vaivém curto delas, numa página vazia, as formas pareciam
+	     paradas. Durações primas entre si, para o conjunto não repetir a mesma
+	     configuração e o olho não achar o ponto onde o laço recomeça. -->
+	<div
+		aria-hidden="true"
+		class="pointer-events-none absolute inset-0 overflow-hidden"
+		style="--amb-k: {scale}"
+	>
+		<div
+			class="absolute top-[30%] -left-[5%] {grande} animate-[en-vagar-a_17s_ease-in-out_infinite]
+			       rounded-full {circleColor}"
+		></div>
+		<div
+			class="absolute top-[6%] right-[10%] {media} animate-[en-vagar-c_13s_ease-in-out_infinite]
+			       rounded-[28%] border-[1.5px] border-accent/40"
+		></div>
+		<div
+			class="absolute bottom-[8%] left-[12%] {media} animate-[en-drift-spin_19s_ease-in-out_infinite]
+			       {triangleColor} [clip-path:polygon(50%_0%,100%_100%,0%_100%)]"
+		></div>
+		<div
+			class="absolute top-[48%] right-[4%] {media} animate-[en-vagar-b_15s_ease-in-out_infinite]
+			       bg-accent/14 [clip-path:polygon(25%_3%,75%_3%,100%_50%,75%_97%,25%_97%,0%_50%)]"
+		></div>
+		<div
+			class="absolute right-[18%] bottom-[12%] {pequena} animate-spin rounded-full border-2
+			       border-dashed {ringColor} [animation-duration:14s]"
+		></div>
+		<div
+			class="absolute top-[16%] left-[20%] {capsula} animate-[en-vagar-b_23s_ease-in-out_infinite]
+			       rounded-full border-[1.5px] border-accent/35"
+		></div>
+		<div
+			class="absolute top-[70%] left-[4%] {pequena} animate-[en-vagar-a_21s_ease-in-out_infinite]
+			       bg-primary/14 [clip-path:polygon(40%_0,60%_0,60%_40%,100%_40%,100%_60%,60%_60%,60%_100%,40%_100%,40%_60%,0_60%,0_40%,40%_40%)]"
+		></div>
 	</div>
 {:else if layout === 'column' || edges !== 'bottom'}
 	<div

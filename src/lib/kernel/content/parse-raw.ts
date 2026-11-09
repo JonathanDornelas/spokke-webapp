@@ -46,8 +46,23 @@ export interface RawLinePreview {
 	text: string;
 	left: string;
 	right: string;
-	/** `false` quando a linha não tem separador: ela vai ser ignorada. */
+	/** `false` quando a linha não tem separador e vai ser ignorada. */
 	ok: boolean;
+	/**
+	 * A linha não tem separador, mas ENTRA: a tradução vem do tradutor
+	 * automático. Só acontece com `traduzirSemSeparador`.
+	 */
+	automatica?: boolean;
+}
+
+/**
+ * Como tratar a linha SEM separador. Sem tradutor ela não vira material (não
+ * há tradução, e a do aluno é obrigatória). Com tradutor ela entra só com o
+ * lado do idioma alvo, e a tradução vem dele — é o caminho padrão: o professor
+ * cola a lista no idioma que ensina e confere a tradução depois.
+ */
+export interface OpcoesDoLote {
+	traduzirSemSeparador?: boolean;
 }
 
 /**
@@ -59,31 +74,43 @@ export interface RawLinePreview {
  * Mesmo `splitPair` do parser de verdade: o que aparece como "vira material"
  * é exatamente o que o servidor grava.
  */
-export function previewRawLines(raw: string): RawLinePreview[] {
+export function previewRawLines(raw: string, opcoes: OpcoesDoLote = {}): RawLinePreview[] {
 	return linesOf(raw).map((text) => {
 		const pair = splitPair(text);
-		return pair
-			? { text, left: pair[0], right: pair[1], ok: true }
+		if (pair) return { text, left: pair[0], right: pair[1], ok: true };
+		return opcoes.traduzirSemSeparador
+			? { text, left: text, right: '', ok: true, automatica: true }
 			: { text, left: text, right: '', ok: false };
 	});
 }
 
-export function parseRawMaterial(kind: ContentUnitKind, raw: string): unknown[] {
+/**
+ * Com `traduzirSemSeparador`, a linha sem separador volta com a tradução EM
+ * BRANCO (`source: ''` / `translation: ''`): o servidor preenche antes de
+ * validar, e uma unidade assim nunca chega ao schema do kernel vazia.
+ */
+export function parseRawMaterial(
+	kind: ContentUnitKind,
+	raw: string,
+	opcoes: OpcoesDoLote = {}
+): unknown[] {
 	const lines = linesOf(raw);
 	if (lines.length === 0) return [];
+	const semSeparador = (line: string): [string, string] | null =>
+		opcoes.traduzirSemSeparador ? [line, ''] : null;
 
 	switch (kind) {
 		// Uma frase por linha vira uma unidade — vinte linhas viram vinte
 		// materiais, e é daí que saem os ~cem exercícios.
 		case 'SentencePair':
 			return lines.flatMap((line) => {
-				const pair = splitPair(line);
+				const pair = splitPair(line) ?? semSeparador(line);
 				return pair ? [{ target: pair[0], source: pair[1] }] : [];
 			});
 
 		case 'VocabItem':
 			return lines.flatMap((line) => {
-				const pair = splitPair(line);
+				const pair = splitPair(line) ?? semSeparador(line);
 				return pair ? [{ term: pair[0], translation: pair[1] }] : [];
 			});
 

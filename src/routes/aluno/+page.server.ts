@@ -28,7 +28,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.aluno) redirect(303, '/entrar?como=aluno&voltar=/aluno');
 	const conta = contaAluno({ id: locals.aluno.id });
 
-	const anonId = cookies.get('entendo_anon');
+	const anonId = cookies.get('spokke_anon');
 	const [fichas, historico, soltas, mapas] = await Promise.all([
 		conta.fichas(),
 		conta.historico(),

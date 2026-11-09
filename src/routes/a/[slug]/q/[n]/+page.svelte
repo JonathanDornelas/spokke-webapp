@@ -801,7 +801,7 @@
 							maxLength: 600
 						} satisfies WritingRuntimeItem}
 						bind:value={text}
-						storageKey="entendo:draft:{data.attemptId}:{data.index}"
+						storageKey="spokke:draft:{data.attemptId}:{data.index}"
 						{campo}
 						bind:tecladoAberto
 						tecladoNaTela

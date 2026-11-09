@@ -27,7 +27,11 @@ Nenhum tipo novo entra sem estes quatro:
 ## Obrigatório em repositório
 
 Todo repositório precisa de um teste provando que ele **não** devolve dado de outro professor.
-É a regra inviolável nº 4, e é o cenário de vazamento mais provável do produto.
+É a regra inviolável nº 4, e é o cenário de vazamento mais provável do produto. O sino também
+(`repos/notificacoes.test.ts`): o de um não aparece nem se marca pelo outro, a mesma chave agrupa
+só enquanto não lida, e ligar a conta avisa uma vez só. E o convite de conta
+(`repos/convites-de-conta.test.ts`): o professor só gera convite da própria chamada, o token é o
+que diz qual ficha, e ficha ligada não muda de dono.
 
 Vale também para LEITURA que junta várias áreas: o início do Studio (`server/inicio/painel.test.ts`)
 procura o nome da aluna, o título da atividade e o nome da turma do outro professor no JSON
@@ -42,13 +46,13 @@ O que protege dinheiro e acesso tem teste contra o banco, não só unitário:
 - **Programação de envio de módulo**: a conta das datas é pura e tem os casos de calendário
   (`modulos/programacao.test.ts`: toda quinta, duas por vez, dia 31 no mês curto, agenda atrasada
   recomeçando de hoje, fuso de Brasília); o envio, contra o banco (`repos/modules.test.ts`): alocar
-  confere as duas pontas, outro professor não programa, "tudo agora" manda um e-mail por aluno só
-  com o que está no ar, processar de novo não manda nada duas vezes, e o futuro não sai antes. A
+  confere as duas pontas, outro professor não programa, "tudo agora" LIBERA só o que está no ar,
+  para todos os alunos (o sem e-mail também) e sem nenhum job de e-mail, processar de novo não manda nada duas vezes, e o futuro não sai antes. A
   AGENDA (calendário e "próximos 7 dias") tem a parte pura em `modulos/agenda.test.ts` (dia e hora
   de Brasília, um cartão por turma por dia, mês começando na segunda) e a do banco no mesmo
   `modules.test.ts`: outro professor não lê, programação pausada some, o que saiu fica no dia em
-  que saiu, e duplicar não leva turma. E o "só disponibilizar": sai sem nenhum `convite-modulo` na
-  fila, com `porEmail` falso, convite até para o aluno sem e-mail, e fora do teto do dia.
+  que saiu, e duplicar não leva turma. E a programação antiga, gravada com o `canal` "por
+  e-mail", também só libera.
 - **Créditos**: débitos simultâneos nunca passam do saldo, o mesmo `requestId` debita uma vez, e falha
   do provedor estorna tudo (`ia/gerar.test.ts`, com provedor FALSO — o Gemini de verdade não entra em
   teste).
@@ -109,3 +113,14 @@ de três interações diferentes, ver resultado. E o mesmo fluxo com feedback de
 confirmando que nada de gabarito chega ao browser.
 
 Teste de determinismo: duas cargas da mesma tentativa produzem a mesma ordem de alternativas.
+
+**Os três estão em `e2e/aluno.spec.ts`** (`pnpm test:e2e`, contra o `preview` na 4173 e o banco do
+`.env`). A semente (`e2e/semente.ts`, via `globalSetup`/`globalTeardown`) cria um professor
+descartável e duas atividades publicadas só de texto — escolher, montar e digitar, sem áudio, para
+não depender da fila de TTS —, uma com o resultado liberado e outra sem, e tira tudo no fim,
+tentativas incluídas. O cenário sem resultado guarda o corpo de TODA resposta (HTML e remote
+functions) e procura a frase do gabarito, `correctIndex` e `accepted`. Duas coisas que custaram
+falha: **esperar a questão nova** antes de clicar (a troca anima a saída, e o clique cai na que vai
+embora) e que **sem resultado a tela segue sozinha** depois de "Verificar" — `seguir()` cobre os dois
+modos. Cenário de professor LOGADO continua fora: no `preview` a autenticação fica presa ao
+`BETTER_AUTH_URL` do `.env` (auth.md).

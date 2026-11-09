@@ -42,7 +42,7 @@
 	const respondido = $derived(feedback !== null);
 
 	/**
-	 * Cor de um cartão já pareado. Errado é vermelho; certo continua no violeta
+	 * Cor de um cartão já pareado. Errado é vermelho; certo continua no azul da marca
 	 * de "pareado" em vez de virar verde — pintar de verde o que sobrou seria
 	 * dizer "estes estão certos" também quando o professor desligou o resultado.
 	 * Classes inteiras e literais: o Tailwind só gera o que aparece completo.

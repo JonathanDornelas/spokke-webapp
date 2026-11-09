@@ -172,7 +172,7 @@ export const convidarParaEscolaAdmin = command(
 			schoolId,
 			email,
 			role,
-			'A equipe do entendo',
+			'A equipe do Spokke',
 			getRequestEvent().url.origin
 		);
 	}

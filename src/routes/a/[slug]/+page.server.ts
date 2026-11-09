@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 	// atividade do ar para liberar a vaga do plano. Quem já começou ainda
 	// termina — por isso a retomada é olhada antes de recusar. E isto vem ANTES
 	// do áudio: link fechado não pode enfileirar síntese a cada visita.
-	const anonIdCedo = cookies.get('entendo_anon');
+	const anonIdCedo = cookies.get('spokke_anon');
 	if (activityVersion.activity.archivedAt) {
 		const emAndamento = anonIdCedo
 			? await playerRepo.resumableAttempt(publication.id, anonIdCedo)
@@ -48,11 +48,9 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 	);
 	const audio = await playerRepo.audioReady(activityVersion.activity.teacherId, hashes);
 	if (audio.done < audio.total) {
-		// **Falta áudio: pode ser a primeira publicação ainda sintetizando, ou o
-		// prazo de 10 dias que venceu.** Publicar é o único momento que enfileira
-		// TTS, então sem esta reposição a atividade de duas semanas atrás ficaria
-		// travada aqui para sempre — o `MediaAsset` expirado nem conta como
-		// pronto, e o objeto já não está no bucket.
+		// **Falta áudio: a primeira publicação ainda sintetizando, ou um job que
+		// falhou.** O áudio de atividade não vence mais, mas sem esta reposição um
+		// arquivo que não chegou ao bucket travaria o link aqui para sempre.
 		//
 		// Enfileirar de uma tela pública é seguro porque o helper é idempotente
 		// nas duas pontas: pula o que tem áudio válido e pula o que já está na
@@ -68,10 +66,10 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 
 	// Quem chegou pelo link pessoal já está identificado: a tela cumprimenta
 	// em vez de pedir o nome. Quem chegou pelo link aberto continua digitando.
-	const studentId = cookies.get(`entendo_aluno_${params.slug}`);
+	const studentId = cookies.get(`spokke_aluno_${params.slug}`);
 	const student = studentId ? await convitePorToken.studentById(studentId) : null;
 
-	const anonId = cookies.get('entendo_anon');
+	const anonId = cookies.get('spokke_anon');
 	const previous = anonId ? await playerRepo.resumableAttempt(publication.id, anonId) : null;
 
 	// Já respondeu esta atividade? A entrada mostra o RESULTADO em vez de pedir

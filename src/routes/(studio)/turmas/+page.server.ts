@@ -42,6 +42,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			idioma: idiomaOuNulo(turma.languageTag),
 			students: turma.students,
 			withEmail: turma.withEmail,
+			withAccount: turma.withAccount,
+			bounced: turma.bounced,
+			/** Para a busca de tela achar a turma pelo nome de um aluno. */
+			studentNames: turma.studentNames,
+			createdAt: turma.createdAt.toISOString(),
 			deliveries: turma.deliveries,
 			lastDelivery: haQuantoTempo(turma.lastDeliveryAt)
 		})),

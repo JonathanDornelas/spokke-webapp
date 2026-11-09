@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	// A atividade de exemplo, na tela do Player. É o destino do "Abrir um
 	// exemplo" da home: cinco questões de verdade, corrigidas no servidor pelo
 	// mesmo kernel, com o veredito sempre ligado. Nada é gravado — não há
@@ -104,13 +105,11 @@
 	const deslocamento = $derived(atual.questao.dir === 'rtl' ? '-22px' : '22px');
 </script>
 
-<svelte:head>
-	<title>Atividade de exemplo · entendo</title>
-	<meta
-		name="description"
-		content="Responda a uma atividade de inglês feita no entendo: escuta, escrita, montar frase, fala e associação, com correção na hora."
-	/>
-</svelte:head>
+<Metadados
+	titulo="Responda uma atividade de exemplo"
+	descricao="Responda a uma atividade de inglês feita no Spokke: escuta, escrita, montar frase, fala e associação, com correção na hora."
+	tituloDaAba="Atividade de exemplo · Spokke"
+/>
 
 <div class="flex h-dvh flex-col overflow-hidden bg-base-100 lg:bg-base-200 lg:py-8">
 	<div
@@ -282,7 +281,7 @@
 
 					<p class="mb-7 text-[16.5px] leading-relaxed text-base-content/65">
 						Do seu lado, você vê isso de cada aluno, e as questões que a turma mais errou aparecem
-						primeiro. Para montar uma atividade assim, você cola as frases da sua aula e o entendo
+						primeiro. Para montar uma atividade assim, você cola as frases da sua aula e o Spokke
 						gera as questões.
 					</p>
 

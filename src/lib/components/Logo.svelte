@@ -1,35 +1,33 @@
 <script lang="ts">
+	// A marca, link para a home. Os traços vêm de `$lib/marca` (vetorizados da
+	// arte original) e são preenchidos com `currentColor` em `text-primary`: o
+	// logo troca de azul junto com o tema, em vez de ser uma imagem fixa.
+	//
+	// `size` é a ALTURA em px — da marca inteira, ou do ícone sozinho. Com a
+	// marca, a largura sai da proporção dela (~4,2×).
 	import { resolve } from '$app/paths';
+	import { ICONE, MARCA } from '$lib/marca';
 
 	let {
 		size = 24,
 		showWordmark = true,
 		sub
 	}: { size?: number; showWordmark?: boolean; sub?: string } = $props();
+
+	const desenho = $derived(showWordmark ? MARCA : ICONE);
 </script>
 
 <a href={resolve('/')} class="flex items-center gap-2.5 text-base-content no-underline">
 	<svg
-		width={size}
 		height={size}
-		viewBox="0 0 24 24"
-		fill="none"
-		class="text-primary"
-		aria-hidden="true"
+		width={Math.round((size * desenho.largura) / desenho.altura)}
+		viewBox={desenho.viewBox}
+		class="shrink-0 text-primary"
+		role="img"
+		aria-label="Spokke"
 	>
-		<rect x="1.5" y="2.5" width="21" height="15" rx="4" stroke="currentColor" stroke-width="2" />
-		<path
-			d="M7 21.5L11 17.5M7 10h10M7 14h6"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="round"
-		/>
+		<path fill="currentColor" d={desenho.d} />
 	</svg>
-	{#if showWordmark}
-		<span class="font-display font-extrabold tracking-tight" style="font-size: {size * 0.78}px">
-			entendo
-		</span>
-	{/if}
 	{#if sub}
 		<span class="border-s border-line ps-3 text-sm text-base-content/65">{sub}</span>
 	{/if}

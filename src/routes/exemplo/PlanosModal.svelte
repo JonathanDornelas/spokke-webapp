@@ -79,7 +79,7 @@
 	}}
 	aria-labelledby="planos-modal-titulo"
 	class="m-auto max-h-[calc(100dvh-1.75rem)] w-[calc(100vw-1.75rem)] max-w-[1120px] overflow-hidden rounded-box border border-line bg-base-100 p-0 text-base-content
-	       shadow-[0_34px_70px_-34px_rgba(20,18,31,0.55)] backdrop:bg-overlay backdrop:backdrop-blur-[3px]
+	       shadow-[0_34px_70px_-34px_rgba(15,20,32,0.55)] backdrop:bg-overlay backdrop:backdrop-blur-[3px]
 	       {animacao} lg:max-h-[calc(100dvh-3.75rem)]"
 >
 	<div class="flex max-h-[inherit] flex-col">
@@ -92,7 +92,7 @@
 					Leve uma atividade assim para a sua turma
 				</span>
 				<span class="mt-0.5 block text-[12.5px] text-base-content/65">
-					Os primeiros 14 dias são grátis e não pedem cartão.
+					Os primeiros 14 dias são grátis.
 				</span>
 			</span>
 			<button

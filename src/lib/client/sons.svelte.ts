@@ -34,7 +34,7 @@ const ARQUIVO: Record<Som, string> = {
 	finish: '/sons/finish.mp3'
 };
 
-export const CHAVE_VOLUME = 'entendo-volume';
+export const CHAVE_VOLUME = 'spokke-volume';
 
 /**
  * Volume inicial. Não é 1: o Player é usado em sala de aula, e trinta

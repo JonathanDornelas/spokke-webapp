@@ -16,7 +16,12 @@
 	import Loading from '$lib/components/Loading.svelte';
 	import SeletorDeAtividades from '$lib/components/SeletorDeAtividades.svelte';
 	import SeletorDeEtiqueta from '$lib/components/SeletorDeEtiqueta.svelte';
-	import { CLASSE_DA_ETIQUETA, etiquetaDaTurma, type CorDeEtiqueta } from '$lib/etiquetas';
+	import {
+		CLASSE_DA_ETIQUETA,
+		COR_PADRAO,
+		etiquetaDaTurma,
+		type CorDeEtiqueta
+	} from '$lib/etiquetas';
 	import { criarModulo, editarModulo } from './modulos.remote';
 
 	type Atividade = {
@@ -48,7 +53,7 @@
 	const editando = $derived(modulo !== null);
 	let nome = $state('');
 	let descricao = $state('');
-	let cor = $state<CorDeEtiqueta>('violeta');
+	let cor = $state<CorDeEtiqueta>(COR_PADRAO);
 	let escolhidas = $state<string[]>([]);
 	let salvando = $state(false);
 	let erro = $state<string | null>(null);
@@ -58,7 +63,7 @@
 		untrack(() => {
 			nome = modulo?.name ?? '';
 			descricao = modulo?.description ?? '';
-			cor = modulo?.color ?? 'violeta';
+			cor = modulo?.color ?? COR_PADRAO;
 			escolhidas = [];
 			erro = null;
 		});

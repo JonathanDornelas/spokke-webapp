@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * A PROGRAMAÇÃO de envio de um módulo para UMA turma (docs/telas-modulos-professor.md
- * 2.4). Pura e isomórfica: a prévia da tela e o servidor que grava as datas
+ * A PROGRAMAÇÃO de LIBERAÇÃO de um módulo para UMA turma (docs/telas-modulos-professor.md
+ * 2.4): em que data cada atividade abre no mapa do aluno. Pura e isomórfica: a prévia da tela e o servidor que grava as datas
  * chamam a MESMA `agendar`, então o professor nunca vê uma data que o envio não
  * vai cumprir.
  *
@@ -27,26 +27,22 @@ export type Modo = (typeof MODOS)[number];
 export const UNIDADES = ['dias', 'semanas', 'meses'] as const;
 
 /**
- * COMO a atividade chega ao aluno em cada data. `email`: um e-mail por aluno,
- * com os links pessoais. `mapa`: nenhum e-mail — a atividade fica disponível no
- * mapa do módulo de quem tem conta (o link pessoal existe do mesmo jeito; só
- * ninguém é avisado). É escolha do professor por turma: há escola em que e-mail
- * de aluno é proibido, e turma que já recebe tudo pelo grupo da sala.
+ * **Módulo não manda e-mail.** Ele LIBERA: na data, a atividade abre no mapa do
+ * módulo de quem tem conta ligada à turma, e ninguém é avisado por e-mail (pedido
+ * do dono do repositório). Houve um campo `canal` (`email` | `mapa`); ele saiu,
+ * e uma programação gravada com ele continua valendo — o Zod descarta a chave.
+ * Mandar UMA atividade por e-mail para a turma continua existindo, fora do
+ * módulo ("Enviar atividade", na tela da turma).
  */
-export const CANAIS = ['email', 'mapa'] as const;
-export type Canal = (typeof CANAIS)[number];
-
 export const programacaoSchema = z.object({
 	modo: z.enum(MODOS),
-	/** Programação gravada antes de existir a escolha continua mandando e-mail. */
-	canal: z.enum(CANAIS).default('email'),
 	/** Dias da semana, 0 = domingo (o `getUTCDay`). */
 	dias: z.array(z.number().int().min(0).max(6)).max(7).default([4]),
 	hora: z
 		.string()
 		.regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido.')
 		.default('08:00'),
-	/** Quantas atividades saem em cada data. */
+	/** Quantas atividades abrem em cada data. */
 	porVez: z.number().int().min(1).max(8).default(1),
 	intervalo: z.number().int().min(1).max(12).default(1),
 	unidade: z.enum(UNIDADES).default('semanas'),
@@ -125,13 +121,7 @@ export function rotuloDaHora(hora: string): string {
 }
 
 /** "toda quinta, 8h", "segunda e quarta, 8h", "a cada 2 semanas, 7h30". */
-/** "toda quinta, 8h" — e " · sem e-mail" quando a programação só disponibiliza. */
 export function resumoDaProgramacao(p: Programacao): string {
-	const ritmo = ritmoDaProgramacao(p);
-	return p.canal === 'mapa' ? ritmo + ' · sem e-mail' : ritmo;
-}
-
-function ritmoDaProgramacao(p: Programacao): string {
 	if (p.modo === 'agora') return 'tudo de uma vez';
 	if (p.modo === 'datas') return 'datas escolhidas';
 	const hora = rotuloDaHora(p.hora);

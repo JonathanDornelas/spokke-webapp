@@ -2,7 +2,7 @@ import { prisma } from '$lib/server/db/client';
 import { creditos } from '$lib/server/db/repos/creditos';
 import type { MotivoDoBloqueio } from '$lib/billing/motivos';
 import { acessoComCiclo } from './acesso';
-import { registrar, type Ator } from './assinaturas';
+import { registrar, type Ator, avisaProfessor, avisarPlano } from './assinaturas';
 import { travarProfessor } from './cota';
 import { motivoDoBloqueio } from './entitlements';
 
@@ -107,4 +107,5 @@ export async function concederCreditos(
 			data: { creditos: n, motivo: motivo.trim().slice(0, 200) }
 		});
 	});
+	if (avisaProfessor(ator)) await avisarPlano(teacherId, { evento: 'creditos', creditos: n });
 }

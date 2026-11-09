@@ -92,7 +92,7 @@ export const TEXTO_DO_MOTIVO: Record<'rascunho' | 'arquivada' | 'audio', string>
 /**
  * A pílula de cada estado — texto, classes e ícone (traço de 24px). Strings
  * INTEIRAS e literais, como em `$lib/etiquetas.ts`: o Tailwind só gera CSS para
- * classe que aparece completa no código-fonte. Vermelho só em "não saiu".
+ * classe que aparece completa no código-fonte. Vermelho só em "não liberada".
  */
 export const PILULA_DO_ESTADO: Record<
 	EstadoDaAlocacao,
@@ -123,8 +123,8 @@ export const PILULA_DO_ESTADO: Record<
 		icone: 'M6 12h12'
 	},
 	falha: {
-		texto: 'Envio que não saiu',
-		curto: 'Não saiu',
+		texto: 'Não liberada',
+		curto: 'Não liberada',
 		classe: 'bg-error text-error-content',
 		icone: 'M12 7.5v6M12 16.5h.01M12 3l9.5 17H2.5z'
 	}

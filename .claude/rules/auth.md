@@ -121,7 +121,7 @@ Conta é para reencontrar o histórico em outro aparelho — nada mais.
 **Duas instâncias de Better Auth, não um campo `role`.** `server/auth/index.ts` é o professor
 (`Teacher`); `server/auth/aluno.ts` é o aluno (`StudentAccount`, `StudentSession`,
 `StudentCredential`, `StudentVerification`), com `basePath: '/api/auth-aluno'` e
-`cookiePrefix: 'entendo-aluno'`. O professor tem assinatura, atividades e turmas pendurados nele:
+`cookiePrefix: 'spokke-aluno'`. O professor tem assinatura, atividades e turmas pendurados nele:
 misturar os dois na mesma tabela faria toda query de professor precisar de um filtro a mais, e o
 dia em que alguém esquecesse esse filtro seria incidente. Aqui as duas identidades não têm como
 se confundir — cookies, tabelas e guards diferentes.
@@ -156,6 +156,19 @@ verifica e-mail no cadastro (não há provedor), e um colega que soubesse o ende
 chamada e o histórico do outro. O vínculo nunca rouba: ficha já ligada a outra conta fica como
 está.
 
+**O CONVITE DE CONTA é o segundo caminho, e é o do módulo.** Módulo libera no MAPA, e o mapa é da
+conta — então o professor precisa de um jeito de chamar o aluno para ela sem mandar uma atividade.
+`Student.accountInviteToken` (192 bits, `repos/convites-de-conta.ts`) é o link
+`/aluno/convite/<token>`, e chega de dois jeitos, à escolha do professor: o Spokke manda por
+e-mail (job `convite-conta`), ou ele copia e manda por onde a turma conversa. Sem sessão, a página
+leva às telas de sempre (`/cadastro` e `/entrar` com `como=aluno` e `voltar`); com sessão, ela
+diz QUAL conta está aberta e **ligar é um botão** (`entrarNaTurmaPeloConvite`, `requireAluno`,
+token no corpo e id da sessão) — nunca efeito de abrir o link: o aparelho pode estar com a conta de
+outra pessoa, e ligar dá ao professor o que ela responder logada. "Gerar outro link" troca o token
+(o antigo para de abrir), e trocar o e-mail de quem JÁ recebeu o convite por e-mail também — o
+endereço errado recebeu a chave. O e-mail tem teto por professor (120 por hora, na memória):
+cada um é cota do provedor.
+
 **Entrar não pode custar o passado.** Ao logar, `adotarMinhasTentativas` passa para a conta o que
 aquele APARELHO respondeu sem conta (escopo: o `anonId` do cookie `httpOnly`). É a mesma promessa
 do `claimAttempts` do convite, pelo mesmo motivo: criar a conta logo depois de responder parecia
@@ -189,8 +202,8 @@ repositório, e o desenho é o que a regra acima exige de qualquer coleta nova:
    (`Attempt.audioConsent = false`) — consentimento presumido não vale. Sem a marca, o áudio é
    transcrito e descartado na mesma requisição, como sempre foi, e o exercício funciona igual.
 2. **Retenção curta e automática: 7 dias**, aplicada pela regra de ciclo de vida do bucket, não
-   por um job nosso que pode falhar em silêncio. É menos que os 10 dias do áudio de atividade
-   de propósito: aquele é conteúdo do professor e se regenera, este é a voz de uma pessoa.
+   por um job nosso que pode falhar em silêncio. O áudio de atividade nem prazo tem (é conteúdo
+   do professor, dentro do estoque do plano); este é a voz de uma pessoa, e fica o mínimo.
 3. **O objeto é privado.** O prefixo `fala/` não tem leitura anônima; quem serve é uma rota do
    Studio com o `teacherId` no `where`. Uma URL pública seria a voz de um aluno acessível a
    quem descobrisse o endereço.

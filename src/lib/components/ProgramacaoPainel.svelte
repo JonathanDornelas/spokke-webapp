@@ -19,8 +19,7 @@
 		rotuloDaData,
 		somarDias,
 		type Programacao,
-		type Modo,
-		type Canal
+		type Modo
 	} from '$lib/modulos/programacao';
 	import {
 		estadoDaAlocacao,
@@ -37,14 +36,13 @@
 	} from '../../routes/(studio)/modulos/modulos.remote';
 
 	type Atividade = { id: string; title: string; estado: 'no-ar' | 'rascunho' | 'arquivada' };
-	type Envio = EnvioResumido & { emails: number | null };
+	type Envio = EnvioResumido;
 
 	let {
 		aberta,
 		alocacao,
 		atividades,
 		hoje,
-		cargaOutras,
 		outras,
 		onfechar,
 		onmudou
@@ -54,23 +52,18 @@
 			id: string;
 			programacao: Programacao | null;
 			pausedAt: Date | null;
-			turma: { name: string; color: CorDeEtiqueta; alunos: number; comEmail: number };
+			turma: { name: string; color: CorDeEtiqueta; alunos: number };
 			envios: Envio[];
 		};
 		/** As atividades do módulo, NA ORDEM do módulo. */
 		atividades: Atividade[];
 		/** Hoje em Brasília — o mesmo do servidor. */
 		hoje: string;
-		/** E-mails já programados por dia nas OUTRAS programações do professor. */
-		cargaOutras: Record<string, number>;
 		/** As outras turmas do módulo, para "Copiar de". */
 		outras: { id: string; nome: string; programacao: Programacao | null }[];
 		onfechar: () => void;
 		onmudou: () => Promise<void>;
 	} = $props();
-
-	/** O teto diário do plano grátis do Resend (server.md "E-mail"). */
-	const TETO_DIARIO = 100;
 
 	// Cópia LOCAL: mexer nos campos não grava nada até "Salvar programação". O
 	// painel é remontado a cada abertura (`{#key}` na página), então a cópia
@@ -84,8 +77,6 @@
 	let aviso = $state<string | null>(null);
 	/** "Quais atividades" nasce RESUMIDA: os títulos já estão na prévia, uma vez só. */
 	let escolhendo = $state(false);
-	/** Por e-mail ou só no mapa — muda o que a prévia e os botões prometem. */
-	const porEmail = $derived(prog.canal === 'email');
 
 	const turma = $derived(alocacao.turma);
 	const pausada = $derived(!!alocacao.pausedAt);
@@ -116,21 +107,6 @@
 	const naoSairam = $derived(alocacao.envios.filter((e) => e.status === 'nao_saiu'));
 	const marcadas = $derived(atividades.filter((a) => !prog.fora.includes(a.id)).length);
 
-	const CANAIS_NA_TELA: { id: Canal; titulo: string; detalhe: string; icone: string }[] = [
-		{
-			id: 'email',
-			titulo: 'Por e-mail',
-			detalhe: 'cada aluno recebe os links na data',
-			icone: 'M4 6.5h16v11H4zM4.5 7l7.5 6 7.5-6'
-		},
-		{
-			id: 'mapa',
-			titulo: 'Só disponibilizar',
-			detalhe: 'abre no mapa, sem e-mail',
-			icone: 'M9 4.5l6 2.5 5-2v13.5l-5 2-6-2.5-5 2V6.5zM9 4.5V17M15 7v13.5'
-		}
-	];
-
 	const MODOS: { id: Modo; titulo: string; exemplo: string }[] = [
 		{ id: 'agora', titulo: 'Tudo agora', exemplo: '“manda tudo”' },
 		{ id: 'semana', titulo: 'Por semana', exemplo: '“toda quinta”' },
@@ -157,7 +133,6 @@
 		if (!fonte) return;
 		prog = {
 			...prog,
-			canal: fonte.canal,
 			modo: fonte.modo,
 			dias: [...fonte.dias],
 			hora: fonte.hora,
@@ -175,34 +150,19 @@
 		return prog.datas[id] ?? somarDias(prog.inicio < hoje ? hoje : prog.inicio, 7 * i);
 	}
 
-	const emails = (n: number) => `${n} ${n === 1 ? 'e-mail' : 'e-mails'}`;
-
-	function emailsDoDia(data: string | null, vivos: number): { total: number; passa: boolean } {
-		if (!porEmail) return { total: 0, passa: false };
-		const deste = vivos > 0 ? turma.comEmail : 0;
-		const total = deste + (data ? (cargaOutras[data] ?? 0) : 0);
-		return { total, passa: vivos > 0 && total > TETO_DIARIO };
-	}
-
 	function frase(r: {
 		enviadas: number;
-		emails: number;
 		naoSairam: { title: string; motivo: 'rascunho' | 'arquivada' | 'audio' }[];
 	}): string | null {
 		const partes: string[] = [];
-		if (r.enviadas > 0 && !porEmail) {
+		if (r.enviadas > 0) {
 			partes.push(
-				`${r.enviadas} ${r.enviadas === 1 ? 'atividade liberada' : 'atividades liberadas'} no mapa dos alunos, sem e-mail.`
-			);
-		} else if (r.enviadas > 0) {
-			// O número REAL, e "na fila" — nunca "chegou" (paginas.md).
-			partes.push(
-				`${r.enviadas} ${r.enviadas === 1 ? 'atividade saiu' : 'atividades saíram'}: ${r.emails} ${r.emails === 1 ? 'e-mail' : 'e-mails'} na fila, um por aluno.`
+				`${r.enviadas} ${r.enviadas === 1 ? 'atividade liberada' : 'atividades liberadas'} no mapa dos alunos.`
 			);
 		}
 		if (r.naoSairam.length > 0) {
 			partes.push(
-				`Não saíram: ${r.naoSairam.map((n) => `${n.title} (${TEXTO_DO_MOTIVO[n.motivo]})`).join(', ')}.`
+				`Não liberadas: ${r.naoSairam.map((n) => `${n.title} (${TEXTO_DO_MOTIVO[n.motivo]})`).join(', ')}.`
 			);
 		}
 		return partes.length > 0 ? partes.join(' ') : null;
@@ -212,7 +172,6 @@
 		qual: string,
 		fn: () => Promise<{
 			enviadas: number;
-			emails: number;
 			naoSairam: { title: string; motivo: 'rascunho' | 'arquivada' | 'audio' }[];
 		}>,
 		semNada?: string
@@ -258,9 +217,9 @@
 	{aberta}
 	{onfechar}
 	titulo="Programação de {turma.name}"
-	descricao="{turma.alunos} {turma.alunos === 1 ? 'aluno' : 'alunos'} · {turma.comEmail > 0
-		? `${turma.comEmail} ${turma.comEmail === 1 ? 'recebe' : 'recebem'} e-mail`
-		: 'nenhum com e-mail'}. Datas valem ao salvar; enviar agora e pausar valem na hora."
+	descricao="{turma.alunos} {turma.alunos === 1
+		? 'aluno'
+		: 'alunos'}. Na data, a atividade abre no mapa do módulo, e ninguém recebe e-mail. Datas valem ao salvar; liberar agora e pausar valem na hora."
 	{erro}
 >
 	{#snippet marca()}
@@ -291,7 +250,7 @@
 				{PILULA_DO_ESTADO[estado].texto}
 			</span>
 			<span class="text-[12.5px] text-base-content/65"
-				>{enviadas.length} de {marcadas} enviadas</span
+				>{enviadas.length} de {marcadas} liberadas</span
 			>
 		</div>
 
@@ -330,51 +289,14 @@
 			</div>
 		{/if}
 
-		<!-- como chega: a primeira pergunta, porque muda o que o resto promete -->
-		<section>
-			<h3 class="mb-2.5 text-[14.5px] font-bold">Como chega ao aluno</h3>
-			<div class="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Como chega ao aluno">
-				{#each CANAIS_NA_TELA as c (c.id)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={prog.canal === c.id}
-						onclick={() => (prog.canal = c.id)}
-						class="motion-tap rounded-[11px] border-[1.5px] px-3 py-2.5 text-start transition-colors {prog.canal ===
-						c.id
-							? 'border-primary bg-base-300'
-							: 'border-line bg-base-100'}"
-					>
-						<span class="mb-0.5 flex items-center gap-2 text-[13.5px] font-bold">
-							<svg class="size-4 flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-								><path
-									d={c.icone}
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								/></svg
-							>
-							{c.titulo}
-						</span>
-						<span class="block text-[12px] leading-snug text-base-content/65">{c.detalhe}</span>
-					</button>
-				{/each}
-			</div>
-			<p class="mt-2 text-[12.5px] leading-relaxed text-pretty text-base-content/65">
-				{#if !porEmail}
-					Ninguém recebe e-mail. Na data, a atividade abre no mapa do módulo de quem já tem conta
-					ligada à turma; para os outros, passe o link aberto ou o QR.
-				{:else if turma.comEmail > 0}
-					{turma.comEmail} de {turma.alunos}
-					{turma.alunos === 1 ? 'aluno recebe' : 'alunos recebem'} o e-mail. Quem não tem e-mail entra
-					pelo link aberto.
-				{:else}
-					Ninguém desta turma tem e-mail cadastrado, então nada chega por e-mail. Escolha “Só
-					disponibilizar” ou cadastre os e-mails na turma.
-				{/if}
-			</p>
-		</section>
+		<!-- Módulo LIBERA: na data, a atividade abre no mapa de quem tem conta ligada à
+		     turma. Não há e-mail (houve uma escolha "por e-mail"; saiu). -->
+		<p
+			class="rounded-[11px] bg-base-200 px-3.5 py-3 text-[13px] leading-relaxed text-pretty text-base-content/70"
+		>
+			Na data, a atividade abre no mapa do módulo de quem já tem conta ligada à turma. Ninguém
+			recebe e-mail. Para quem ainda não tem conta, mande o convite pela tela da turma.
+		</p>
 
 		<!-- quais: resumida — os títulos já estão na prévia, uma vez só -->
 		<section>
@@ -430,7 +352,7 @@
 								{saiu
 									? 'saiu'
 									: falhou
-										? 'não saiu'
+										? 'não liberada'
 										: a.estado === 'no-ar'
 											? 'no ar'
 											: a.estado === 'arquivada'
@@ -467,7 +389,11 @@
 					</label>
 				{/if}
 			</div>
-			<div class="mb-3.5 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Modo de envio">
+			<div
+				class="mb-3.5 grid grid-cols-2 gap-1.5"
+				role="radiogroup"
+				aria-label="Ritmo da liberação"
+			>
 				{#each MODOS as m (m.id)}
 					<button
 						type="button"
@@ -489,9 +415,8 @@
 				<p
 					class="rounded-[11px] bg-base-200 px-3.5 py-3 text-[13px] leading-relaxed text-base-content/70"
 				>
-					{porEmail
-						? 'Ao salvar sai um e-mail por aluno com todas as atividades marcadas que estão no ar, na ordem do módulo.'
-						: 'Ao salvar, todas as atividades marcadas que estão no ar abrem no mapa dos alunos, sem e-mail.'}
+					Ao salvar, todas as atividades marcadas que estão no ar abrem no mapa dos alunos, na ordem
+					do módulo.
 				</p>
 			{/if}
 
@@ -652,9 +577,7 @@
 				<span class="text-[12.5px] text-base-content/65">recalcula enquanto você mexe</span>
 			</div>
 			<p class="mb-2.5 text-[12.5px] text-base-content/65">
-				{porEmail
-					? 'Um e-mail por aluno em cada data, com tudo o que sai naquele dia.'
-					: 'Em cada data, o que abre no mapa dos alunos. Ninguém recebe e-mail.'}
+				Em cada data, o que abre no mapa dos alunos.
 			</p>
 			<div class="overflow-hidden rounded-field border border-line">
 				{#each enviadas as e (e.activityId)}
@@ -681,13 +604,9 @@
 											stroke-linejoin="round"
 										/></svg
 									>
-									{e.emails === 0 ? 'Liberada' : 'Enviada'}
+									Liberada
 								</span>
-								<span class="text-base-content/65"
-									>{e.emails === 0
-										? 'no mapa, sem e-mail'
-										: `${emails(e.emails ?? turma.comEmail)} na fila`}</span
-								>
+								<span class="text-base-content/65">aberta no mapa</span>
 							</span>
 						</span>
 					</div>
@@ -716,10 +635,10 @@
 											stroke-linejoin="round"
 										/></svg
 									>
-									Não saiu
+									Não liberada
 								</span>
 								<span class="text-base-content/65"
-									>{e.reason ? TEXTO_DO_MOTIVO[e.reason] : 'não saiu'} · o envio espera</span
+									>{e.reason ? TEXTO_DO_MOTIVO[e.reason] : 'não liberada'} · a liberação espera</span
 								>
 								<button
 									type="button"
@@ -742,7 +661,6 @@
 
 				{#each grupos as g (g.data ?? 'agora')}
 					{@const vivos = g.itens.filter((i) => !i.pulada).length}
-					{@const carga = emailsDoDia(g.data, vivos)}
 					<div
 						class="grid grid-cols-[94px_minmax(0,1fr)] gap-3 border-b border-line px-3 py-2.75 last:border-b-0"
 					>
@@ -793,10 +711,8 @@
 												>
 												<button
 													type="button"
-													title="{porEmail
-														? 'Enviar'
-														: 'Liberar'} agora · as outras datas não mudam"
-													aria-label="{porEmail ? 'Enviar' : 'Liberar'} {a.title} agora"
+													title="Liberar agora · as outras datas não mudam"
+													aria-label="Liberar {a.title} agora"
 													disabled={pendente !== null}
 													onclick={() => mandarAgora([it.id], `agora:${it.id}`)}
 													class="inline-flex min-h-7.5 items-center gap-1.5 rounded-[7px] px-1.75 text-[12px] font-bold text-primary hover:bg-base-300"
@@ -805,9 +721,9 @@
 															variant="fila"
 															size={8}
 															tone="current"
-															label="Enviando"
+															label="Liberando"
 														/>{/if}
-													{porEmail ? 'Enviar agora' : 'Liberar agora'}
+													Liberar agora
 												</button>
 											</span>
 										{/if}
@@ -857,35 +773,9 @@
 									{pausada ? 'Pausada' : vivos === 0 ? 'Pulada' : 'Programada'}
 								</span>
 								<span class="text-base-content/65">
-									{vivos === 0
-										? 'nada sai nesta data'
-										: !porEmail
-											? 'abre no mapa, sem e-mail'
-											: turma.comEmail > 0
-												? emails(turma.comEmail)
-												: 'nenhum e-mail sai · o mapa de quem tem conta abre a fase'}
+									{vivos === 0 ? 'nada abre nesta data' : 'abre no mapa'}
 								</span>
 							</span>
-							{#if !pausada && carga.passa}
-								<span
-									class="flex items-start gap-1.75 rounded-[8px] bg-base-200 px-2.25 py-1.75 text-[12px] leading-snug text-base-content/70"
-								>
-									<svg
-										class="mt-px size-3.5 flex-none"
-										viewBox="0 0 24 24"
-										fill="none"
-										aria-hidden="true"
-										><path
-											d="M4 6.5h16v11H4zM4.5 7l7.5 6 7.5-6"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linejoin="round"
-										/></svg
-									>
-									{carga.total} e-mails neste dia, somando suas outras programações. O limite é {TETO_DIARIO}
-									por dia: o que passar espera na fila e sai no dia seguinte.
-								</span>
-							{/if}
 						</span>
 					</div>
 				{/each}
@@ -922,9 +812,7 @@
 		{#if salva && !pausada && prog.modo !== 'agora' && proxima}
 			<button
 				type="button"
-				title="{porEmail
-					? 'Manda'
-					: 'Libera'} só a próxima que está no ar. As outras datas não mudam."
+				title="Libera só a próxima que está no ar. As outras datas não mudam."
 				disabled={pendente !== null}
 				onclick={() => proxima && mandarAgora(proxima, 'proxima')}
 				class="btn min-h-11 motion-tap gap-2 btn-plain text-[13.5px] font-semibold"
@@ -933,9 +821,9 @@
 						variant="fila"
 						size={10}
 						tone="current"
-						label="Enviando"
+						label="Liberando"
 					/>{/if}
-				{porEmail ? 'Enviar a próxima agora' : 'Liberar a próxima agora'}
+				Liberar a próxima agora
 			</button>
 		{/if}
 		{#if salva}
@@ -966,11 +854,7 @@
 					tone="current"
 					label="Salvando"
 				/>{/if}
-			{prog.modo !== 'agora'
-				? 'Salvar programação'
-				: porEmail
-					? 'Salvar e enviar'
-					: 'Salvar e liberar'}
+			{prog.modo !== 'agora' ? 'Salvar programação' : 'Salvar e liberar'}
 		</button>
 	{/snippet}
 </Bandeja>

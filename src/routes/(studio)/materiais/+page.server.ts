@@ -7,6 +7,7 @@ import { idiomaMaisFrequente, idiomaOuNulo } from '$lib/idiomas';
 import { KERNEL_TO_KIND, type MaterialRow } from '$lib/components/material-form';
 import { estadoDaIa } from '$lib/server/ia/estado';
 import { contaProfessor } from '$lib/server/db/repos/teachers';
+import { isTraducaoLigada } from '$lib/server/traducao';
 
 /**
  * A biblioteca. Diferente da etapa 2 do wizard, aqui o recorte é TUDO que o
@@ -100,6 +101,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		usedInCount: materials.filter((m) => m.usedIn > 0).length,
 		idiomaPadrao,
 		ia: await estadoDaIa(teacher, iaIdiomas),
-		iaIdiomas
+		// A mesma língua do aluno (`iaIdiomas.origem`) é o destino da tradução
+		// automática do material (adr-006).
+		iaIdiomas,
+		traducaoAutomatica: isTraducaoLigada()
 	};
 };

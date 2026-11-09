@@ -38,7 +38,7 @@ export const authAluno = betterAuth({
 	// Cookie próprio: sem isto as duas instâncias brigariam pelo mesmo nome e
 	// entrar como aluno derrubaria a sessão do professor no mesmo browser — que
 	// é exatamente o caso do professor testando a própria atividade.
-	advanced: { cookiePrefix: 'entendo-aluno' },
+	advanced: { cookiePrefix: 'spokke-aluno' },
 	user: {
 		modelName: 'studentAccount',
 		additionalFields: {

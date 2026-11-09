@@ -116,9 +116,16 @@ describe('rótulos e fuso', () => {
 		expect(resumoDaProgramacao(prog({ dias: [4] }))).toBe('toda quinta, 8h');
 		expect(resumoDaProgramacao(prog({ dias: [6] }))).toBe('todo sábado, 8h');
 		expect(resumoDaProgramacao(prog({ dias: [0] }))).toBe('todo domingo, 8h');
-		expect(resumoDaProgramacao(prog({ dias: [4], canal: 'mapa' }))).toBe(
-			'toda quinta, 8h · sem e-mail'
-		);
+		// Módulo não manda e-mail: a programação gravada com o antigo `canal`
+		// continua lendo, e o resumo não fala de e-mail nenhum.
+		const antiga = programacaoSchema.parse({
+			modo: 'semana',
+			canal: 'email',
+			inicio: '2026-10-15',
+			dias: [4]
+		});
+		expect(antiga).not.toHaveProperty('canal');
+		expect(resumoDaProgramacao(antiga)).toBe('toda quinta, 8h');
 		expect(resumoDaProgramacao(prog({ dias: [3, 1], hora: '07:30' }))).toBe(
 			'segunda e quarta, 7h30'
 		);

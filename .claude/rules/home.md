@@ -8,7 +8,7 @@ paths:
 # Página inicial (marketing)
 
 A home é a única superfície pública com liberdade visual. Ainda assim, o tema é o mesmo:
-violeta é a marca, ciano só para áudio, e **verde/âmbar/vermelho aparecem apenas na seção de
+azul (#3659CB) é a marca, ciano só para áudio, e **verde/âmbar/vermelho aparecem apenas na seção de
 correção** — nunca como destaque decorativo.
 
 Referência visual navegável: `docs/home.html`.
@@ -17,7 +17,7 @@ Regras base: `.claude/rules/design-system.md`. Snippets: `.claude/rules/componen
 ## Voz
 
 **A voz da marca mora no Cérebro do projeto agentic-seo**, na pasta irmã do repositório:
-`../entendo-seo/project/brain/voice.md` (direto e confiante, escolhida pelo dono em 2026-11-02),
+`../spokke-seo/project/brain/voice.md` (direto e confiante, escolhida pelo dono em 2026-11-02),
 com o checklist de revisão em `brain/review.md`. Copy nova passa por ali antes de entrar aqui;
 o rascunho e a checagem da home estão em `project/artifacts/contents/home/`.
 
@@ -53,10 +53,11 @@ Nove blocos, nesta ordem. Cada um responde a uma pergunta e nenhum repete o ante
 seis (Criar, Enviar, Para o aluno, Acompanhar), a faixa "Para escolas" na largura inteira e uma
 linha com o CTA. Os itens saem de `docs/funcionalidades.md`, que só lista o que existe: o desenho
 original prometia código de seis letras, áudio próprio, fila de correção e "distratores mais
-escolhidos", e foram trocados. Ícones e checks em violeta, não no verde e no âmbar do desenho.
+escolhidos", e foram trocados. Ícones e checks na cor da marca, não no verde e no âmbar do desenho.
 
 **O rodapé não tem indicador de status.** O "Todos os sistemas operando" era um ponto verde fixo;
-no lugar entrou a identificação da empresa (nome e CNPJ) e, quando houver, a faixa de selos
+no lugar entrou a identificação da empresa (o nome empresarial — o CNPJ não aparece no site, a
+pedido do dono do repositório) e, quando houver, a faixa de selos
 verificáveis (`selos` em `institucional.ts`; roteiro em `docs/selos-e-seguranca.md`).
 
 O hero mostra um **celular que RESPONDE de verdade** e cicla entre quatro questões (escuta,
@@ -100,7 +101,7 @@ tornaria mais complicados dos dois lados sem ganho real.
 O cabeçalho tem um botão de tema (ícone só, ao lado de "Entrar no Studio") — diferente do resto
 do site, que segue `prefers-color-scheme` sem controle manual, a home é a superfície pública que
 o professor decide visitar de dia ou de noite, então oferece a escolha. Estado inicial lê
-`localStorage['entendo-theme']`; sem valor salvo, cai para a preferência do sistema — nunca força
+`localStorage['spokke-theme']`; sem valor salvo, cai para a preferência do sistema — nunca força
 claro por padrão (isso já foi bug no catálogo de dev: abrir com preferência escura do sistema e
 ver a tela clara até clicar). Ao trocar, grava a escolha; visitas seguintes respeitam o que a
 pessoa escolheu da última vez.
@@ -114,13 +115,13 @@ Todas as durações e curvas vêm de `design-system.md`. Específico da home:
   (`use:reveal={{ ordem: i }}`, o `--stagger` do design system). O hero anima no carregamento, sem
   observer, com `animate-entrada em-sequencia` e o `--i` de cada bloco.
 - **Formas de ambiente**: confinadas à coluna do celular no hero e a regiões sem texto nas
-  faixas escura e violeta. Nunca atrás de parágrafo. Cada zona tem sua própria composição — não
+  faixas escura e azul. Nunca atrás de parágrafo. Cada zona tem sua própria composição — não
   é o mesmo `AmbientShapes.svelte` genérico do catálogo reaproveitado três vezes, porque a
   contagem e o arranjo de formas mudam por zona (home.md pede isso, o componente genérico é de
   5 formas fixas para um bloco de tamanho fixo).
 - **Carrossel de idiomas**: `en-marquee` linear infinito, lista duplicada, borda resolvida com
   `mask-image` em fade horizontal. `aria-hidden` — é ilustração, não conteúdo.
-- **Hover**: cartão usa `cartao-interativo` (sobe 3 px, borda puxando para o violeta); linha de estado de correção desliza
+- **Hover**: cartão usa `cartao-interativo` (sobe 3 px, borda puxando para a cor da marca); linha de estado de correção desliza
   4px na horizontal. Botão usa `motion-tap`.
 
 ## Superfícies escuras
@@ -130,7 +131,7 @@ tema escuro isso vira texto claro sobre fundo claro. Os tokens são `panel`, `pa
 `panel-dim`, `panel-line`, definidos nos dois temas em `app.css` (mesmo mecanismo de `line` e
 `card` — ver design-system.md). A mesma regra vale para o bezel do celular (`bezel`) e para a
 cor da sombra (`--shadow`, triplet RGB cru para `shadow-[...rgb(var(--shadow)/alpha)]`), que é
-preta no escuro e violeta-tinta no claro.
+preta no escuro e azul-tinta no claro.
 
 ## Acessibilidade
 
@@ -143,7 +144,7 @@ Vale tudo de `design-system.md`, mais:
 - O carrossel de idiomas não é lido por leitor de tela; a lista dos dez idiomas está por extenso
   no parágrafo acima dele. **Só entra idioma que tem `LanguageProfile`** — o carrossel chegou a
   mostrar alemão, coreano, hebraico e tailandês, que o produto não corrige.
-- Contraste de 4.5:1 em todo corpo de texto, incluindo o texto sobre as faixas escura e violeta.
+- Contraste de 4.5:1 em todo corpo de texto, incluindo o texto sobre as faixas escura e azul.
 
 ## Texto
 

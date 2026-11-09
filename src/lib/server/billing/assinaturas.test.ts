@@ -11,6 +11,8 @@ import {
 } from './assinaturas';
 import { manualBillingProvider } from './manual-provider';
 import { uso } from '$lib/server/db/repos/uso';
+
+const ORIGEM = { origem: 'http://localhost:5173' };
 import { minhaAssinatura } from '$lib/server/db/repos/assinatura';
 
 /**
@@ -117,8 +119,13 @@ describe('assinaturas', () => {
 describe('pedido de plano (provedor manual)', () => {
 	it('substitui o pedido pendente, avisa a equipe e só o painel ativa', async () => {
 		const professor = { id: ids.b, name: 'Prof B', email: `assin-${ids.b}@test.dev` };
-		await manualBillingProvider.iniciarAssinatura(professor, 'basico', 'mensal');
-		const segundo = await manualBillingProvider.iniciarAssinatura(professor, 'super', 'anual');
+		await manualBillingProvider.iniciarAssinatura(professor, 'basico', 'mensal', ORIGEM);
+		const segundo = await manualBillingProvider.iniciarAssinatura(
+			professor,
+			'super',
+			'anual',
+			ORIGEM
+		);
 		expect(segundo.tipo).toBe('pedido');
 
 		const pendentes = await prisma.planRequest.findMany({
@@ -149,7 +156,8 @@ describe('pedido de plano (provedor manual)', () => {
 		await manualBillingProvider.iniciarAssinatura(
 			{ id: ids.a, name: 'Prof A', email: `assin-${ids.a}@test.dev` },
 			'super',
-			'mensal'
+			'mensal',
+			ORIGEM
 		);
 		expect(await minhaAssinatura({ id: ids.b }).pedidoPendente()).toBeNull();
 		expect(await minhaAssinatura({ id: ids.b }).cancelarPedido()).toBe(false);

@@ -76,15 +76,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	await prisma.job.deleteMany({
-		where: {
-			type: 'convite-modulo',
-			createdAt: { gte: inicioDoTeste },
-			OR: ['7º B', '8º A'].map((nome) => ({
-				payload: { path: ['classroomName'], equals: nome }
-			}))
-		}
-	});
 	const alocacoes = await prisma.moduleClassroom.findMany({
 		where: { module: { teacherId: { in: [ids.a, ids.b] } } },
 		select: { id: true }
@@ -157,7 +148,6 @@ describe('turmas do módulo e programação de envio', () => {
 		expect(await programacoes({ id: ids.a }).alocar(modA, [turmaA, turmaA])).toBe(1);
 		const [linha] = await programacoes({ id: ids.a }).doModulo(modA);
 		alocacao = linha.id;
-		expect(linha.turma.comEmail).toBe(2);
 		expect(await programacoes({ id: ids.b }).doModulo(modA)).toEqual([]);
 	});
 
@@ -169,26 +159,26 @@ describe('turmas do módulo e programação de envio', () => {
 		expect(await programacoes({ id: ids.b }).desalocar(alocacao)).toBe(false);
 	});
 
-	it('"tudo agora" manda só o que está no ar, e UM e-mail por aluno com todos os links', async () => {
+	it('"tudo agora" LIBERA só o que está no ar, para todos os alunos, sem e-mail', async () => {
 		const prog = programacaoSchema.parse({ modo: 'agora', inicio: '2026-10-09' });
 		const r = await salvarProgramacao(profA, alocacao, prog, ORIGEM);
 		expect(r?.enviadas).toBe(2);
 		expect(r?.naoSairam.map((n) => n.motivo).sort()).toEqual(['arquivada', 'rascunho']);
-		// Ana e Bia têm e-mail; Caio não recebe e-mail, mas fica na turma.
-		expect(r?.emails).toBe(2);
 
-		const jobs = await prisma.job.findMany({
-			where: { type: 'convite-modulo', payload: { path: ['classroomName'], equals: '7º B' } }
+		// Módulo não manda e-mail: nenhum job de e-mail nasce deste despacho.
+		expect(
+			await prisma.job.count({
+				where: { type: { in: ['convite', 'convite-modulo'] }, createdAt: { gte: inicioDoTeste } }
+			})
+		).toBe(0);
+		const deliveries = await prisma.delivery.findMany({
+			where: { classroomId: turmaA },
+			include: { invites: true }
 		});
-		expect(jobs).toHaveLength(2);
-		for (const job of jobs) {
-			const payload = job.payload as { atividades: { title: string }[]; inviteIds: string[] };
-			expect(payload.atividades.map((a) => a.title)).toEqual(['Frutas 1', 'Frutas 2']);
-			expect(payload.inviteIds).toHaveLength(2);
-		}
-		const deliveries = await prisma.delivery.findMany({ where: { classroomId: turmaA } });
 		expect(new Set(deliveries.map((d) => d.envioId)).size).toBe(1);
-		expect(deliveries.every((d) => d.moduleId === modA)).toBe(true);
+		expect(deliveries.every((d) => d.moduleId === modA && !d.porEmail)).toBe(true);
+		// Os três alunos — o Caio sem e-mail também — têm o convite que abre a fase.
+		expect(deliveries.every((d) => d.invites.length === 3)).toBe(true);
 
 		const [linha] = await programacoes({ id: ids.a }).doModulo(modA);
 		const porAtividade = Object.fromEntries(linha.envios.map((e) => [e.activityId, e]));
@@ -245,7 +235,8 @@ describe('turmas do módulo e programação de envio', () => {
 		const do7B = eventos.filter((e) => e.turma.nome === '7º B');
 		expect(do7B.filter((e) => e.estado === 'enviada')).toHaveLength(2);
 		expect(do7B.filter((e) => e.estado === 'nao_saiu')).toHaveLength(2);
-		expect(do7B.find((e) => e.estado === 'enviada')?.emails).toBe(2);
+		// Liberada, não enviada por e-mail: nenhum e-mail conta na agenda.
+		expect(do7B.find((e) => e.estado === 'enviada')?.emails).toBe(0);
 		// 8º A: as duas quintas de 2099, no dia de Brasília e no horário dele.
 		const do8A = eventos.filter((e) => e.turma.nome === '8º A');
 		expect(do8A.map((e) => [e.dia, e.hora, e.estado])).toEqual([
@@ -269,11 +260,11 @@ describe('turmas do módulo e programação de envio', () => {
 
 	it('o último envio por turma conta os convidados, e só do professor', async () => {
 		const ultimos = await programacoes({ id: ids.a }).ultimoEnvioPorTurma();
-		expect(ultimos[`${modA}:${turmaA}`]).toEqual({ convites: 2, terminaram: 0 });
+		expect(ultimos[`${modA}:${turmaA}`]).toEqual({ convites: 3, terminaram: 0 });
 		expect(await programacoes({ id: ids.b }).ultimoEnvioPorTurma()).toEqual({});
 	});
 
-	it('"só disponibilizar" libera no mapa sem nenhum e-mail — e convida até quem não tem e-mail', async () => {
+	it('programação gravada com o antigo "por e-mail" também só libera', async () => {
 		const turma3 = await turmas({ id: ids.a }).create('9º C', 'en-US', 'azul', [
 			{ name: 'Edu', email: 'edu@test.dev' },
 			{ name: 'Fábio', email: null }
@@ -282,14 +273,13 @@ describe('turmas do módulo e programação de envio', () => {
 		const linha = (await programacoes({ id: ids.a }).doModulo(modA)).find(
 			(l) => l.turma.id === turma3.id
 		)!;
-		const prog = programacaoSchema.parse({ modo: 'agora', canal: 'mapa', inicio: '2026-10-09' });
+		// O campo `canal` saiu; uma programação antiga que ainda o tenha é lida igual.
+		const prog = programacaoSchema.parse({ modo: 'agora', canal: 'email', inicio: '2026-10-09' });
 		const r = await salvarProgramacao(profA, linha.id, prog, ORIGEM);
 		expect(r?.enviadas).toBe(2);
-		expect(r?.emails).toBe(0);
-
 		expect(
 			await prisma.job.count({
-				where: { type: 'convite-modulo', payload: { path: ['classroomName'], equals: '9º C' } }
+				where: { type: { in: ['convite', 'convite-modulo'] }, createdAt: { gte: inicioDoTeste } }
 			})
 		).toBe(0);
 		const entregas = await prisma.delivery.findMany({
@@ -300,10 +290,6 @@ describe('turmas do módulo e programação de envio', () => {
 		expect(entregas.every((d) => !d.porEmail)).toBe(true);
 		// Os dois alunos — inclusive o Fábio, sem e-mail — têm o convite que abre a fase no mapa.
 		expect(entregas.every((d) => d.invites.length === 2)).toBe(true);
-
-		// O dia não pesa no teto de 100 e-mails, e a agenda diz que não há e-mail.
-		const carga = await programacoes({ id: ids.a }).cargaPorDia();
-		expect(carga[linha.id]).toBeUndefined();
 	});
 
 	it('duplicar copia nome, cor e ordem — sem turmas — e só o próprio módulo', async () => {

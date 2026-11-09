@@ -1,9 +1,18 @@
 /**
- * Conteúdo institucional. Trocar os dados da empresa aqui reflete em todas as
- * páginas — o texto nunca fica solto numa rota (paginas.md "Grupo (site)").
+ * Conteúdo institucional. O texto nunca fica solto numa rota (paginas.md
+ * "Grupo (site)"): trocar algo aqui reflete em todas as páginas.
  *
- * Os dados abaixo são de EXEMPLO (nome, CNPJ, endereço, contatos, status dos
- * serviços) e precisam ser substituídos pelos reais antes de publicar.
+ * **Só o que o produto faz hoje** (revisão de novembro de 2026, registrada no
+ * Cérebro do projeto de SEO, `../spokke-seo/project/brain/log.md`). Saíram a
+ * história e a equipe inventadas, a encarregada de dados com nome fictício, o
+ * endereço e a razão social de exemplo, a página de Status com uptime e
+ * incidentes que ninguém media, os nomes de cookie que não existiam e as
+ * respostas da ajuda que não batiam com o produto. A voz é a de
+ * `brain/voice.md`: direta, em segunda pessoa, sem travessão.
+ *
+ * O CNPJ, a razão social e o endereço entram quando existirem de verdade — o
+ * CNPJ fica fora do site a pedido do dono do repositório. Os e-mails usam o
+ * domínio `spokke.app`, que ainda é PLACEHOLDER (docs/operacao.md).
  */
 
 export interface LegalSection {
@@ -17,12 +26,13 @@ function P(t: string, p: string[], extra?: { l?: string[]; note?: string }): Leg
 	return { t, p, ...extra };
 }
 
-export const legalName = 'Entendo Tecnologia Educacional Ltda.';
-export const legalDoc = 'CNPJ 12.345.678/0001-90';
-export const address1 = 'Rua das Laranjeiras, 210 · conj. 74';
-export const address2 = 'Pinheiros, São Paulo/SP · 05422-000';
+/** O nome que o rodapé e os documentos usam. */
+export const legalName = 'Spokke';
 
-export const empresa = { legalName, legalDoc, address1, address2 };
+export const empresa = { legalName };
+
+/** A data que as quatro páginas legais mostram no topo. Mudou o texto, muda aqui. */
+export const atualizadoEm = '9 de novembro de 2026';
 
 /**
  * Selos que aparecem no rodapé. Só entra selo VERIFICÁVEL: o link leva à página
@@ -46,241 +56,226 @@ export const selos: Selo[] = [];
 
 export const privacidade: LegalSection[] = [
 	P('Quem somos e o que esta política cobre', [
-		legalName +
-			', inscrita no ' +
-			legalDoc +
-			', é a controladora dos dados pessoais tratados na plataforma entendo — o site institucional, o Studio (onde o professor cria atividades) e o Player (onde o aluno responde).',
-		'Esta política explica quais dados coletamos, por que coletamos, com quem compartilhamos e como você exerce seus direitos sob a Lei nº 13.709/2018 (LGPD).'
+		'O Spokke é o controlador dos dados tratados no site, no painel em que o professor monta as atividades e na tela em que o aluno responde.',
+		'Aqui está o que guardamos, para quê, com quem compartilhamos e como você exerce os direitos da Lei nº 13.709/2018 (LGPD).'
 	]),
 	P(
 		'Dados que coletamos',
-		[
-			'Coletamos apenas o necessário para a plataforma funcionar. Nenhum dado é vendido, em nenhuma hipótese.'
-		],
+		['Guardamos o que o produto usa para funcionar. Nenhum dado é vendido.'],
 		{
 			l: [
-				'Cadastro do professor: nome, e-mail e senha em hash. Opcionalmente, os idiomas que você ensina e a língua dos seus alunos, usados só como padrão ao criar atividades e turmas.',
-				'Conteúdo de autoria: os materiais que você cola ou envia no Studio, os itens gerados a partir deles e os ajustes que você faz.',
-				'Dados de aluno: nome ou apelido informado na entrada da atividade, respostas enviadas, tempo por item e pontuação.',
-				'Dados técnicos: endereço IP, tipo de navegador, sistema operacional, data e hora dos acessos e registros de erro.',
-				'Cobrança: em planos pagos, os dados de faturamento tratados pelo nosso processador de pagamentos. Não armazenamos número de cartão.'
+				'Do professor: nome, e-mail e senha, guardada de forma irreversível. Se você preencher, também os idiomas que ensina e a língua dos seus alunos, que viram o padrão ao criar atividades e turmas, e o avatar que você monta, um desenho e não uma foto.',
+				'O material da aula: as frases, os textos, o vocabulário e os diálogos que você cadastra, as questões montadas a partir deles e as mudanças que você faz.',
+				'Das turmas: o nome de cada aluno e, se você quiser mandar convites, o e-mail dele.',
+				'De quem responde: o nome ou apelido digitado na entrada, as respostas, o tempo em cada questão e o resultado.',
+				'Da conta do aluno, que é opcional: nome, e-mail, senha e o avatar escolhido.',
+				'A gravação da voz do aluno, só quando ele marca a autorização antes de começar. Sem a marca, a fala é transcrita para a correção e descartada na hora.',
+				'Dados técnicos: endereço IP, navegador, data e hora dos acessos e registros de erro.',
+				'Da cobrança: o plano, o ciclo e o histórico da assinatura. O pagamento com cartão acontece no ambiente do Mercado Pago, e o número do cartão nunca passa por nós.'
 			]
 		}
 	),
-	P(
-		'Para que usamos e com que base legal',
-		['Cada finalidade tem uma base legal do art. 7º da LGPD:'],
-		{
-			l: [
-				'Executar o contrato (art. 7º, V): criar e manter sua conta, gerar itens a partir dos seus materiais, aplicar atividades e devolver resultados.',
-				'Legítimo interesse (art. 7º, IX): medir uso agregado para melhorar o produto, prevenir fraude e abuso, e manter a segurança da plataforma.',
-				'Consentimento (art. 7º, I): envio de comunicações de marketing e uso de cookies não essenciais. Você pode revogar a qualquer momento.',
-				'Obrigação legal (art. 7º, II): guarda de registros de acesso por seis meses, conforme o art. 15 do Marco Civil da Internet.'
-			]
-		}
-	),
+	P('Para que usamos e com que base legal', ['Cada uso tem uma base do art. 7º da LGPD:'], {
+		l: [
+			'Execução do contrato (art. 7º, V): manter a sua conta, montar as questões a partir do seu material, aplicar as atividades e mostrar os resultados.',
+			'Legítimo interesse (art. 7º, IX): prevenir abuso e manter a plataforma segura. É por isso que o formulário de contato e a atividade de exemplo têm limite de uso por endereço IP.',
+			'Consentimento (art. 7º, I): guardar a gravação da voz do aluno por 7 dias. Ele decide antes de começar, e responder sem marcar funciona igual.',
+			'Obrigação legal (art. 7º, II): guardar os registros de acesso pelo prazo do art. 15 do Marco Civil da Internet e os documentos fiscais pelo prazo da lei.'
+		]
+	}),
 	P(
 		'Com quem compartilhamos',
-		[
-			'Compartilhamos dados apenas com operadores que precisam deles para prestar um serviço à entendo, sempre sob contrato que os obriga a tratar os dados conforme esta política.'
-		],
+		['Só com quem presta um serviço que o produto usa, e só o que esse serviço precisa:'],
 		{
 			l: [
-				'Infraestrutura em nuvem, para hospedagem e banco de dados.',
-				'Provedor de modelos de linguagem (Google Gemini), só quando você usa "Gerar com IA".',
-				'Serviço de e-mail transacional, para avisos de conta e de atividade.',
-				'Processador de pagamentos, nos planos pagos.',
-				'Autoridades públicas, quando houver ordem judicial ou obrigação legal.'
+				'Hospedagem e armazenamento: onde ficam o banco de dados e os arquivos de áudio.',
+				'Resend, o serviço de e-mail: recebe o endereço e o texto dos convites, dos avisos de conta e dos links de recuperação de senha.',
+				'Google, pelo Gemini: só quando você usa "Gerar com IA", e só o pedido que você escreveu com os nomes dos idiomas.',
+				'Mercado Pago: os dados da cobrança, nos planos pagos.',
+				'Autoridades públicas, diante de ordem judicial ou obrigação legal.'
 			],
-			note: 'A lista atualizada de operadores, com país de hospedagem, está disponível mediante pedido ao encarregado.'
+			note: 'A voz das questões de escuta, a transcrição da fala do aluno e a tradução automática do material são feitas na infraestrutura do próprio Spokke. Esse conteúdo não vai para terceiros.'
 		}
 	),
 	P(
 		'Dados de alunos e de menores de idade',
 		[
-			'A relação com o aluno é sempre intermediada pela instituição de ensino ou pelo professor, que é quem decide aplicar a atividade e quem informa os alunos.',
-			'A entendo não exige e-mail, telefone, documento ou foto de aluno. A entrada na atividade pede apenas um nome ou apelido, que pode ser um código da turma.',
-			'Tratando-se de crianças e adolescentes, o tratamento é feito no melhor interesse do titular (art. 14 da LGPD) e cabe à instituição obter o consentimento específico e destacado do responsável legal quando a legislação exigir.'
+			'A relação com o aluno passa pelo professor ou pela escola, que decidem aplicar a atividade e informam a turma.',
+			'Para responder, o aluno só digita um nome ou apelido, que pode ser o número da chamada. O e-mail aparece em dois casos, os dois opcionais: quando o professor o cadastra na turma para mandar convites, e quando o próprio aluno cria uma conta.',
+			'Com crianças e adolescentes, o tratamento segue o melhor interesse deles (art. 14 da LGPD), e cabe à escola colher o consentimento dos responsáveis quando a lei exigir.'
 		],
 		{
-			note: 'Se você é responsável por um aluno e quer saber quais dados existem sobre ele, escreva para o encarregado. Nós encaminhamos o pedido à instituição e respondemos junto com ela.'
+			note: 'Se você é responsável por um aluno e quer saber que dados existem sobre ele, escreva para privacidade@spokke.app. O professor também apaga as respostas e o cadastro de um aluno quando quiser, pela tela da turma.'
 		}
 	),
-	P('Uso do seu conteúdo e geração por IA', [
-		'Os exercícios da atividade são gerados nos nossos próprios servidores, a partir dos materiais que você cadastra, sem enviar esse conteúdo a terceiros.',
-		'"Gerar com IA" é opcional: quando você usa, o pedido que você escreveu e os nomes dos idiomas vão ao provedor de modelo de linguagem para ele propor materiais. Nenhum dado de aluno é enviado, e nada entra na sua biblioteca antes de você marcar e confirmar.',
-		'Não usamos o seu conteúdo, nem as respostas dos seus alunos, para treinar modelos. Usamos a modalidade paga do provedor, em que os dados enviados não são usados para treinamento.',
-		'Os materiais e as atividades são seus. Você pode editar e excluir a qualquer momento.',
-		'Se você faz parte de uma escola no plano Scholar, a coordenação vê números agregados das suas turmas — nunca nomes de alunos nem respostas.'
+	P('Seu material e a IA', [
+		'As questões da atividade são montadas pelo próprio Spokke a partir do material que você cadastra, por regras fixas, sem modelo de linguagem e sem enviar o seu material a ninguém.',
+		'"Gerar com IA" é opcional e existe nos planos Pro e Super. Quando você usa, o pedido que você escreveu vai ao Gemini para ele propor materiais. Nenhum dado de aluno vai junto, e nada entra na sua biblioteca antes de você marcar e confirmar.',
+		'Usamos a modalidade paga do Gemini, em que o que é enviado não treina modelos. Nós também não usamos o seu material nem as respostas dos alunos para isso.',
+		'O material e as atividades são seus: você edita e apaga quando quiser.',
+		'Se você faz parte de uma escola no plano Scholar, a coordenação vê números das suas turmas, nunca o nome de um aluno nem uma resposta.'
 	]),
 	P(
 		'Por quanto tempo guardamos',
-		[
-			'Guardamos os dados enquanto sua conta estiver ativa e pelo tempo necessário às finalidades acima.'
-		],
+		['Os dados ficam enquanto a sua conta existir. O que tem prazo próprio:'],
 		{
 			l: [
-				'Conta e conteúdo de autoria: até a exclusão da conta, mais 30 dias de retenção técnica em backup.',
-				'Respostas e resultados de alunos: 24 meses após o fim da atividade, ou antes, se a instituição pedir.',
-				'Registros de acesso: 6 meses, por obrigação legal.',
-				'Dados fiscais de cobrança: 5 anos, por obrigação legal.'
-			]
+				'A gravação da voz do aluno: 7 dias, e ela some sozinha.',
+				'O áudio das questões de escuta: enquanto alguma atividade sua usar aquela frase. Apagar a atividade apaga o áudio que só ela usava.',
+				'Respostas, alunos e turmas: até você apagar, a qualquer momento.',
+				'Registros de acesso e documentos fiscais: pelo prazo que a lei manda.'
+			],
+			note: 'Para encerrar a sua conta, escreva para suporte@spokke.app. Encerrar pelo próprio painel ainda não está disponível.'
 		}
 	),
 	P('Transferência internacional', [
-		'Parte da nossa infraestrutura e o provedor de modelos de linguagem estão fora do Brasil. Essas transferências ocorrem com base em cláusulas contratuais padrão e nas garantias do art. 33 da LGPD.'
+		'O Gemini, do Google, e o Resend tratam dados fora do Brasil. Essas transferências seguem as hipóteses do art. 33 da LGPD.'
 	]),
 	P('Segurança', [
-		'Adotamos criptografia em trânsito (TLS 1.3) e em repouso, controle de acesso por função, autenticação em duas etapas para a equipe interna, registro de auditoria em operações sensíveis e revisão periódica de dependências.',
-		'Nenhum sistema é imune. Em caso de incidente de segurança com risco relevante, comunicamos a ANPD e os titulares afetados nos prazos da LGPD, descrevendo o que aconteceu, quais dados foram atingidos e o que estamos fazendo.'
+		'A senha fica guardada de forma irreversível, e toda consulta ao banco vai amarrada à conta de quem pede: um professor não chega aos dados de outro. A gravação de voz fica numa área sem acesso público, e só o professor da turma a ouve.',
+		'Nenhum sistema é imune. Num incidente de segurança com risco relevante, avisamos a ANPD e as pessoas afetadas nos prazos da LGPD, contando o que aconteceu, que dados foram atingidos e o que estamos fazendo.'
 	]),
 	P('Seus direitos', ['O art. 18 da LGPD garante a você, a qualquer momento e sem custo:'], {
 		l: [
-			'Confirmar se tratamos dados seus e acessar esses dados.',
-			'Corrigir dados incompletos, inexatos ou desatualizados.',
-			'Pedir anonimização, bloqueio ou eliminação de dados desnecessários ou tratados em desconformidade.',
-			'Pedir a portabilidade dos dados a outro fornecedor.',
-			'Eliminar dados tratados com base em consentimento.',
-			'Saber com quais entidades compartilhamos seus dados.',
-			'Revogar o consentimento e se opor a tratamento feito com base em legítimo interesse.'
+			'Confirmar se tratamos dados seus e ter acesso a eles.',
+			'Corrigir dados incompletos, errados ou desatualizados.',
+			'Pedir anonimização, bloqueio ou eliminação de dados desnecessários ou tratados fora da lei.',
+			'Pedir a portabilidade dos dados para outro fornecedor.',
+			'Eliminar os dados tratados com base no seu consentimento.',
+			'Saber com quem compartilhamos os seus dados.',
+			'Revogar o consentimento e se opor a um tratamento feito por legítimo interesse.'
 		],
-		note: 'Pedidos são respondidos em até 15 dias. Precisamos confirmar sua identidade antes de atender, para não entregar dados à pessoa errada.'
+		note: 'Respondemos em até 15 dias, como a lei pede. Antes, confirmamos que o pedido é seu, para não entregar dados à pessoa errada.'
 	}),
 	P('Cookies', [
-		'Usamos cookies essenciais para manter sua sessão e cookies analíticos para entender quais telas travam o professor. Os analíticos só são ativados com o seu aceite, e o detalhe de cada cookie está na página de Cookies.'
+		'Usamos só o necessário para o produto funcionar, como manter a sua sessão e lembrar onde o aluno parou. Não há cookie de análise nem de publicidade, e cada um está descrito na página de Cookies.'
 	]),
 	P('Encarregado de dados', [
-		'Nossa encarregada (DPO) é Marina Vieira. Fale com ela em privacidade@entendo.app ou pelo endereço postal ' +
-			address1 +
-			', ' +
-			address2 +
-			'.',
-		'Você também pode peticionar diretamente à Autoridade Nacional de Proteção de Dados (ANPD).'
+		'Pedidos sobre dados pessoais vão para privacidade@spokke.app.',
+		'Você também pode levar o pedido direto à Autoridade Nacional de Proteção de Dados (ANPD).'
 	]),
 	P('Mudanças nesta política', [
-		'Se mudarmos algo material, avisamos por e-mail e dentro do Studio pelo menos 15 dias antes de a mudança valer. O histórico de versões fica publicado nesta página.'
+		'Quando algo importante mudar, avisamos por e-mail antes de a mudança valer, e a data no topo desta página muda junto.'
 	])
 ];
 
 export const termos: LegalSection[] = [
 	P('Aceitação destes termos', [
-		'Ao criar uma conta ou usar a entendo, você concorda com estes Termos de Uso e com a Política de Privacidade. Se você aceita em nome de uma escola, declara ter poderes para isso.'
+		'Ao criar uma conta ou usar o Spokke, você concorda com estes Termos de Uso e com a Política de Privacidade. Se aceita em nome de uma escola, você declara ter poderes para isso.'
 	]),
-	P('O que a entendo faz', [
-		'A entendo transforma material de aula — frases, textos, vocabulário, diálogos — em atividades de idioma que o aluno responde no Player, com correção automática nos formatos objetivos e correção humana nos formatos abertos.',
-		'A plataforma é uma ferramenta de autoria. As decisões pedagógicas, a escolha do material e a revisão dos itens são do professor.'
+	P('O que o Spokke faz', [
+		'O Spokke monta atividades de idioma a partir do material da sua aula, como frases, textos, vocabulário e diálogos, e as publica num link para a turma responder. As questões objetivas são corrigidas na hora; a escrita livre, por você.',
+		'As decisões de ensino são suas: o material, o que entra na atividade e a revisão antes de publicar.'
 	]),
 	P('Conta e responsabilidade', [
-		'Você é responsável por manter a senha em sigilo e por tudo que acontecer na sua conta. Avise imediatamente em suporte@entendo.app se suspeitar de acesso indevido.',
-		'É preciso ter 18 anos ou mais para criar conta de professor. Alunos acessam atividades por link ou código, sem cadastro.'
+		'Você guarda a sua senha e responde pelo que acontece na sua conta. Se suspeitar de acesso indevido, escreva para suporte@spokke.app.',
+		'A conta de professor é para maiores de 18 anos. O aluno responde pelo link, sem cadastro, e a conta de aluno é opcional: serve para ele reencontrar o que já respondeu.'
 	]),
 	P('Conteúdo que você envia', [
-		'Você continua dono de todo material que envia. Ao enviar, você nos concede uma licença limitada, não exclusiva e revogável para armazenar, processar e exibir esse material com o único fim de operar a plataforma para você.',
-		'Você declara que tem direito de usar o material enviado. Não envie conteúdo protegido por direito autoral de terceiros sem autorização — livro didático digitalizado inteiro, por exemplo.'
+		'O material que você envia continua seu. Ao enviar, você nos dá uma licença limitada, não exclusiva e revogável para guardar, processar e exibir esse material com um único fim: operar a plataforma para você.',
+		'Você declara ter o direito de usar o que envia. Não envie material de terceiros protegido por direito autoral sem autorização, como um livro didático digitalizado inteiro.'
 	]),
-	P(
-		'Itens gerados automaticamente',
-		[
-			'Os itens são propostas geradas por modelo de linguagem a partir do seu material. Eles podem conter erro de gramática, de sentido ou de nível.',
-			'A revisão antes de publicar é obrigatória e é sua. A entendo não garante correção pedagógica ou linguística dos itens gerados, e a etapa de revisão existe exatamente por isso.'
-		],
-		{ note: 'Nada é publicado para aluno sem passar pela sua confirmação na etapa de revisão.' }
-	),
+	P('Questões montadas automaticamente', [
+		'As questões saem do seu material por regras fixas. A tradução automática e as propostas da IA podem errar no sentido ou na gramática, e por isso a atividade passa pela sua revisão antes de ir para o ar.',
+		'O Spokke não garante a correção linguística do que é gerado ou traduzido. Nada chega ao aluno antes de você publicar.'
+	]),
 	P('Uso aceitável', ['É proibido:'], {
 		l: [
-			'Usar a plataforma para conteúdo ilegal, discriminatório, violento ou sexualmente explícito.',
-			'Tentar burlar limites de plano, engenharia reversa, raspagem automatizada ou sobrecarga proposital dos serviços.',
-			'Revender acesso à conta ou compartilhar credenciais entre professores diferentes.',
-			'Usar a saída do gerador para treinar outro modelo de linguagem.'
+			'Publicar conteúdo ilegal, discriminatório, violento ou sexualmente explícito.',
+			'Contornar os limites do plano, fazer engenharia reversa, coletar dados de forma automatizada ou sobrecarregar o serviço de propósito.',
+			'Revender o acesso ou dividir uma conta entre professores diferentes.'
 		]
 	}),
 	P('Planos, cobrança e cancelamento', [
-		'Planos pagos são cobrados por ciclo, antecipadamente, com renovação automática até que você cancele. O cancelamento vale para o próximo ciclo e mantém o acesso até o fim do período pago.',
-		'Reembolso integral em até 7 dias da primeira contratação, conforme o art. 49 do Código de Defesa do Consumidor. Reajustes anuais são comunicados com 30 dias de antecedência.'
+		'Toda conta nova começa com 14 dias de teste grátis. Depois, o plano é cobrado por ciclo, mensal ou anual, adiantado, e com o pagamento pelo Mercado Pago a assinatura renova sozinha até você cancelar.',
+		'Cancelar vale para o próximo ciclo: você usa até o fim do período pago, e nada do que publicou sai do ar. Na primeira contratação, você pode desistir em até 7 dias e receber o valor de volta, como garante o art. 49 do Código de Defesa do Consumidor.'
 	]),
 	P('Propriedade intelectual', [
-		'O software, a marca, o design e a documentação da entendo são nossos. Estes termos não transferem nenhum direito sobre eles.',
-		'As atividades que você cria a partir do seu material são suas e podem ser exportadas quando você quiser.'
+		'O software, a marca e o design do Spokke são nossos, e estes termos não transferem nenhum direito sobre eles.',
+		'O que você cria a partir do seu material é seu. Os resultados e a chamada da turma saem em planilha (CSV) quando você quiser.'
 	]),
 	P('Disponibilidade e suporte', [
-		'Trabalhamos para manter a plataforma disponível, mas não prometemos operação ininterrupta. Manutenções programadas são anunciadas na página de Status com pelo menos 48 horas de antecedência, fora de horário letivo sempre que possível.',
-		'Suporte por e-mail em dias úteis, das 9h às 18h (horário de Brasília).'
+		'Trabalhamos para manter o Spokke no ar, mas não prometemos funcionamento sem interrupção. Um plano vencido nunca tira do ar uma atividade publicada.',
+		'O suporte é por e-mail, em suporte@spokke.app.'
 	]),
 	P('Limitação de responsabilidade', [
-		'Na máxima extensão permitida pela lei aplicável, a responsabilidade total da entendo por qualquer reclamação relacionada ao serviço fica limitada ao valor pago por você nos 12 meses anteriores ao fato.',
-		'Não respondemos por lucros cessantes, perda de oportunidade pedagógica ou dano indireto. Nada aqui afasta direitos irrenunciáveis do consumidor.'
+		'Na extensão máxima que a lei permite, a responsabilidade total do Spokke por qualquer reclamação ligada ao serviço fica limitada ao que você pagou nos 12 meses anteriores ao fato.',
+		'Não respondemos por lucro cessante nem por dano indireto. Nada aqui afasta os direitos do consumidor que a lei torna irrenunciáveis.'
 	]),
-	P('Rescisão', [
-		'Você pode encerrar sua conta quando quiser, pelas configurações. Podemos suspender ou encerrar contas que violem estes termos, com aviso prévio sempre que a situação permitir.',
-		'Depois do encerramento, você tem 30 dias para exportar seu conteúdo antes da exclusão definitiva.'
+	P('Encerramento', [
+		'Para encerrar a sua conta, escreva para suporte@spokke.app. Podemos suspender ou encerrar contas que violem estes termos, avisando antes sempre que a situação permitir.'
 	]),
 	P('Lei aplicável e foro', [
-		'Estes termos são regidos pela lei brasileira. Fica eleito o foro da comarca de São Paulo/SP para dirimir controvérsias, ressalvado o direito do consumidor de acionar o foro do seu domicílio.'
+		'Estes termos seguem a lei brasileira. Quem contrata como consumidor pode acionar a Justiça no foro do próprio domicílio.'
 	])
 ];
 
 export const cookies: LegalSection[] = [
 	P('O que são cookies', [
-		'Cookies são arquivos pequenos que o site guarda no seu navegador para lembrar de algo entre uma visita e outra. Usamos também tecnologias equivalentes, como armazenamento local.'
+		'Cookies são arquivos pequenos que o site guarda no seu navegador para lembrar de algo entre uma visita e outra. Também usamos o armazenamento local do navegador, que funciona parecido e só é lido pelo próprio Spokke.'
 	]),
 	P(
 		'Cookies essenciais',
-		['Sempre ativos. Sem eles a plataforma não funciona e não há como recusá-los.'],
-		{
-			l: [
-				'en_session — mantém você autenticado no Studio. Expira em 30 dias.',
-				'en_csrf — protege formulários contra requisição forjada. Expira ao fechar o navegador.',
-				'en_theme — guarda a sua escolha de tema claro ou escuro. Expira em 1 ano.',
-				'en_player_progress — guarda a posição do aluno na atividade para ele não perder o trabalho. Expira em 7 dias.'
-			]
-		}
-	),
-	P(
-		'Cookies analíticos',
 		[
-			'Só são gravados depois do seu aceite no banner. Servem para entender em que tela o professor desiste e o que quebra em qual navegador. Os dados são agregados e não identificam você individualmente.'
+			'Sem eles a plataforma não funciona, por isso não há como recusá-los. Nenhum serve para medir audiência ou mostrar anúncio.'
 		],
 		{
 			l: [
-				'en_anon_id — identificador anônimo de sessão de uso. Expira em 6 meses.',
-				'en_funnel — etapa alcançada na criação de atividade. Expira em 30 dias.'
+				'better-auth.session_token: mantém o professor conectado. Vale 7 dias e se renova enquanto você usa.',
+				'spokke-aluno.session_token: o mesmo, para quem entra com a conta de aluno.',
+				'spokke_anon: identifica o aparelho que respondeu, para o aluno continuar de onde parou e, se criar conta, levar as respostas junto. Vale 180 dias.',
+				'spokke_attempt_<atividade>: a tentativa em andamento naquela atividade. Vale 7 dias.',
+				'spokke_aluno_<atividade>: quem chegou pelo link pessoal do convite, para a resposta sair com o nome certo. Vale 30 dias.',
+				'spokke_code_<atividade>: o código de acesso já digitado, para a atividade não pedir de novo. Vale 1 dia.'
+			],
+			note: 'Em conexão segura, o navegador mostra os dois primeiros com o prefixo __Secure-.'
+		}
+	),
+	P(
+		'Armazenamento local',
+		['Fica só no seu aparelho e guarda preferências e trabalho em andamento:'],
+		{
+			l: [
+				'spokke-theme: o tema claro ou escuro que você escolheu.',
+				'spokke-volume: o volume do som de acerto e de erro.',
+				'spokke-pronuncia: se o teclado virtual mostra a pronúncia nas teclas.',
+				'spokke-mapa-<módulo>: até onde o personagem do mapa já andou, para a animação não se repetir.',
+				'spokke:draft:<tentativa>: o rascunho de uma resposta longa, para ele não sumir se a página recarregar.'
 			]
 		}
 	),
-	P('Cookies de marketing', [
-		'Não usamos. Não há pixel de rede social nem rastreamento entre sites na entendo.'
+	P('Cookies de análise e de publicidade', [
+		'Não usamos. Não há pixel de rede social, ferramenta de análise de terceiros nem rastreamento entre sites.'
 	]),
 	P('Como controlar', [
-		'Você pode revisar sua escolha a qualquer momento pelo link "Preferências de cookies" no rodapé, ou apagar os cookies pelas configurações do seu navegador. Apagar os essenciais desconecta a sua sessão.'
+		'Você apaga cookies e armazenamento local pelas configurações do navegador. Apagar os essenciais desconecta a sua sessão e faz o aparelho esquecer a tentativa em andamento; as respostas já enviadas continuam guardadas.'
 	])
 ];
 
 export const acessibilidade: LegalSection[] = [
 	P('Nosso compromisso', [
-		'A entendo é usada por professores e alunos com necessidades muito diferentes. Tratamos acessibilidade como requisito de produto, não como ajuste posterior.',
-		'Nosso alvo é a WCAG 2.1 nível AA, e a conformidade com a Lei Brasileira de Inclusão (Lei nº 13.146/2015) e com o eMAG nos pontos aplicáveis.'
+		'Professores e alunos chegam ao Spokke com necessidades muito diferentes, e a acessibilidade entra no desenho de cada tela desde o começo.',
+		'A referência que seguimos é a WCAG 2.1, nível AA, junto da Lei Brasileira de Inclusão (Lei nº 13.146/2015). O produto ainda não passou por uma auditoria externa.'
 	]),
-	P('O que já está implementado', [], {
+	P('O que já funciona', [], {
 		l: [
-			'Contraste mínimo de 4.5:1 para texto e 3:1 para elementos de interface, verificado nos temas claro e escuro.',
-			'Navegação completa por teclado, com foco visível e ordem de tabulação previsível em todas as telas do Studio e do Player.',
-			'Alvos de toque de no mínimo 44 por 44 pixels no mobile.',
-			'Rótulos e descrições em português para leitores de tela, com regiões marcadas semanticamente.',
-			'Respeito à preferência do sistema por movimento reduzido: as animações de forma e transição são desligadas.',
-			'Texto redimensionável até 200% sem perda de conteúdo ou função.',
-			'Nenhuma informação transmitida só por cor — estados sempre têm rótulo ou ícone junto.'
+			'Toda questão responde pelo teclado. Montar a frase e pôr em ordem também funcionam por clique e pelas setas, além de arrastar.',
+			'Certo, quase e errado aparecem com ícone e texto, nunca só pela cor, e o resultado de cada questão é anunciado para o leitor de tela.',
+			'Na tela do aluno, todo botão tem pelo menos 48 pixels, inclusive no computador.',
+			'O áudio nunca toca sozinho, e a velocidade troca entre normal, 0,75 e 0,5.',
+			'Quem ativa a redução de movimento no sistema não vê as animações de forma e de transição.',
+			'O texto segue o contraste mínimo de 4,5:1 nos temas claro e escuro.'
 		]
 	}),
-	P('Limitações conhecidas', ['Somos honestos sobre onde ainda não chegamos:'], {
+	P('Limitações conhecidas', ['Onde ainda existe barreira:'], {
 		l: [
-			'Itens de áudio dependem do material enviado pelo professor e nem sempre têm transcrição; estamos gerando transcrição automática como padrão.',
-			'A tela de resultados usa gráficos que ainda não têm alternativa em tabela navegável.',
-			'A montagem de frase por arrastar ainda não tem equivalente completo por teclado em telas estreitas.'
+			'As questões de escuta não mostram o texto do áudio, porque ele é a resposta. Quem não ouve pode pular a questão a qualquer momento.',
+			'As questões de fala pedem microfone e um lugar silencioso. O botão de pular fica sempre à vista.'
 		]
 	}),
 	P('Como reportar uma barreira', [
-		'Escreva para acessibilidade@entendo.app descrevendo a tela, o que você tentou fazer e a tecnologia assistiva usada. Respondemos em até 5 dias úteis com um prazo de correção.',
-		'Barreira que impeça um aluno de concluir uma atividade entra como incidente e é tratada com prioridade máxima.'
+		'Escreva para acessibilidade@spokke.app contando a tela, o que você tentou fazer e a tecnologia assistiva que usa.',
+		'Barreira que impede um aluno de terminar uma atividade passa na frente de tudo.'
 	])
 ];
 
@@ -296,35 +291,29 @@ export interface Canal {
 export const canais: Canal[] = [
 	{
 		label: 'Suporte',
-		value: 'suporte@entendo.app',
-		note: 'Dúvidas de uso e problemas técnicos. Dias úteis, 9h às 18h.',
-		href: 'mailto:suporte@entendo.app'
+		value: 'suporte@spokke.app',
+		note: 'Dúvidas de uso e problemas técnicos.',
+		href: 'mailto:suporte@spokke.app'
 	},
 	{
 		label: 'Privacidade',
-		value: 'privacidade@entendo.app',
-		note: 'Encarregada de dados: Marina Vieira. Pedidos da LGPD em até 15 dias.',
-		href: 'mailto:privacidade@entendo.app'
+		value: 'privacidade@spokke.app',
+		note: 'Pedidos sobre dados pessoais (LGPD).',
+		href: 'mailto:privacidade@spokke.app'
 	},
 	{
 		label: 'Escolas e redes',
-		value: 'escolas@entendo.app',
-		note: 'Implantação, formação de equipe e planos por instituição.',
-		href: 'mailto:escolas@entendo.app'
-	},
-	{
-		label: 'Imprensa',
-		value: 'imprensa@entendo.app',
-		note: 'Materiais de marca e pedidos de entrevista.',
-		href: 'mailto:imprensa@entendo.app'
+		value: 'escolas@spokke.app',
+		note: 'Plano Scholar e contrato da escola.',
+		href: 'mailto:escolas@spokke.app'
 	}
 ];
 
 export const aboutParas: string[] = [
-	'A entendo começou numa sala de professores em 2024, com uma reclamação repetida: preparar uma atividade boa leva mais tempo do que aplicá-la. O material já existe — está no caderno, na apostila, na conversa da aula anterior. O que falta é o trabalho mecânico de virar isso em exercício, corrigir e devolver.',
-	'Decidimos atacar exatamente esse trecho. A entendo não escolhe o que sua turma precisa aprender e não sugere currículo. Ela pega o material que você já usa e devolve itens prontos para revisão, com correção automática onde faz sentido e correção humana onde não faz.',
-	'Isso muda o formato do produto. Não há banco de exercícios genéricos, porque a frase que funciona na sua turma de sexto ano de uma escola pública do interior não é a mesma que funciona numa turma de executivos. Há um gerador que lê o seu material, e uma etapa de revisão onde você tem a palavra final.',
-	'Somos uma equipe pequena em São Paulo, formada por professores de idioma e gente de produto. Metade da equipe já deu aula. É por isso que a etapa de revisão nunca foi opcional.'
+	'O material da aula já existe: está no caderno, na apostila, na lista de frases da semana passada. O que toma tempo é transformar isso em exercício, corrigir e devolver para cada aluno, e é esse trecho que o Spokke assume.',
+	'Você cola o material e ele vira questões de escuta, fala, leitura e escrita. A correção sai na hora e conta "workin" como quase, não como erro; no seu relatório, quem chegou perto fica separado de quem errou de vez. A escrita livre continua com você, que lê e dá a nota.',
+	'Não há banco de exercícios prontos nem currículo sugerido. A frase que funciona numa turma de sexto ano não serve para uma turma de executivos, e quem sabe qual é a certa é quem dá a aula. Por isso toda atividade passa pela sua revisão antes de chegar à turma.',
+	'Do outro lado, o aluno abre o link no celular, digita o nome e responde. A conta dele é opcional e serve para duas coisas: reencontrar o que já fez em outro aparelho e ver os módulos da turma num mapa.'
 ];
 
 export interface Principle {
@@ -336,17 +325,17 @@ export interface Principle {
 export const principles: Principle[] = [
 	{
 		t: 'O professor decide',
-		d: 'Nada vai para o aluno sem passar pela confirmação de quem dá a aula. O gerador propõe; a palavra final é sempre humana.',
+		d: 'Nada chega ao aluno sem você publicar. O Spokke propõe as questões, e a palavra final é sua.',
 		icon: 'M12 3l8 4v6c0 4.2-3.2 7.4-8 8.5C7.2 20.4 4 17.2 4 13V7z'
 	},
 	{
 		t: 'Falhar em voz alta',
-		d: 'Quando um material não gera nada ou um serviço degrada, a tela diz o motivo e o que fazer. Erro silencioso custa uma aula.',
+		d: 'Quando um material não rende questão ou um serviço sai do ar, a tela diz o motivo e o que fazer. Erro silencioso custa uma aula.',
 		icon: 'M12 3.5l9.5 16.5H2.5zM12 9.5v4.5M12 17h.01'
 	},
 	{
 		t: 'Menos campos',
-		d: 'Cada campo a mais é uma decisão empurrada para antes da hora. Habilidade e formato saem do material, não de um formulário — e o nível, quando você quer marcar, é um rótulo opcional.',
+		d: 'Cada campo a mais é uma decisão pedida antes da hora. A habilidade sai do tipo de questão, e o nível é um rótulo que você usa se quiser.',
 		icon: 'M4 7h16M4 12h10M4 17h6'
 	}
 ];
@@ -362,15 +351,15 @@ export const faqGrupos: FaqGroup[] = [
 		items: [
 			[
 				'Preciso preparar o material antes?',
-				'Não. Você cola o que já tem — a lista de frases do caderno, o texto que passou na aula passada, a lista de vocabulário. O gerador lê esse material e propõe itens. Se você não tiver nada em mãos, dá para escrever três frases direto no campo e seguir.'
+				'Não. Cole o que você já usa: a lista de frases do caderno, o texto da aula passada, o vocabulário da unidade. Escreva a frase no idioma que você ensina, e a tradução vem preenchida para você conferir. Nos planos Pro e Super, a IA também propõe material a partir de um pedido seu.'
 			],
 			[
-				'Quanto tempo leva para criar a primeira atividade?',
-				'Entre três e cinco minutos: título e idiomas, colar o material, esperar a geração e revisar os itens. A revisão é a parte que consome mais tempo, e é a que vale a pena.'
+				'Como o aluno recebe a atividade?',
+				'Por um link. Você manda no grupo da turma, projeta o QR code na sala ou envia por e-mail aos alunos cadastrados. Se quiser, a atividade pede um código de quatro letras antes de começar.'
 			],
 			[
 				'Funciona para qual idioma?',
-				'Qualquer idioma com escrita alfabética ou silábica. Inglês, espanhol, francês, alemão, italiano e japonês estão em uso hoje. O idioma alvo define fonte, direção do texto e como o corretor separa as palavras.'
+				'Para dez: português, espanhol, inglês dos Estados Unidos e do Reino Unido, francês, italiano, híndi, mandarim, japonês e árabe. Em árabe ainda não há questão de escuta, porque a voz sintética não fala o idioma; o resto funciona igual. O idioma define a fonte, a direção do texto e como a correção separa as palavras.'
 			]
 		]
 	},
@@ -378,16 +367,16 @@ export const faqGrupos: FaqGroup[] = [
 		t: 'Conteúdo e geração',
 		items: [
 			[
-				'Por que não escolho a habilidade?',
-				'Porque habilidade não é um campo: ela sai da combinação entre o material que você cola, a interação gerada e a forma de correção. Você vê quais habilidades a atividade treina na etapa de publicar, já derivadas do que existe de fato.'
+				'Por que não escolho a habilidade de cada questão?',
+				'Porque ela sai do tipo de questão: ouvir e digitar treina escuta e escrita, repetir em voz alta treina fala. Ao criar a atividade, você diz quais habilidades ela deve treinar e quantas questões quer, e o Spokke separa as que se encaixam.'
 			],
 			[
-				'Um material pode não gerar nada?',
-				'Pode, e a tela avisa em vez de falhar em silêncio. Parear, por exemplo, precisa de pelo menos seis palavras para não ficar óbvio. Quando isso acontece você vê o motivo e um botão para completar o material.'
+				'Um material pode não render questão?',
+				'Pode, e você vê isso antes de gerar. Ao cadastrar, a tela mostra quanto o conjunto já rende. Uma pergunta de escolha, por exemplo, precisa de outros termos no conjunto, porque as alternativas erradas saem do seu próprio material.'
 			],
 			[
-				'Posso editar um item gerado?',
-				'Todos. Cada item abre no editor com o enunciado, as alternativas, a resposta certa e a regra de correção. Você também pode criar um item do zero, sem passar pelo gerador.'
+				'Posso editar uma questão?',
+				'Pode. Nas questões de digitar e de completar a lacuna, você muda o enunciado, a resposta certa e as respostas aceitas. Nas outras, a resposta certa vem do material: para trocar, edite o material e gere de novo. Também dá para criar uma questão do zero.'
 			]
 		]
 	},
@@ -396,15 +385,15 @@ export const faqGrupos: FaqGroup[] = [
 		items: [
 			[
 				'O aluno precisa criar conta?',
-				'Não. Ele entra por link ou por um código de seis caracteres e informa só um nome ou apelido. Nenhum e-mail, telefone ou documento é pedido.'
+				'Não. Ele abre o link, digita um nome ou apelido e responde. A conta é opcional: serve para reencontrar o histórico em outro aparelho e ver os módulos da turma num mapa. Você convida cada aluno a criar a dele por e-mail ou mandando o link.'
 			],
 			[
 				'Dá para ver onde a turma errou?',
-				'A tela de resultados mostra item a item quantos acertaram, quanto tempo cada um levou e quais distratores foram escolhidos. É essa última coluna que costuma indicar o que revisar na próxima aula.'
+				'Dá. Os resultados ordenam as questões da que menos gente acertou para a que mais acertou, e quem chegou perto aparece separado de quem errou. Clicando num aluno, você vê o que ele respondeu em cada questão.'
 			],
 			[
-				'Como funciona a correção de escrita longa?',
-				'Itens de escrita longa não são corrigidos automaticamente. Eles ficam numa fila para você corrigir, com o texto do aluno e o material de origem lado a lado.'
+				'Como funciona a correção da escrita livre?',
+				'Ela não tem correção automática. Você abre a tentativa do aluno, lê a resposta e marca se atende, atende em parte ou não atende, com um comentário se quiser. O sino do painel avisa quando há resposta esperando por você.'
 			]
 		]
 	},
@@ -413,7 +402,7 @@ export const faqGrupos: FaqGroup[] = [
 		items: [
 			[
 				'Como começo?',
-				'Toda conta nova começa num período de teste, sem cartão, com os limites do plano Básico. Antes de ele acabar, escolha um plano em Planos — a equipe confirma o pagamento e ativa.'
+				'Toda conta nova tem 14 dias de teste grátis com os limites do plano Básico. Antes do fim, escolha um plano na página de planos; ele libera assim que o pagamento é confirmado.'
 			],
 			[
 				'O que conta no limite de atividades e de materiais?',
@@ -421,7 +410,7 @@ export const faqGrupos: FaqGroup[] = [
 			],
 			[
 				'Cheguei ao limite. Preciso apagar alguma coisa?',
-				'Não precisa apagar: arquive. Arquivar fecha o link para quem ainda não começou, guarda todos os resultados e libera a vaga. Quem já estava respondendo termina normalmente. Na biblioteca, apagar um material não mexe em nenhuma atividade.'
+				'Não precisa apagar: arquive. Arquivar fecha o link para quem ainda não começou, guarda todos os resultados e libera a vaga, e quem já estava respondendo termina normalmente. Na biblioteca, apagar um material não mexe em nenhuma atividade.'
 			],
 			[
 				'O que são os créditos de IA?',
@@ -433,7 +422,7 @@ export const faqGrupos: FaqGroup[] = [
 			],
 			[
 				'Como cancelo?',
-				'Em Conta › Assinatura, "Cancelar no fim do período". Até lá nada muda, e dá para desfazer.'
+				'Na sua conta, aba Assinatura: "Cancelar no fim do período". Você usa até o último dia pago, e nada do que publicou sai do ar.'
 			]
 		]
 	},
@@ -442,11 +431,11 @@ export const faqGrupos: FaqGroup[] = [
 		items: [
 			[
 				'O que é um módulo?',
-				'Uma sequência de atividades com nome — "Intermediário", "Frutas", "Unidade 3". Ele organiza a sua lista e manda tudo de uma vez para a turma, com um e-mail só por aluno trazendo todos os links. Uma atividade pode estar em vários módulos.'
+				'Uma sequência de atividades com nome, como "Unidade 3" ou "Frutas". Você escolhe as turmas e programa quando cada atividade abre: tudo de uma vez, uma por semana ou em datas marcadas. Na data, ela aparece no mapa de quem tem conta ligada à turma. Uma atividade pode estar em vários módulos.'
 			],
 			[
 				'O nível muda os exercícios?',
-				'Não. O nível (A1 a C2) é um rótulo seu: organiza e filtra a lista e aparece para o aluno ao lado do idioma. Os exercícios continuam saindo do material.'
+				'Não. O nível (de A1 a C2) é um rótulo seu: organiza e filtra a lista e aparece para o aluno ao lado do idioma. Os exercícios continuam saindo do material.'
 			]
 		]
 	},
@@ -459,84 +448,8 @@ export const faqGrupos: FaqGroup[] = [
 			],
 			[
 				'O que a coordenação vê das minhas turmas?',
-				'Só números: quantos alunos, envios, tentativas terminadas e o acerto médio de cada turma. Nunca o nome de um aluno nem uma resposta. Seu conteúdo continua seu, inclusive se você sair da escola.'
+				'Só números: quantos alunos, quantos envios, quantas tentativas terminadas e o acerto médio de cada turma. Nunca o nome de um aluno nem uma resposta. O seu conteúdo continua seu, inclusive se você sair da escola.'
 			]
 		]
-	}
-];
-
-export type ServiceTone = 'ok' | 'part' | 'err' | 'mute';
-
-export interface Service {
-	name: string;
-	note: string;
-	state: string;
-	tone: ServiceTone;
-	uptime: string;
-}
-
-export const servicos: Service[] = [
-	{
-		name: 'Studio',
-		note: 'Criação e edição de atividades',
-		state: 'Operando',
-		tone: 'ok',
-		uptime: '99,98%'
-	},
-	{
-		name: 'Player',
-		note: 'Aplicação de atividade para alunos',
-		state: 'Operando',
-		tone: 'ok',
-		uptime: '99,99%'
-	},
-	{
-		name: 'Geração de itens',
-		note: 'Fila mais longa que o normal desde 14h20',
-		state: 'Degradado',
-		tone: 'part',
-		uptime: '99,71%'
-	},
-	{
-		name: 'Autenticação',
-		note: 'Entrada e recuperação de senha',
-		state: 'Operando',
-		tone: 'ok',
-		uptime: '100%'
-	},
-	{
-		name: 'API pública',
-		note: 'Integrações de escola',
-		state: 'Operando',
-		tone: 'ok',
-		uptime: '99,95%'
-	}
-];
-
-export interface Incident {
-	date: string;
-	tone: ServiceTone;
-	title: string;
-	body: string;
-}
-
-export const incidentes: Incident[] = [
-	{
-		date: '03 set 2026 · 14h20',
-		tone: 'part',
-		title: 'Fila de geração acima do normal',
-		body: 'Um pico de uso simultâneo deixou a geração de itens entre 40 e 90 segundos, contra os 15 habituais. Nenhum item foi perdido e nenhuma atividade publicada foi afetada. Estamos ampliando a capacidade da fila.'
-	},
-	{
-		date: '21 ago 2026 · 08h05',
-		tone: 'mute',
-		title: 'Manutenção programada concluída',
-		body: 'Migração do banco de resultados para uma nova região, com 12 minutos de indisponibilidade do Studio anunciados com 72 horas de antecedência. O Player seguiu operando.'
-	},
-	{
-		date: '02 ago 2026 · 19h40',
-		tone: 'err',
-		title: 'Erro ao salvar item com áudio',
-		body: 'Itens de escuta criados entre 19h40 e 20h15 falhavam ao salvar por um erro em um serviço de armazenamento. Corrigido em 35 minutos; os rascunhos afetados foram recuperados automaticamente.'
 	}
 ];

@@ -10,6 +10,7 @@
 	import FiltroIdioma from './FiltroIdioma.svelte';
 	import IdiomaTag from './IdiomaTag.svelte';
 	import { casaComFiltro } from '$lib/idiomas';
+	import { casaComBusca } from '$lib/busca';
 
 	type Atividade = {
 		id: string;
@@ -34,15 +35,10 @@
 	let busca = $state('');
 	let idioma = $state('');
 
-	/** Busca de TELA: sem caixa e sem acento, para "intermediario" achar "Intermediário". */
-	const simples = (t: string) =>
-		t.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');
-	const visiveis = $derived.by(() => {
-		const q = simples(busca.trim());
-		return atividades.filter(
-			(a) => casaComFiltro(a.idioma, idioma) && (!q || simples(a.title).includes(q))
-		);
-	});
+	// Busca de TELA, sem caixa e sem acento (`$lib/busca.ts`).
+	const visiveis = $derived(
+		atividades.filter((a) => casaComFiltro(a.idioma, idioma) && casaComBusca(a.title, busca))
+	);
 
 	function alternar(id: string) {
 		escolhidas = escolhidas.includes(id) ? escolhidas.filter((x) => x !== id) : [...escolhidas, id];

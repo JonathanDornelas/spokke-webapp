@@ -34,17 +34,17 @@
 		traco: 'M6 12h12'
 	};
 
-	// Vermelho só no envio que não saiu; "tudo enviado" é neutro, não verde.
+	// Vermelho só na liberação que não aconteceu; "tudo liberado" é neutro, não verde.
 	const PILULA: Record<Estado, { texto: string; icone: string; classe: string }> = {
-		ativo: { texto: 'Envio programado', icone: ICONE.play, classe: 'bg-base-300 text-primary' },
-		erro: { texto: 'Envio que não saiu', icone: ICONE.erro, classe: 'bg-error text-error-content' },
+		ativo: { texto: 'Liberação programada', icone: ICONE.play, classe: 'bg-base-300 text-primary' },
+		erro: { texto: 'Não liberada', icone: ICONE.erro, classe: 'bg-error text-error-content' },
 		pausa: {
 			texto: 'Pausado',
 			icone: ICONE.pausa,
 			classe: 'border border-line bg-base-200 text-base-content/70'
 		},
 		fim: {
-			texto: 'Tudo enviado',
+			texto: 'Tudo liberado',
 			icone: ICONE.ok,
 			classe: 'border border-line bg-base-200 text-base-content/70'
 		},
@@ -72,7 +72,7 @@
 	const VAZIO_DA_SEMANA: Record<Estado, (m: Modulo) => string> = {
 		pausa: (m) =>
 			`Pausado${m.pausadaDesde ? ` desde ${m.pausadaDesde}` : ''}. Nada sai até você retomar.`,
-		fim: () => 'Tudo já foi enviado.',
+		fim: () => 'Tudo já foi liberado.',
 		sem: () => 'Sem turma, nada programado.',
 		parado: () => 'Nenhuma turma com programação ainda.',
 		ativo: () => 'Nada sai nesta semana.',
@@ -201,13 +201,13 @@
 		},
 		{
 			n: '3',
-			t: 'Programe os envios',
+			t: 'Programe as liberações',
 			d: 'Toda quinta, a cada duas semanas ou em datas fixas. A prévia mostra cada data antes de salvar.'
 		}
 	];
 </script>
 
-<svelte:head><title>Módulos — entendo</title></svelte:head>
+<svelte:head><title>Módulos — Spokke</title></svelte:head>
 <svelte:window onclick={aoClicarFora} onkeydown={aoTeclar} />
 
 {#snippet icone(d: string, classe = 'size-3')}
@@ -414,15 +414,16 @@
 				</div>
 			</div>
 
-			<!-- a listagem -->
-			<div class="grid gap-3.5">
+			<!-- a listagem: dois por linha a partir do xl (pedido do dono do repositório);
+			     cada cartão é um container, e o miolo dele responde à largura DELE. -->
+			<div class="grid items-start gap-3.5 xl:grid-cols-2">
 				{#each visiveis as m (m.id)}
 					{@const P = PILULA[m.estado]}
 					<article
-						class="overflow-hidden rounded-[16px] border border-line transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-[0_20px_40px_-32px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+						class="@container overflow-hidden rounded-[16px] border border-line transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-[0_20px_40px_-32px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
 					>
 						<div
-							class="flex flex-wrap items-start gap-3 p-4 lg:flex-nowrap lg:gap-3.5 lg:px-5 lg:py-4.5"
+							class="flex flex-wrap items-start gap-3 p-4 @2xl:flex-nowrap @2xl:gap-3.5 @2xl:px-5 @2xl:py-4.5"
 						>
 							<span
 								class="grid size-11 flex-none place-items-center rounded-[12px] text-[14px] font-bold {CLASSE_DA_ETIQUETA[
@@ -449,7 +450,7 @@
 									</p>
 								{/if}
 							</div>
-							<div class="flex flex-[1_1_100%] gap-1.5 lg:flex-none" data-menu>
+							<div class="flex flex-[1_1_100%] gap-1.5 @2xl:flex-none" data-menu>
 								<a
 									href={resolve('/(studio)/modulos/[id]', { id: m.id })}
 									class="btn min-h-[42px] flex-1 motion-tap btn-outline text-[13px] font-bold whitespace-nowrap no-underline"
@@ -488,7 +489,7 @@
 											aria-label="Ações de {m.name}"
 											use:focarPrimeiro
 											onkeydown={navegarNoMenu}
-											class="absolute end-0 top-full z-30 mt-1.5 grid min-w-[200px] animate-entrada-curta gap-0.5 rounded-[12px] border border-line bg-base-100 p-1.5 shadow-[0_18px_40px_-20px_rgba(20,18,31,0.45)]"
+											class="absolute end-0 top-full z-30 mt-1.5 grid min-w-[200px] animate-entrada-curta gap-0.5 rounded-[12px] border border-line bg-base-100 p-1.5 shadow-[0_18px_40px_-20px_rgba(15,20,32,0.45)]"
 										>
 											<button
 												type="button"
@@ -528,18 +529,18 @@
 						</div>
 
 						{#if erroCartao?.id === m.id}
-							<p class="px-4 pb-3 text-[13px] font-semibold text-error lg:px-5" role="alert">
+							<p class="px-4 pb-3 text-[13px] font-semibold text-error @2xl:px-5" role="alert">
 								{erroCartao.texto}
 							</p>
 						{/if}
 
 						{#if apagando === m.id}
-							<div class="border-t border-line bg-base-200 px-4 py-3.5 lg:px-5">
+							<div class="border-t border-line bg-base-200 px-4 py-3.5 @2xl:px-5">
 								<p class="mb-1.5 text-[13.5px] font-bold">Apagar {m.name}?</p>
 								<p class="mb-3 max-w-[72ch] text-[13px] leading-relaxed text-base-content/65">
 									As {plural(m.sequencia.length, 'atividade continua', 'atividades continuam')} na sua
 									conta: só o agrupamento some.{m.turmas.length > 0
-										? ` Os envios que ainda não saíram são cancelados nas ${plural(m.turmas.length, 'turma', 'turmas')}.`
+										? ` As liberações que ainda não aconteceram são canceladas nas ${plural(m.turmas.length, 'turma', 'turmas')}.`
 										: ''} O que já saiu continua valendo, porque o link é da atividade.
 								</p>
 								<div class="flex flex-wrap gap-2">
@@ -568,7 +569,7 @@
 
 						<!-- a sequência -->
 						<div
-							class="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line px-4 py-3 lg:px-5"
+							class="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line px-4 py-3 @2xl:px-5"
 						>
 							<span class="flex-none text-[12.5px] text-base-content/65"
 								><strong class="font-bold text-base-content">{m.sequencia.length}</strong>
@@ -615,7 +616,7 @@
 						</div>
 
 						<!-- os próximos 7 dias deste módulo -->
-						<div class="border-t border-line px-4 py-3 lg:px-5">
+						<div class="border-t border-line px-4 py-3 @2xl:px-5">
 							<p
 								class="mb-2.5 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
 							>
@@ -635,18 +636,17 @@
 						{#if m.turmas.length > 0}
 							<div class="border-t border-line bg-base-200">
 								<div
-									class="hidden grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] gap-4 px-5 pt-2.25 text-[10.5px] font-bold tracking-[0.09em] text-base-content/65 uppercase lg:grid"
+									class="hidden grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] gap-4 px-5 pt-2.25 text-[10.5px] font-bold tracking-[0.09em] text-base-content/65 uppercase @2xl:grid"
 								>
-									<span>Turma · ritmo</span><span>Enviadas</span><span>Próximo envio</span><span
-										>Terminaram</span
-									>
+									<span>Turma · ritmo</span><span>Liberadas</span><span>Próxima liberação</span
+									><span>Terminaram</span>
 								</div>
 								{#each m.turmas as t (t.id)}
 									{@const X = PROXIMO[t.tipo]}
 									<div
-										class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 lg:mt-2.25 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] lg:gap-4 lg:border-t lg:px-5 lg:py-2.75 lg:first:border-t"
+										class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 @2xl:mt-2.25 @2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] @2xl:gap-4 @2xl:border-t @2xl:px-5 @2xl:py-2.75 @2xl:first:border-t"
 									>
-										<span class="col-span-2 flex min-w-0 items-center gap-2.5 lg:col-span-1">
+										<span class="col-span-2 flex min-w-0 items-center gap-2.5 @2xl:col-span-1">
 											<span
 												class="flex-none rounded-[7px] px-2 py-1 text-[11.5px] font-bold {CLASSE_DA_ETIQUETA[
 													t.cor
@@ -657,7 +657,7 @@
 												<span class="block text-[12px] text-base-content/65">{t.ritmo}</span>
 											</span>
 										</span>
-										<span class="col-start-1 grid min-w-0 gap-1.25 lg:col-start-auto">
+										<span class="col-start-1 grid min-w-0 gap-1.25 @2xl:col-start-auto">
 											<span
 												class="flex h-1.5 overflow-hidden rounded-full bg-base-300"
 												aria-hidden="true"
@@ -673,24 +673,24 @@
 												></span>
 											</span>
 											<span class="font-mono text-[12px] text-base-content/65"
-												>{t.enviadas} de {t.total}<span class="sr-only"> enviadas</span></span
+												>{t.enviadas} de {t.total}<span class="sr-only"> liberadas</span></span
 											>
 										</span>
 										<span
-											class="col-span-2 flex min-w-0 items-center gap-1.5 text-[12.5px] lg:col-span-1 {X.classe}"
+											class="col-span-2 flex min-w-0 items-center gap-1.5 text-[12.5px] @2xl:col-span-1 {X.classe}"
 										>
 											{@render icone(X.icone, 'size-[13px]')}
 											<span class="min-w-0">{t.prox}</span>
 										</span>
 										<span
-											class="col-start-2 row-start-2 text-end text-[12.5px] text-base-content/65 lg:col-start-auto lg:row-start-auto lg:text-start"
+											class="col-start-2 row-start-2 text-end text-[12.5px] text-base-content/65 @2xl:col-start-auto @2xl:row-start-auto @2xl:text-start"
 										>
 											{#if t.terminaram}
 												<strong class="font-mono text-[13px] font-medium text-base-content"
 													>{t.terminaram}</strong
 												> na última
 											{:else}
-												<span aria-label="ainda sem envio">—</span>
+												<span aria-label="nada liberado ainda">—</span>
 											{/if}
 										</span>
 									</div>
@@ -698,7 +698,7 @@
 							</div>
 						{:else}
 							<div
-								class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-t border-line bg-base-200 px-4 py-3 lg:px-5"
+								class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-t border-line bg-base-200 px-4 py-3 @2xl:px-5"
 							>
 								<span class="min-w-[200px] flex-1 text-[13px] text-base-content/65"
 									>Nenhuma turma recebe este módulo ainda. As atividades no ar já funcionam soltas.</span

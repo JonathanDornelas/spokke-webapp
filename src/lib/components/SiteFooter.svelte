@@ -24,7 +24,6 @@
 			links: [
 				{ href: resolve('/(site)/sobre'), label: 'Sobre' },
 				{ href: resolve('/(site)/ajuda'), label: 'Ajuda' },
-				{ href: resolve('/(site)/status'), label: 'Status' },
 				{ href: resolve('/(site)/contato'), label: 'Contato' }
 			]
 		},
@@ -73,12 +72,12 @@
 			{/each}
 		</div>
 
-		<!-- A identificação da empresa (Decreto 7.962/2013: nome empresarial e CNPJ
-		     em local visível) no lugar do "Todos os sistemas operando", que era um
-		     ponto verde fixo dizendo algo que ninguém media. -->
+		<!-- A identificação da empresa (o nome empresarial; o CNPJ não aparece no
+		     site, a pedido do dono do repositório) no lugar do "Todos os sistemas
+		     operando", que era um ponto verde fixo dizendo algo que ninguém media. -->
 		<div class="flex flex-wrap items-center gap-x-[18px] gap-y-2.5 border-t border-line pt-[18px]">
 			<span class="text-[12.5px] text-base-content/65">
-				© 2026 {empresa.legalName} · {empresa.legalDoc}
+				© 2026 {empresa.legalName}
 			</span>
 			{#if selos.length > 0}
 				<div class="flex-1"></div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	// Sobre: texto corrido, sem números de tração. Os princípios explicam
 	// decisões visíveis no produto (paginas.md "Grupo (site)").
 	import { resolve } from '$app/paths';
@@ -6,12 +7,16 @@
 	import { aboutParas, principles } from '$lib/content/institucional';
 </script>
 
-<svelte:head><title>Sobre — entendo</title></svelte:head>
+<Metadados
+	titulo="Sobre o Spokke"
+	descricao="Você cola o material da aula e ele vira questões de escuta, fala, leitura e escrita, com correção na hora. Toda atividade passa pela sua revisão antes de chegar à turma."
+	tituloDaAba="Sobre · Spokke"
+/>
 
 <SiteHero
 	eyebrow="Sobre"
-	title="Uma ferramenta de autoria, não um banco de exercícios"
-	lede="A entendo nasceu de uma frustração específica: bons professores passam mais tempo formatando exercício do que dando aula."
+	title="O material é seu. O trabalho mecânico fica com a gente."
+	lede="Preparar exercício leva mais tempo do que aplicar. O Spokke assume essa parte e deixa a aula com você."
 />
 
 <div class="mx-auto w-full max-w-[1100px] px-7 py-8 lg:px-10 lg:py-10">
@@ -53,10 +58,11 @@
 	>
 		<div class="min-w-[220px] flex-1">
 			<h3 class="mb-1.5 font-display text-[19px] font-semibold">
-				Quer conversar sobre a sua escola?
+				Vários professores na mesma escola?
 			</h3>
 			<p class="text-[13.5px] leading-relaxed text-base-content/65">
-				A gente responde e-mail de professor antes de responder e-mail de investidor.
+				O plano Scholar tem limites combinados por professor e uma visão da coordenação que mostra
+				só números.
 			</p>
 		</div>
 		<a

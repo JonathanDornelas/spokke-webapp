@@ -23,7 +23,7 @@ export function montarConviteEscola(dados: ConviteEscolaJob): EmailParaEnviar {
 		corpo: `<tr><td style="padding:24px 26px 8px;">
   <p style="font-family:${DISPLAY};font-size:24px;font-weight:600;letter-spacing:-0.02em;color:${COR.texto};margin:0 0 12px;">${escaparHtml(dados.schoolName)} convidou você</p>
   <p style="font-family:${SANS};font-size:15px;line-height:1.6;color:${COR.suave};margin:0 0 14px;">
-    ${escaparHtml(dados.quemConvidou)} convidou você para entrar ${papel} no entendo da escola. Ao aceitar:
+    ${escaparHtml(dados.quemConvidou)} convidou você para entrar ${papel} no Spokke da escola. Ao aceitar:
   </p>
   <ul style="font-family:${SANS};font-size:14px;line-height:1.7;color:${COR.texto};margin:0 0 18px;padding-left:20px;">
     <li>seu plano passa a ser o da escola, com os limites do contrato;</li>
@@ -40,7 +40,7 @@ export function montarConviteEscola(dados: ConviteEscolaJob): EmailParaEnviar {
 	});
 
 	const text = [
-		`${dados.schoolName} convidou você para entrar ${papel} no entendo.`,
+		`${dados.schoolName} convidou você para entrar ${papel} no Spokke.`,
 		'',
 		'Ao aceitar: seu plano passa a ser o da escola; a coordenação vê os números das suas turmas (nunca nomes de alunos nem respostas); seu conteúdo continua seu.',
 		'',
@@ -51,7 +51,7 @@ export function montarConviteEscola(dados: ConviteEscolaJob): EmailParaEnviar {
 
 	return {
 		to: '',
-		subject: `Convite: entrar em ${dados.schoolName} no entendo`,
+		subject: `Convite: entrar em ${dados.schoolName} no Spokke`,
 		preheader,
 		html,
 		text

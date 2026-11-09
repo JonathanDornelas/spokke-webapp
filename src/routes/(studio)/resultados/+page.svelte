@@ -168,7 +168,7 @@
 	}
 </script>
 
-<svelte:head><title>Resultados — entendo</title></svelte:head>
+<svelte:head><title>Resultados — Spokke</title></svelte:head>
 
 <div class="flex min-h-full flex-col">
 	<header

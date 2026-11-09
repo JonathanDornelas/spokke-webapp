@@ -42,7 +42,7 @@
 	}
 </script>
 
-<svelte:head><title>Convite de escola — entendo</title></svelte:head>
+<svelte:head><title>Convite de escola — Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	{#if data.estado === 'aberto'}

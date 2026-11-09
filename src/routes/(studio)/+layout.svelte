@@ -10,6 +10,7 @@
 	import Avatar from '$lib/components/Avatar.svelte';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import StudioSearch from '$lib/components/StudioSearch.svelte';
+	import NotificacoesSino from '$lib/components/NotificacoesSino.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import PlanoCard from '$lib/components/PlanoCard.svelte';
 	import { authClient } from '$lib/client/auth';
@@ -86,6 +87,9 @@
 	);
 </script>
 
+<!-- O painel do professor não aparece em busca: tudo aqui é conta de alguém. -->
+<svelte:head><meta name="robots" content="noindex" /></svelte:head>
+
 {#snippet icone(nome: string, size = 17)}
 	<svg
 		class="shrink-0"
@@ -149,8 +153,8 @@
 				<span
 					class="grid size-5 place-items-center rounded-full bg-error text-[11px] font-bold text-error-content"
 					aria-label="{data.modulosComFalha} {data.modulosComFalha === 1
-						? 'envio que não saiu'
-						: 'envios que não saíram'}"
+						? 'liberação que não aconteceu'
+						: 'liberações que não aconteceram'}"
 				>
 					{data.modulosComFalha}
 				</span>
@@ -265,22 +269,7 @@
 			<Logo size={22} />
 			<div class="flex-1"></div>
 			<ThemeToggle />
-			<span
-				class="relative grid size-9 place-items-center rounded-full bg-base-200 text-base-content/70"
-			>
-				<svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-					<path
-						d="M6 9a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9zM10 18.5a2 2 0 004 0"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				{#if data.aCorrigir > 0}
-					<span class="absolute top-1.5 right-1.5 size-2 rounded-full bg-warning"></span>
-				{/if}
-			</span>
+			<NotificacoesSino />
 			<a
 				href={resolve('/(studio)/conta')}
 				class="shrink-0 rounded-full no-underline"
@@ -317,22 +306,7 @@
 			</nav>
 			<div class="flex-1"></div>
 			<StudioSearch />
-			<span
-				class="relative grid size-9 place-items-center rounded-full bg-base-200 text-base-content/70"
-			>
-				<svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-					<path
-						d="M6 9a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5h-15S6 13 6 9zM10 18.5a2 2 0 004 0"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				{#if data.aCorrigir > 0}
-					<span class="absolute top-1.5 right-1.5 size-2 rounded-full bg-warning"></span>
-				{/if}
-			</span>
+			<NotificacoesSino />
 			<ThemeToggle />
 			<a
 				href={resolve('/(site)/ajuda')}
@@ -345,18 +319,10 @@
 		<footer
 			class="hidden flex-wrap items-center gap-x-[18px] gap-y-2 px-[30px] py-[15px] text-[12.5px] text-base-content/60 lg:flex"
 		>
-			<span>© 2026 entendo</span>
+			<span>© 2026 Spokke</span>
 			<a href={resolve('/(site)/privacidade')} class="text-inherit no-underline">Privacidade</a>
 			<a href={resolve('/(site)/termos')} class="text-inherit no-underline">Termos</a>
 			<a href={resolve('/(site)/ajuda')} class="text-inherit no-underline">Central de ajuda</a>
-			<div class="flex-1"></div>
-			<a
-				href={resolve('/(site)/status')}
-				class="flex items-center gap-1.5 text-inherit no-underline"
-			>
-				<span class="size-1.5 rounded-full bg-success"></span>
-				Online
-			</a>
 		</footer>
 	</div>
 </div>

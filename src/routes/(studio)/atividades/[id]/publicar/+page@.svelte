@@ -46,8 +46,8 @@
 
 	const MOCK: PageData = {
 		access: { requireCode: false, code: '', showResult: true },
-		origin: 'https://entendo.app',
-		link: 'https://entendo.app/a/atv_01',
+		origin: 'https://spokke.app',
+		link: 'https://spokke.app/a/atv_01',
 		qr: '',
 		activity: {
 			id: page.params.id ?? 'atv_01',
@@ -219,7 +219,7 @@
 	};
 </script>
 
-<svelte:head><title>Publicar — entendo</title></svelte:head>
+<svelte:head><title>Publicar — Spokke</title></svelte:head>
 
 <WizardShell
 	step={4}

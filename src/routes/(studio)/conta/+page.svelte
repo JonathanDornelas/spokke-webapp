@@ -57,6 +57,9 @@
 		};
 		contagens: { turmas: number; alunos: number };
 		acesso: ResumoDoAcesso;
+		cobranca: { provedor: 'manual' | 'mercadopago'; podeDesfazerCancelamento: boolean };
+		/** A volta do checkout do Mercado Pago, com o que ele respondeu. */
+		checkout: { status: string; plano: string } | null;
 		pedido: { plano: string; ciclo: string; quando: Date } | null;
 		historico: { id: string; texto: string; quando: Date }[];
 	}
@@ -89,6 +92,8 @@
 			pode: { publicar: true, criarAtividade: true, criarMaterial: true, usarIa: false },
 			motivo: { publicar: null, criarAtividade: null, criarMaterial: null, usarIa: 'ia' }
 		},
+		cobranca: { provedor: 'manual', podeDesfazerCancelamento: true },
+		checkout: null,
 		pedido: null,
 		historico: []
 	};
@@ -444,7 +449,7 @@
 	}
 </script>
 
-<svelte:head><title>Conta — entendo</title></svelte:head>
+<svelte:head><title>Conta — Spokke</title></svelte:head>
 
 {#snippet icone(d: string, classe = 'size-4')}
 	<svg class="{classe} shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"
@@ -484,7 +489,7 @@
 		>
 			<span class="[overflow-wrap:anywhere]">{data.teacher.email}</span>
 			<span class="hidden sm:inline" aria-hidden="true">·</span>
-			<span>na entendo desde {desde}</span>
+			<span>no Spokke desde {desde}</span>
 		</p>
 		{#snippet actions()}
 			<button
@@ -495,19 +500,6 @@
 			>
 				{@render icone('M5 19h3l10-10-3-3L5 16z')}
 				Montar avatar
-			</button>
-			<button
-				type="button"
-				onclick={sortearEUsar}
-				disabled={salvandoAvatar}
-				class="btn h-[42px] motion-tap gap-2 btn-plain text-[13.5px] font-semibold"
-			>
-				{#if salvandoAvatar}
-					<Loading variant="fila" size={10} tone="current" label="Salvando" />
-				{:else}
-					{@render icone('M4 4h16v16H4zM8.5 8.5h.01M15.5 15.5h.01M15.5 8.5h.01M8.5 15.5h.01')}
-				{/if}
-				Sortear outro
 			</button>
 		{/snippet}
 	</HeaderCard>
@@ -783,6 +775,45 @@
 			</div>
 		</div>
 	{:else}
+		{#if data.checkout}
+			<!-- A volta do checkout: o que o Mercado Pago respondeu AGORA. Voltar não
+			     é pagar (paginas.md "Cobrança não afeta o aluno") — enquanto ele não
+			     autoriza, a tela diz "confirmando", não "ativo". Nunca em verde. -->
+			<div
+				class="mb-5 flex flex-wrap items-start gap-3 rounded-[14px] border px-4 py-4 lg:px-6 {data
+					.checkout.status === 'authorized'
+					? 'border-primary/40 bg-primary/6'
+					: data.checkout.status === 'pending'
+						? 'border-warning/40 bg-warning/6'
+						: 'border-line bg-base-200'}"
+				role="status"
+			>
+				{#if data.checkout.status === 'pending'}
+					<Loading variant="traco" size={24} tone="current" label="Confirmando o pagamento" />
+				{/if}
+				<div class="min-w-[220px] flex-1">
+					{#if data.checkout.status === 'authorized'}
+						<p class="mb-1 text-[13.5px] font-bold">Pagamento confirmado</p>
+						<p class="text-[12.5px] leading-relaxed text-base-content/65">
+							O Mercado Pago autorizou a assinatura do plano {data.checkout.plano}. Ele já vale.
+						</p>
+					{:else if data.checkout.status === 'pending'}
+						<p class="mb-1 text-[13.5px] font-bold">Confirmando o pagamento com o Mercado Pago</p>
+						<p class="text-[12.5px] leading-relaxed text-base-content/65">
+							Assim que ele confirmar, o plano {data.checkout.plano} libera sozinho — costuma levar poucos
+							minutos. Até lá a conta segue como está.
+						</p>
+					{:else}
+						<p class="mb-1 text-[13.5px] font-bold">O pagamento não foi concluído</p>
+						<p class="text-[12.5px] leading-relaxed text-base-content/65">
+							O Mercado Pago não autorizou a assinatura. Nada mudou na sua conta — dá para tentar de
+							novo pelos planos.
+						</p>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
 		{#if data.pedido}
 			<!-- O pedido é o "confirmando" de quando não há gateway: escolher um plano
 			     não libera nada sozinho — a equipe combina o pagamento e ativa pelo
@@ -886,6 +917,13 @@
 							{/if}
 							Sair da escola
 						</button>
+					{:else if data.acesso.cancelAtPeriodEnd && !data.cobranca.podeDesfazerCancelamento}
+						<!-- No Mercado Pago a assinatura cancelada não volta: o caminho é assinar de novo. -->
+						<a
+							href={resolve('/(site)/planos')}
+							class="btn min-h-11 w-full motion-tap btn-plain font-semibold no-underline sm:w-auto"
+							>Assinar de novo</a
+						>
 					{:else}
 						<button
 							type="button"

@@ -52,45 +52,6 @@ export async function enqueueConvites(jobs: ConviteJob[]): Promise<void> {
 }
 
 /**
- * O convite de MÓDULO: UM e-mail por aluno com o link pessoal de cada
- * atividade do módulo (docs/adr-004-modulos-e-nivel.md). Um e-mail por
- * atividade seria cinco e-mails para a mesma turma no mesmo minuto — e o plano
- * grátis do Resend dá 100 por dia.
- *
- * `inviteIds` são os convites que este e-mail entrega: o worker só manda se
- * algum deles ainda não saiu, e marca todos como enviados depois.
- */
-export const conviteModuloJobSchema = z.object({
-	inviteIds: z.array(z.string()).min(1),
-	to: z.string(),
-	studentName: z.string(),
-	teacherName: z.string(),
-	moduleName: z.string(),
-	classroomName: z.string(),
-	atividades: z
-		.array(
-			z.object({
-				title: z.string(),
-				languageLabel: z.string(),
-				itemCount: z.number().int(),
-				minutes: z.number().int(),
-				link: z.string(),
-				code: z.string().nullable(),
-				codeUrl: z.string()
-			})
-		)
-		.min(1)
-});
-export type ConviteModuloJob = z.infer<typeof conviteModuloJobSchema>;
-
-export async function enqueueConvitesDeModulo(jobs: ConviteModuloJob[]): Promise<void> {
-	if (jobs.length === 0) return;
-	await prisma.job.createMany({
-		data: jobs.map((job) => ({ type: 'convite-modulo', payload: job }))
-	});
-}
-
-/**
  * O convite para um PROFESSOR entrar numa escola (docs/adr-005-escola.md).
  * `expiresAt` vai em ISO porque o payload é JSON. O worker só manda se o
  * convite ainda existe, não foi aceito e não venceu — e marca `sentAt`.
@@ -151,7 +112,32 @@ export async function enqueueRedefinirSenha(job: RedefinirSenhaJob): Promise<voi
 	});
 }
 
-/** Jobs que falharam depois de esgotar as tentativas — nunca somem em silêncio. */
+/**
+ * O CONVITE DE CONTA do aluno da chamada (auth.md "A conta do aluno"): o link
+ * para ele criar a conta, ou entrar na que já tem, e ligá-la à ficha.
+ *
+ * O job não carrega o endereço: o worker lê a ficha na hora e só manda se ela
+ * ainda não tem conta, se o token ainda é o mesmo (o professor pode ter gerado
+ * outro link, e o velho não vale mais) e se ainda há e-mail. `pedidoEm` é a
+ * idempotência: o worker não manda de novo um pedido que já saiu
+ * (`accountInviteSentAt` depois dele), e um "Mandar de novo" é um pedido novo.
+ */
+export const conviteContaJobSchema = z.object({
+	studentId: z.string(),
+	token: z.string(),
+	link: z.string(),
+	teacherName: z.string(),
+	pedidoEm: z.string()
+});
+export type ConviteContaJob = z.infer<typeof conviteContaJobSchema>;
+
+export async function enqueueConvitesDeConta(jobs: ConviteContaJob[]): Promise<void> {
+	if (jobs.length === 0) return;
+	await prisma.job.createMany({
+		data: jobs.map((job) => ({ type: 'convite-conta', payload: conviteContaJobSchema.parse(job) }))
+	});
+}
+
 /**
  * O envio PROGRAMADO de um módulo para uma turma (docs/telas-modulos-professor.md
  * 2.4). O job não carrega o QUE sai: ele só acorda na hora (`runAfter`) e
@@ -179,6 +165,25 @@ export async function enqueueEnviosProgramados(
 	});
 }
 
+/**
+ * A notificação do Mercado Pago, já com a assinatura conferida (billing.md
+ * "Mercado Pago"). O webhook só enfileira e responde 200 na hora; quem busca o
+ * recurso na API e aplica é o worker, com as retentativas da fila — o provedor
+ * fora do ar vira backoff, não notificação perdida.
+ */
+export const mercadoPagoJobSchema = z.object({
+	topico: z.enum(['subscription_preapproval', 'subscription_authorized_payment']),
+	id: z.string().min(1).max(100)
+});
+export type MercadoPagoJob = z.infer<typeof mercadoPagoJobSchema>;
+
+export async function enqueueMercadoPago(job: MercadoPagoJob): Promise<void> {
+	await prisma.job.create({
+		data: { type: 'mercadopago', payload: mercadoPagoJobSchema.parse(job) }
+	});
+}
+
+/** Jobs que falharam depois de esgotar as tentativas — nunca somem em silêncio. */
 export function failedJobs(limit = 50) {
 	return prisma.job.findMany({
 		where: { status: 'failed' },

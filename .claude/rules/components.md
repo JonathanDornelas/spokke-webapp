@@ -4,7 +4,7 @@ paths:
   - 'src/lib/components/**'
 ---
 
-# Componentes — entendo
+# Componentes — Spokke
 
 Componentes canônicos em `src/lib/components/`. Reutilize-os em vez de reinventar: as classes e
 os estados aqui já seguem `design-system.md` (semântica de correção, alvo de toque, teclado,
@@ -304,7 +304,7 @@ Props: `{ variant?: 'info' | 'warning' | 'error' | 'success'; children: Snippet 
 ## Espera — `Loading.svelte`, `LoadingBar.svelte`, `NavigationProgress.svelte`
 
 Três variações do MESMO vocabulário do ambiente — círculo, triângulo, hexágono e anel tracejado —
-e as mesmas três cores (violeta cheio, violeta a 60%, teal a 70%). Trocar de variante não pode
+e as mesmas três cores (azul cheio, azul a 60%, teal a 70%). Trocar de variante não pode
 parecer trocar de produto.
 
 Props de `Loading`: `{ variant?: 'orbita' | 'fila' | 'traco'; size?: number; label?: string; pace?: 'normal' | 'devagar'; tone?: 'brand' | 'current' }`.
@@ -318,7 +318,7 @@ Props de `Loading`: `{ variant?: 'orbita' | 'fila' | 'traco'; size?: number; lab
 - **`size` é sempre a ALTURA em px.** Na fila isso é a altura da linha (padrão 14), não o
   diâmetro de uma bolinha — ela é uma linha baixa, não uma caixa quadrada.
 - **`tone="current"` dentro de botão colorido.** As formas herdam `currentColor`; com `brand`
-  elas sairiam violeta sobre violeta.
+  elas sairiam azul sobre azul.
 - **`pace="devagar"` (1,75×) acima de dez segundos.** A órbita rápida lê como travamento; a
   lenta lê como trabalho acontecendo.
 - As durações dentro de cada variante são primas entre si de propósito: o conjunto nunca volta à
@@ -383,7 +383,7 @@ a fila de TTS e o bucket em 50% para ganhar um degrau.
 arquivo muda mesmo, a posição é restaurada por FRAÇÃO (os dois têm durações diferentes) depois
 do `loadedmetadata`, e o `play()` só acontece aí — chamá-lo antes de o `src` novo ser aplicado
 era abortado pelo carregamento, e a promessa rejeitada sem `catch` deixava o player mudo até
-recarregar a página. Arquivo lento que sumiu (o áudio tem 10 dias) cai para o normal. As repetições contam para
+recarregar a página. Arquivo lento que não carregou (síntese na fila, job que falhou) cai para o normal. As repetições contam para
 a tentativa — quem instrumenta isso é o `onplay` que a tela passa.
 
 No celular as pílulas de velocidade descem para uma linha própria rotulada "Velocidade": em
@@ -408,7 +408,7 @@ QUESTÃO, com velocidade alternável, e segue o volume do aparelho. Este rege s�
   sozinho seria a mesma falha por outro sentido.
 - **O padrão é 0.6, não 1 nem 0.** Trinta aparelhos no talo numa sala é barulho, não retorno;
   e um recurso que nasce mudo é um recurso que ninguém descobre. A escolha vive em
-  `localStorage` (`entendo-volume`) e vale por aparelho.
+  `localStorage` (`spokke-volume`) e vale por aparelho.
 - **Os arquivos são baixados no clique de "Verificar"**, não na montagem da tela
   (`som.preparar()`). A correção acontece no servidor, então o áudio viaja em paralelo com a
   ida até lá e já está pronto quando o veredito chega. Baixar os quatro ao montar seriam
@@ -521,7 +521,7 @@ componente só diz o que foi tocado.
   marcas, e no corpo da letra sumiam num canto da tecla.
 - **Pronúncia sob a tecla** (`Tecla.leitura`), em mono 9,5px, `aria-hidden` — o leitor de tela já
   pronuncia a letra no `lang` certo. Desligável; a escolha é por aparelho
-  (`$lib/client/pronuncia.svelte.ts`, `entendo-pronuncia`) e vale também para a linha "Leitura"
+  (`$lib/client/pronuncia.svelte.ts`, `spokke-pronuncia`) e vale também para a linha "Leitura"
   sob o campo (`LeituraDoCampo.svelte`, que só aparece na grade: na barra o texto já é latino).
   Teclado sem pronúncia nas teclas (o pinyin — a tecla já É a pronúncia) não mostra a chave, e a
   linha "Leitura" some quando seria igual ao que foi digitado.
@@ -698,7 +698,15 @@ usando os keyframes `en-float-a`, `en-float-c`, `en-drift-spin`, `en-float-b` do
 própria; a borda é resolvida com `mask-image` em fade, nunca corte reto. São sutis por design
 (opacidade 25–35%) — não é bug se mal aparecerem num screenshot pequeno.
 
-Props opcionais: `{ height?: string; tone?: 'primary' | 'success'; layout?: 'band' | 'column'; edges?: 'top' | 'bottom' | 'both'; scale?: number }`.
+Props opcionais: `{ height?: string; tone?: 'primary' | 'success'; layout?: 'band' | 'column' | 'corner' | 'tela'; edges?: 'top' | 'bottom' | 'both'; scale?: number }`.
+
+`layout="tela"` espalha sete formas (nenhuma família repetida) pela página INTEIRA, nas margens e
+em alturas diferentes, com o canto de cima à esquerda livre para a marca. É o fundo das telas de
+entrar, criar conta e recuperar a senha (`(auth)/+layout.svelte`): ali o cartão fica no meio de um
+fundo vazio, e as duas faixas de `edges="both"` deixavam o meio chapado. O cartão é opaco, então o
+que passa por trás dele some; nenhuma forma fica atrás de texto. **O movimento é o `en-vagar-*`**
+(app.css), com amplitude de até 80 px e ciclos de 13 a 23 s: com o vaivém de ~30 px das faixas,
+numa página quase vazia, as formas pareciam paradas, e foi esse o retorno do dono do repositório.
 
 `scale` só existe para quem desenha uma TELA DENTRO DE OUTRA — hoje só o painel da prévia do
 editor de item, que é uma coluna estreita ao lado do formulário. As formas crescem por `clamp(mín, Nvw, máx)`, e `vw` é a VIEWPORT: dentro de uma
@@ -763,7 +771,7 @@ Props: `{ numbers?: { value: string | number; label: string; tone?: 'primary' | 
 - **Os números são uma lista curta em linha**, não uma grade que espalha quatro valores pela
   largura toda: lidos juntos eles respondem uma pergunta só ("qual é o tamanho disto?"), e a
   distância entre eles quebrava a leitura. Quem merece cor é dito por `tone` — um por cartão, no
-  máximo dois (o que recebe convite em violeta, o e-mail que voltou em vermelho).
+  máximo dois (o que recebe convite em azul, o e-mail que voltou em vermelho).
 - `badge` é a etiqueta de 46px à esquerda do título: as iniciais do aluno, a sigla da turma na
   cor dela, ou um ícone. `children` é o `h1` (22px no celular, 28 no desktop) mais a linha de
   contexto em 13,5px. `actions` são os botões de 42px — `btn-plain` para o secundário, porque o
@@ -815,7 +823,7 @@ itens). `delay` (ms) escalona a animação de entrada quando várias barras apar
 
 Props: `{ dias: DiaDaSemana[]; rotulo?: string }` — `dias` sai de `proximosDias` (`$lib/modulos/agenda.ts`).
 A mesma faixa na lista de módulos (de todos e de cada um) e no módulo aberto. Um cartão por TURMA por
-dia, porque é um e-mail por aluno por data ("Frutas 3 +1"); cada um abre a programação daquela turma
+dia, porque é uma liberação por turma por data ("Frutas 3 +1"); cada um abre a programação daquela turma
 (`?turma=`). O dia com envio é largo e o vazio estreito (`grid-cols-(--cols-lg)`, montado dos dias),
 para a semana caber numa linha sem espremer o que importa; no celular a faixa rola de lado e o dia
 vazio continua ali — "nada" é informação. Rascunho é contorno tracejado MAIS o aviso escrito, nunca só
@@ -1056,6 +1064,30 @@ de voz", "corrigida pelo professor").
 
 ---
 
+## Metadados e prévia de compartilhamento — `Metadados.svelte`
+
+Props: `{ titulo; descricao; tituloDaAba?; imagem?; imagemAlt?; tipo?: 'website' | 'article'; indexar? }`.
+Toda página PÚBLICA abre com ele no lugar de um `<svelte:head>` solto: título da aba, descrição,
+canonical, Open Graph (`og:title`, `og:description`, `og:image` com 1200×630 e `alt`, `og:url`,
+`og:type`, `og:locale` `pt_BR`, `og:site_name`) e Twitter Card `summary_large_image`.
+
+- **Tudo no HTML inicial, renderizado no servidor.** O robô que monta a prévia do WhatsApp e do
+  LinkedIn não roda JavaScript; `e2e/smoke.spec.ts` lê o HTML cru da home para provar isso.
+- **URL absoluta** a partir da origem do pedido (`page.url.origin`): em produção, o `ORIGIN` do
+  adapter-node faz dela a do domínio público. `og:url` e o canonical são a mesma URL, sem query.
+- **As imagens são duas, em `static/og/`**: `spokke.png` (a marca e a promessa, padrão) e
+  `atividade.png` (o link que o professor manda para a turma e o convite de turma). Foram
+  desenhadas em HTML com os tokens da marca e renderizadas pelo Chromium do Playwright; mudar a
+  promessa pede gerar de novo, no mesmo tamanho.
+- **`indexar={false}`** dá `noindex` e tira o canonical, mas MANTÉM a prévia: é o caso do link da
+  atividade (`a/[slug]`: o título dela e "N questões de inglês, uns M minutos" — nunca uma
+  questão, e `e2e/aluno.spec.ts` confere que o gabarito não aparece) e do convite de turma.
+- As áreas logadas (painel, administração, área do aluno, telas do Player) levam
+  `<meta name="robots" content="noindex">` no layout; entrar e recuperar a senha também, o
+  cadastro não. O `robots.txt` bloqueia só `/api/`: bloquear `/a/` impediria o robô da prévia de
+  ler o título do link.
+- **Título da aba com "·", nunca travessão** (voz do projeto de SEO): "Planos e preços · Spokke".
+
 ## Casca das páginas públicas — `SiteHeader.svelte`, `SiteFooter.svelte`, `SiteHero.svelte`, `LegalPage.svelte`
 
 A home e as páginas institucionais (`(site)/**`) compartilham cabeçalho e rodapé — é um desenho
@@ -1106,6 +1138,6 @@ nenhuma das telas tem painel de aba de verdade. Era o mesmo markup copiado em ci
 ## Cartão clicável — `cartao-interativo` (utility)
 
 O cartão que é um link inteiro (peça do início, turma, atividade enviada, módulo do aluno, cartões
-da home): sobe 3 px, a borda puxa para o violeta e ganha sombra na cor da marca; ao apertar, afunda
+da home): sobe 3 px, a borda puxa para a cor da marca e ganha sombra na cor da marca; ao apertar, afunda
 um nada. Um gesto, uma utility — cada tela tinha o seu, com 2, 3 e 5 px e `transition-all`.
 Controle pequeno (chip, opção, token) não usa: sobe 2 px com `hover:-translate-y-0.5`.

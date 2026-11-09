@@ -1,6 +1,7 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	/**
-	 * Home — entendo. Tema, tipografia e movimento vêm de src/app.css.
+	 * Home — Spokke. Tema, tipografia e movimento vêm de src/app.css.
 	 * Regras: .claude/rules/design-system.md + home.md
 	 */
 	import { untrack } from 'svelte';
@@ -231,7 +232,7 @@
 		{
 			n: '1',
 			title: 'Cole o seu material',
-			body: 'Frases, vocabulário, um texto ou um diálogo. O entendo propõe as questões e você fica só com as que servem.'
+			body: 'Frases, vocabulário, um texto ou um diálogo. O Spokke propõe as questões e você fica só com as que servem.'
 		},
 		{
 			n: '2',
@@ -284,13 +285,11 @@
 	];
 </script>
 
-<svelte:head>
-	<title>entendo · Exercícios de idiomas com o material da sua aula</title>
-	<meta
-		name="description"
-		content="Exercícios de idiomas feitos com o material da sua aula. O aluno responde pelo link, sem criar conta, e você vê o que a turma errou. Para professores e escolas."
-	/>
-</svelte:head>
+<Metadados
+	titulo="Exercícios de idioma com o material da sua aula"
+	descricao="Exercícios de idiomas feitos com o material da sua aula. O aluno responde pelo link, sem criar conta, e você vê o que a turma errou. Para professores e escolas."
+	tituloDaAba="Spokke · Exercícios de idiomas com o material da sua aula"
+/>
 
 <SiteHeader>
 	{#snippet extra()}
@@ -603,7 +602,7 @@
 
 		<!-- 3 · Tudo que vem junto (o desenho "Home Funcionalidades"). As cores do
 		     desenho eram verde e âmbar nos ícones e nos checks; aqui ficam no
-		     violeta, porque verde e âmbar são só da correção (home.md). -->
+		     azul, porque verde e âmbar são só da correção (home.md). -->
 		<section id="funcionalidades" class="pt-[72px]">
 			<div class="reveal-row rounded-[20px] border border-line bg-card p-7 lg:p-11" use:reveal>
 				<div class="mb-[34px] max-w-[58ch]">
@@ -731,7 +730,7 @@
 						class="min-w-[240px] flex-1 text-[15px] leading-relaxed text-pretty text-base-content/65"
 					>
 						O aluno nunca paga nem cria conta.
-						<strong class="text-base-content">Você testa tudo por 14 dias, sem cartão.</strong>
+						<strong class="text-base-content">Você testa tudo grátis por 14 dias.</strong>
 					</p>
 					<Button
 						href={resolve('/(auth)/cadastro')}
@@ -982,7 +981,7 @@
 					<p
 						class="mb-6 max-w-[46ch] text-[17px] leading-relaxed text-[color-mix(in_oklab,var(--color-primary-content)_84%,var(--color-primary))]"
 					>
-						Você precisa de uma conta. Seus alunos, não. Teste por 14 dias sem cartão ou fale com a
+						Você precisa de uma conta. Seus alunos, não. Teste grátis por 14 dias ou fale com a
 						gente para levar à escola inteira.
 					</p>
 					<div class="flex flex-wrap gap-3">

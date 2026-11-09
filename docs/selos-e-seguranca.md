@@ -1,6 +1,6 @@
 # Selos, certificados e sinais de confiança
 
-O que colocar no site para o professor e a escola confiarem no entendo, em que ordem, e o que
+O que colocar no site para o professor e a escola confiarem no Spokke, em que ordem, e o que
 NÃO colocar. Escrito em 2026-11-02, quando o "Todos os sistemas operando" saiu do rodapé: era um
 ponto verde fixo, que ninguém media, dizendo que estava tudo bem.
 
@@ -36,9 +36,12 @@ O Decreto nº 7.962/2013 (comércio eletrônico), art. 2º, pede em local de des
 empresarial, CNPJ, endereço físico e eletrônico e meio de contato. Vendendo assinatura pelo site,
 isso vale para nós.
 
-- [x] Nome empresarial e CNPJ no rodapé (`SiteFooter.svelte`, lendo `empresa` de
+- [x] Nome empresarial no rodapé (`SiteFooter.svelte`, lendo `empresa` de
       `src/lib/content/institucional.ts`).
-- [ ] **Trocar os dados de exemplo** de `institucional.ts` pelos reais (nome, CNPJ, endereço,
+- [ ] **CNPJ fora do site, por decisão do dono do repositório** (novembro de 2026). O decreto
+      acima o pede para quem vende pelo site: antes de abrir a assinatura com pagamento, revisitar
+      essa decisão com quem cuida do jurídico.
+- [ ] **Trocar os dados de exemplo** de `institucional.ts` pelos reais (nome, endereço,
       e-mails). Hoje são inventados.
 - [ ] Endereço e contato visíveis a um clique: a página `/contato` já tem os canais; confirme que
       o endereço real está lá.
@@ -73,12 +76,12 @@ página lá também é sinal.
 - Use a imagem estática do selo com o link, não o script de widget deles: script de terceiro no
   site traz cookie e peso que a política de cookies não descreve.
 
-### 4. Pagamento · quando o gateway existir
+### 4. Pagamento · quando o Mercado Pago for ligado
 
-Hoje não há gateway (`docs/adr-002-billing.md`). Quando houver:
+O gateway é o Mercado Pago, pronto e desligado (`docs/adr-002-billing.md`, seção 8). Ao ligar:
 
 - [ ] Mostrar "Pagamento processado por <gateway>" na tela de planos e no checkout. Quem tem a
-      certificação PCI DSS é o gateway, não nós: nunca escrever que o entendo é PCI.
+      certificação PCI DSS é o gateway, não nós: nunca escrever que o Spokke é PCI.
 - [ ] Na tela de planos, o direito de arrependimento (CDC, art. 49: sete dias para compra fora
       do estabelecimento) e como cancelar. O cancelamento no fim do período já existe.
 
@@ -89,7 +92,7 @@ avisar o professor de que algo está errado.
 
 - [ ] **Domínio de e-mail verificado** com SPF, DKIM e DMARC (no Resend, `CLAUDE.md`
       "Pendências"). Sem isso o convite cai no spam e qualquer um pode mandar e-mail "do
-      entendo". É o item técnico mais urgente.
+      Spokke". É o item técnico mais urgente.
 - [ ] HTTPS com HSTS e nota A no SSL Labs (ssllabs.com/ssltest).
 - [ ] Cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`), conferidos no
       securityheaders.com ou no Mozilla Observatory.
@@ -121,7 +124,7 @@ Escola e rede não compram por selo, compram por documento. Um PDF ou uma págin
 - [ ] **Incidente**: quem avisa a escola e em quanto tempo, e a comunicação à ANPD (LGPD,
       art. 48).
 - [ ] **Contrato de tratamento de dados** (DPA) modelo, com a escola como controladora e o
-      entendo como operador para os dados dos alunos dela.
+      Spokke como operador para os dados dos alunos dela.
 - [ ] Contato do encarregado.
 
 ## Parte 3 — certificações formais · mais tarde
@@ -136,8 +139,8 @@ kit da Parte 2 responde quase tudo que uma escola pergunta.
 - "LGPD Compliant" ou "Certificado LGPD" de consultoria.
 - Número de usuários, notas ou depoimentos que não existem (`home.md` "Voz").
 - Logo de escola cliente sem autorização por escrito.
-- Selo de status ("todos os sistemas operando") sem monitoramento de verdade por trás. Se um dia
-  houver, ele lê o monitor, e a página `/status` também.
+- Selo de status ("todos os sistemas operando") sem monitoramento de verdade por trás. A página
+  `/status` saiu em novembro de 2026 por isso; se um dia houver monitor, ela volta lendo dele.
 
 ## Como adicionar um selo no código
 

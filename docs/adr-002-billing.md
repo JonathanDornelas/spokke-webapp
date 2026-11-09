@@ -89,10 +89,40 @@ própria migration, para ninguém que já publicava ser travado na hora.
 ### 7. Segurança
 
 Todos os campos de cobrança e o `avatar` são `input: false` no Better Auth (o corpo com eles é
-recusado com 400); `stripeCustomerId` é `returned: false`. Teste: `src/lib/server/auth/campos.test.ts`.
+recusado com 400). Os ids do gateway moram em `ProviderSubscription`, fora da linha do professor e
+fora da sessão. Teste: `src/lib/server/auth/campos.test.ts`.
+
+### 8. Atualização (novembro de 2026) — o gateway é o Mercado Pago
+
+Decisão do dono: **Mercado Pago**. O esqueleto do Stripe saiu (cliente, webhook dormente,
+`stripeCustomerId` e `StripeEvent` — os dois vazios, conferido antes da migration).
+
+- **Assinatura sem plano associado** (`POST /preapproval` com `status: 'pending'`): o professor
+  digita o cartão no checkout do Mercado Pago (`init_point`); o produto nunca vê número de cartão.
+  `external_reference` é o id do professor. O valor sai de `$lib/billing/precos.ts`, o mesmo que a
+  vitrine mostra (`precos.test.ts`); o anual é `frequency: 12`.
+- **`ProviderSubscription`** guarda cada assinatura criada (id do provedor, plano, ciclo, status
+  cru). O webhook só traz o id; é esta linha que diz de quem é e o que foi escolhido.
+- **O webhook (`routes/api/mercadopago`) confere a assinatura e enfileira**; o worker (job
+  `mercadopago`) busca o recurso na API e aplica por `assinaturas.ts`, com o ator `provedor`.
+  Autorizada ativa até a próxima cobrança; fatura aprovada estende um ciclo, uma vez por fatura
+  (`ProviderEvent`); cancelada ou pausada para a renovação no fim do período. Troca de plano
+  cancela a assinatura antiga lá.
+- **A volta do checkout relê** as assinaturas pendentes recentes (`sincronizarPendentes`) e a
+  Conta mostra "confirmando" até o Mercado Pago autorizar. O redirect nunca libera nada sozinho.
+- **Cancelar no fim do período** cancela PRIMEIRO no Mercado Pago (se ele recusar, nada muda aqui).
+  Lá, cancelada não volta: "Desfazer cancelamento" vira "Assinar de novo".
+- **Por que `fetch` e não o SDK**: são quatro chamadas, e o SDK seria uma dependência a mais para o
+  worker carregar. As respostas passam por Zod.
+- **O teste com cartão continua pendente**: o `free_trial` só está documentado no plano
+  (`preapproval_plan`), não na assinatura avulsa. O caminho é um plano por (plano, ciclo) com
+  `free_trial` e o cadastro levando ao checkout — decisão de produto, porque muda a primeira tela
+  depois do cadastro.
 
 ## Pendências
 
 - Preços reais (os de `planos.ts` seguem placeholder).
-- Escolha do gateway (Stripe ou um local com Pix) e o fluxo de confirmação pelo webhook.
+- Ligar o Mercado Pago (credenciais e webhook — `docs/operacao.md`) e conferir no sandbox os
+  pontos que a documentação não fecha (billing.md "Mercado Pago").
+- O teste exigindo cartão (seção 8).
 - Ações de conta que não são cobrança (trocar senha, encerrar conta) continuam em mock.

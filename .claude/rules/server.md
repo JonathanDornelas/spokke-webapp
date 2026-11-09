@@ -65,6 +65,8 @@ Os que vieram com planos, módulos e escola, cada um com o seu guard:
 - `(studio)/conta/conta.remote.ts` — `solicitarPlano`, `cancelarPedido`, `agendarCancelamento`,
   `desfazerCancelamento`, `sairDaEscola`. O id vem da sessão.
 - `(studio)/materiais/ia.remote.ts` — `gerarPropostasIa` e `aceitarPropostasIa` (ver "IA" abaixo).
+- `(studio)/materiais/traducao.remote.ts` — `sugerirTraducao`, a tradução sugerida enquanto o
+  professor digita; não grava nada (ver "Tradução do material" abaixo).
 - `(studio)/modulos/modulos.remote.ts` — CRUD de módulo (com `duplicarModulo`: atividades e ordem, sem
   turmas nem programação), acrescentar/remover/reordenar, as turmas
   do módulo (`alocarTurmas`, `desalocarTurma`) e a programação de envio (`salvarProgramacao`,
@@ -124,8 +126,9 @@ Regras:
 ## E-mail
 
 `server/email/` — `index.ts` escolhe o provedor, `smtp-provider.ts` envia, e cada e-mail tem o seu
-montador sobre `base.ts` (moldura, cores, `escaparHtml`): `convite-aluno.ts`, `convite-modulo.ts`
-(UM e-mail por aluno com todos os links do módulo), `convite-escola.ts`, `redefinir-senha.ts` (o link
+montador sobre `base.ts` (moldura, cores, `escaparHtml`): `convite-aluno.ts`, `convite-escola.ts`,
+`convite-conta.ts` (o convite para o aluno da chamada criar a conta — auth.md),
+`redefinir-senha.ts` (o link
 de "esqueci a senha" das duas contas — ver auth.md "Senha") e `aviso-equipe.ts`
 (pedido de plano e formulário de contato, para `CONTATO_PARA`, com Reply-To de quem escreveu).
 
@@ -175,7 +178,7 @@ que é a primitiva que dá exclusão mútua entre workers concorrentes.
 Job { id, type, payload JSON, status, attempts, lockedUntil, runAfter, lastError }
 ```
 
-Tipos: `tts`, `convite`, `convite-modulo`, `convite-escola`, `aviso-equipe`, `envio-programado`, `redefinir-senha`. Cada um tem o schema e o
+Tipos: `tts`, `convite`, `convite-escola`, `convite-conta`, `aviso-equipe`, `envio-programado`, `redefinir-senha`, `mercadopago` (a notificação do gateway, conferida pelo webhook — billing.md). (`convite-modulo` saiu com o e-mail do módulo.) O `convite-conta` não carrega o endereço: o worker lê a ficha na hora e não manda para quem já tem conta, para link que foi trocado nem pedido que já saiu (`conviteAindaVale`). Cada um tem o schema e o
 `enqueue…` em `server/queue/index.ts` e o caso em `worker/index.ts`. **Suba o worker antes (ou junto)
 do web** quando criar um tipo: tipo desconhecido lança erro e vai para `failed`. Os jobs falhados
 aparecem no painel interno (`/admin`), com "Tentar de novo".
@@ -212,12 +215,11 @@ termina. As regras que seguram isso:
 - **O que não pode sair vira `nao_saiu` com o motivo, e não pula para a seguinte.** Áudio faltando
   agenda uma nova tentativa em 5 minutos (até 6); rascunho é destravado por `publicarAtividade`
   (`liberarEnviosQueEsperavamPublicacao`).
-- **O canal é da programação** (`Programacao.canal`, `email` | `mapa`, padrão `email` — o que já
-  estava gravado continua mandando e-mail). Em `mapa`, `despacharEnvio` cria os convites para todos
-  os alunos, grava `Delivery.porEmail = false` e não enfileira `convite-modulo`; `cargaPorDia` não
-  conta essa alocação no teto de 100 e-mails.
-- **O worker monta os links do e-mail com `ORIGIN`** (ou `BETTER_AUTH_URL`), porque não há request.
-  Na tela ("tudo agora", "enviar agora") vale a origem do request, como no envio de atividade.
+- **Módulo não manda e-mail: ele LIBERA.** `despacharEnvio` cria os convites para TODOS os alunos
+  (é o convite que abre a fase no mapa de quem tem conta) e grava `Delivery.porEmail = false`.
+  Houve um canal `email` | `mapa` na programação, o job `convite-modulo` e um teto de 100 e-mails
+  por dia na prévia; os três saíram. Uma programação gravada com `canal` é lida igual (o Zod
+  descarta a chave).
 
 ## TTS
 
@@ -247,11 +249,13 @@ vez que ele a encontra e o arquivo continua sendo um só.
 não fala. Sem esse corte o gerador produzia item de escuta cujo TTS o provedor recusa, e a
 publicação ficava travada em "gerando áudio" para sempre.
 
-**O áudio vive 10 dias.** Quem apaga é a regra de ciclo de vida do próprio bucket, ancorada no
-prefixo `tts/` (o container `init` de `docker/minio.yml` a escreve); `TTS_DIAS_DE_VIDA`
-(`server/tts/index.ts`) é a MESMA data do lado de cá, gravada em `MediaAsset.expiresAt`. Os dois
-prazos têm de bater: divergindo, o banco aponta para objeto que já sumiu — ou o bucket guarda
-lixo que ninguém pede.
+**O áudio de atividade não vence.** Ele vivia 10 dias (regra de ciclo de vida no prefixo `tts/`
+e a mesma data em `MediaAsset.expiresAt`), e a entrada do Player resintetizava o vencido: um link
+de três semanas abria em "gerando áudio" para a turma inteira. Com o limite de atividades por
+plano o estoque é finito, e um MP3 de frase (~35 kB) custa menos que essa espera. Hoje ele fica
+enquanto alguma atividade do professor o usa, e **apagar a atividade apaga o que só ela usava**
+(`limparAudioSemUso`, `server/tts/limpeza.ts`; a conta é por conteúdo, então o arquivo
+compartilhado com outra atividade fica). O bucket só tem a regra de `fala/` (7 dias).
 
 **Quem enfileira é a GERAÇÃO dos itens, não a publicação.** A etapa 4 só libera o botão quando
 todos os arquivos existem, e enfileirar apenas dentro de `publicarAtividade` era um impasse: o
@@ -271,8 +275,8 @@ pronto e a tela não sabia.
 
 Atividade com áudio pendente não fica acessível pelo link.
 
-**Quem repõe o áudio expirado é a ENTRADA do Player**, não a publicação: publicar é um evento
-único, e a atividade de duas semanas atrás ficaria travada em "gerando áudio" para sempre. O
+**Quem repõe o áudio que falta é a ENTRADA do Player**, não a publicação: publicar é um evento
+único, e um job que falhou deixaria o link travado em "gerando áudio" para sempre. O
 loader de `a/[slug]` chama `enfileirarAudioFaltante` (`server/tts/enfileirar.ts`) antes de
 devolver o 503 de `audioPending`, e é o mesmo helper que `publicarAtividade` usa. Ele é
 idempotente nas duas pontas — pula o que tem `MediaAsset` válido e pula o que já está na fila —,
@@ -290,9 +294,8 @@ reclamou. Os dois enfileiram o que falta de passagem, para o caminho de conserto
 o professor achar um botão.
 
 **"Gerar áudio de novo" (`regerarAudio`) APAGA as linhas antes de enfileirar.** Enfileirar
-sozinho não bastaria: o worker pula o que já existe e não expirou, e a regra de ciclo de vida do
-bucket conta a partir da última gravação do objeto — só reescrevendo o arquivo o relógio dos 10
-dias recomeça. A tela já desabilita a ação, mas toda remote function é endpoint
+sozinho não bastaria: o worker pula o que já existe. A síntese nova grava na mesma chave do
+bucket. A tela já desabilita a ação, mas toda remote function é endpoint
 público (regra nº 3) e versão publicada é imutável (regra nº 7): um POST direto congelaria para
 sempre uma atividade cujas questões de escuta não tocam, e nem republicar consertaria para quem
 abriu o link no meio.
@@ -387,6 +390,53 @@ worker da publicação tenta de novo com backoff.
   professor delimitado, como dado. Nunca dado de aluno, nunca a nota privada do professor.
 - Créditos: débito ANTES da chamada (transação curta, `refKey` = `requestId` do cliente), chamada
   FORA da transação com teto de tempo, estorno do que não serviu.
+
+## Tradução do material
+
+`docs/adr-006-traducao.md`. O professor cadastra no idioma que ensina e a frase do aluno sai do
+tradutor — **MADLAD-400 3B** (Apache 2.0, int8 no CTranslate2), o terceiro motor do
+`audiotext-service` (`POST /v1/translate`, em lote). `server/traducao/` é a interface
+(`TRANSLATE_PROVIDER`: vazio desliga, `audiotext` liga); `server/audiotext/client.ts` manda pedidos
+de até 32 textos, em sequência, e recusa resposta com contagem diferente da pedida.
+
+- **Só preenche o que veio em BRANCO.** A tradução que o professor escreveu nunca é trocada; a da
+  IA também não (ela já vem no material). `completarTraducoes` é a regra, e é genérica no formato
+  (`target`→`source` no par de frases, `term`→`translation` no vocabulário).
+- **Quem garante é o servidor, ao gravar**: `preencherTraducao` (um material) e `traduzirLote` (a
+  lista colada) rodam antes de `montarMaterial`, nos dois lugares que cadastram material — wizard e
+  biblioteca. A sugestão ao vivo do formulário (`materiais/traducao.remote.ts`, `sugerirTraducao`)
+  é conforto: não grava nada, tem guard e teto por professor (120 em 10 min — cada pedido é CPU do
+  serviço que também transcreve a fala dos alunos), e pode falhar à vontade.
+- **Lote é tudo ou nada.** Tradutor fora do ar no meio da lista colada = nada gravado e a tela pede
+  a tradução depois do separador. Um material avulso falha com `AVISO_SEM_TRADUTOR`, nunca 500.
+- **O par de idiomas**: no wizard, `activity.targetLang` → `activity.sourceLang`; na biblioteca, o
+  idioma do material → o `linguaDoAluno` que a página manda num campo escondido (a mesma língua que
+  ela usa para a IA). Material "sem idioma" não tem de onde traduzir.
+- **Os idiomas do tradutor são uma lista FECHADA** em `audiotext-service/app/traducao.py`, pelo
+  código base; `traducao.test.ts` confere que todo `LanguageProfile` está nela.
+- **O tradutor é o motor opcional do serviço**: ele sobe depois do Whisper e do Kokoro, e falhar ao
+  carregá-lo não tira voz e fala do ar (`/health` segue `ok`, com `translate_ready: false`).
+- **Ele também alimenta o "ligue os pares" do fecho**: `gerarItens` chama `paresDasFrases`, que
+  escolhe palavras das frases (kernel puro), traduz num pedido e só guarda o par que faz a IDA E
+  VOLTA (kernel.md "closing-match"). Sem tradutor ou com ele fora, volta vazio e a geração segue.
+
+## Notificações
+
+`docs/notificacoes.md` é o mapa (o que avisa, o que não avisa e por quê). As regras de código:
+
+- **Quem grava é `$lib/server/notificacoes`, e nunca uma remote function.** `notificar(teacherId,
+evento)` recebe o professor de quem chama porque é chamado onde não há sessão dele — o Player
+  (resposta de rubrica), o worker (áudio que a fila desistiu de gerar), a programação de módulos, a
+  cobrança e a escola. A leitura é `repos/notificacoes.ts`, com o professor da SESSÃO
+  (`notificacoesDoSino`, `marcarNotificacaoLida`, `marcarTodasLidas` em `studio.remote.ts`).
+- **Avisar nunca derruba quem avisa**: tudo ali engole o erro com `console.warn`. No Player o
+  aviso nem é esperado (`void`): o aluno não espera o sino de outra pessoa.
+- **Dentro de transação, o aviso sai DEPOIS do commit** — `ativarPlano` chamado por
+  `atenderPedido` não avisa (quem avisa é `atenderPedido`, depois do `$transaction`). Um aviso de
+  plano ativo para uma ativação desfeita mentiria, e um erro do aviso dentro da transação a abortaria.
+- **O que o aviso pedia aconteceu, ele se resolve**: a correção pela contagem do banco
+  (`atualizarCorrecao`), a liberação que saiu e o "Gerar áudio de novo" por
+  `resolverNotificacoes`.
 
 ## Mídia
 

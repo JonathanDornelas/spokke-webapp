@@ -17,7 +17,7 @@
 	import MaterialList from '$lib/components/MaterialList.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import FiltroIdioma from '$lib/components/FiltroIdioma.svelte';
-	import { casaComFiltro } from '$lib/idiomas';
+	import { casaComFiltro, idiomaDe } from '$lib/idiomas';
 	import { TIPOS, type MaterialKind, type MaterialRow } from '$lib/components/material-form';
 	import { withMock } from '$lib/dev/with-mock';
 	import {
@@ -27,6 +27,7 @@
 		criarMateriaisEmLote
 	} from './materiais.remote';
 	import { aceitarPropostasIa, gerarPropostasIa } from './ia.remote';
+	import { sugerirTraducao } from './traducao.remote';
 	import type { ResultadoMaterial } from '$lib/components/MaterialForm.svelte';
 	import type { EstadoDaIa, RespostaDaGeracao } from '$lib/billing/ia';
 	import type { ContentUnitKind } from '$lib/kernel/content/types';
@@ -38,6 +39,7 @@
 		idiomaPadrao: string | null;
 		ia: EstadoDaIa;
 		iaIdiomas: { alvo: string; origem: string };
+		traducaoAutomatica: boolean;
 	}
 
 	const MOCK: PageData = {
@@ -68,7 +70,8 @@
 			custoPorProposta: 1,
 			idiomas: null
 		},
-		iaIdiomas: { alvo: 'en-US', origem: 'pt-BR' }
+		iaIdiomas: { alvo: 'en-US', origem: 'pt-BR' },
+		traducaoAutomatica: false
 	};
 
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
@@ -185,6 +188,17 @@
 		return r.ok ? { ok: true, propostas: r.propostas, saldo: r.saldo } : r;
 	}
 
+	// A sugestão de tradução enquanto o professor digita — do idioma do material
+	// para a língua do aluno. Falhar é normal: o servidor traduz ao salvar.
+	async function sugerir(texto: string, de: string, para: string): Promise<string | null> {
+		try {
+			const r = await sugerirTraducao({ texto, de, para });
+			return r.ok ? r.traducao : null;
+		} catch {
+			return null;
+		}
+	}
+
 	async function aceitarIa(kind: ContentUnitKind, dados: Record<string, unknown>[]) {
 		const r = await aceitarPropostasIa({
 			kind,
@@ -213,7 +227,7 @@
 	const chipOff = 'border-[1.5px] border-line bg-base-100 hover:border-primary';
 </script>
 
-<svelte:head><title>Materiais — entendo</title></svelte:head>
+<svelte:head><title>Materiais — Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<div class="mb-4 flex flex-wrap items-end gap-x-4 gap-y-3">
@@ -404,6 +418,10 @@
 			ia={data.ia}
 			ongerarIa={gerarIa}
 			onaceitarIa={aceitarIa}
+			traducaoAutomatica={data.traducaoAutomatica}
+			linguaDoAluno={data.iaIdiomas.origem}
+			sourceLabel={idiomaDe(data.iaIdiomas.origem)?.rotulo}
+			onsugerirTraducao={sugerir}
 			bind:idioma
 			idiomaPadrao={data.idiomaPadrao}
 		/>

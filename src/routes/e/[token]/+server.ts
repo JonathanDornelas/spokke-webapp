@@ -35,7 +35,7 @@ export const GET: RequestHandler = async ({ params, cookies, locals }) => {
 
 	// Este cookie diz "sou o aluno tal nesta atividade". Ele NÃO é uma sessão
 	// do produto: não dá acesso a nada do professor nem a outra publicação.
-	cookies.set(`entendo_aluno_${publication.slug}`, convite.student.id, {
+	cookies.set(`spokke_aluno_${publication.slug}`, convite.student.id, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
@@ -45,7 +45,7 @@ export const GET: RequestHandler = async ({ params, cookies, locals }) => {
 	// Se o aluno já tinha respondido pelo link aberto neste aparelho, aquelas
 	// respostas passam a ser dele. Elas já contavam para o professor antes —
 	// o que muda é o nome na lista.
-	const anonId = cookies.get('entendo_anon');
+	const anonId = cookies.get('spokke_anon');
 	if (anonId) {
 		await convitePorToken.claimAttempts(
 			convite.student.id,

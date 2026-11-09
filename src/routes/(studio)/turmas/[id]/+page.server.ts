@@ -77,10 +77,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			estado,
 			resumo:
 				estado === 'sem'
-					? 'alocada · nada enviado ainda'
+					? 'alocada · nada liberado ainda'
 					: estado === 'falha' && falha
-						? `${quando} · ${enviadas} de ${total} enviadas · ${titulo(falha.activityId)} esperando desde ${rotuloDoInstante(falha.dueAt)}`
-						: `${quando} · ${enviadas} de ${total} enviadas${prox && !a.pausedAt ? ` · próxima ${rotuloDoInstante(prox.dueAt)}` : ''}`
+						? `${quando} · ${enviadas} de ${total} liberadas · ${titulo(falha.activityId)} esperando desde ${rotuloDoInstante(falha.dueAt)}`
+						: `${quando} · ${enviadas} de ${total} liberadas${prox && !a.pausedAt ? ` · próxima ${rotuloDoInstante(prox.dueAt)}` : ''}`
 		};
 	});
 
@@ -119,6 +119,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			// conta e aluno sem conta participam igual, e por isso isto não entra
 			// na contagem de estados nem muda o que o professor pode fazer.
 			temConta: !!aluno.account,
+			// O convite para a CONTA saiu por e-mail e ele ainda não entrou — a
+			// chamada mostra "convidado" para o professor não mandar de novo à toa.
+			convidadoParaConta: !aluno.account && !!aluno.accountInviteSentAt,
 			// O avatar que o aluno montou na conta dele — o ícone dele na chamada.
 			// Sem conta, as iniciais (o próprio `Avatar` cai nelas).
 			avatar: aluno.account?.avatar ?? null

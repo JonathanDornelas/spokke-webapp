@@ -15,7 +15,7 @@ Teacher ─┬─ Activity ─┬─ ActivityVersion (imutável) ─── Item
          │            └─ Publication (slug, settings)
          ├─ ContentUnit
          ├─ ContentUnit
-         └─ MediaAsset (hash, url, kind, duration, expiresAt)   [10 dias]
+         └─ MediaAsset (hash, url, kind, duration)   [não vence; sai com a última atividade]
 
 Attempt (audioConsent) ─ AttemptItem (answer, score, ms, audioKey, audioExpiresAt)   [7 dias]
 
@@ -29,7 +29,9 @@ Teacher ─┬─ Classroom ─── Student ─┬─ Invite ─── Deliver
          ├─ AuditEvent (actor, type, data)   PlanRequest (pedido de plano)
          ├─ CreditEntry (delta, cicloInicio, refKey único)            [livro-razão]
          └─ SchoolMembership ─── School ─── SchoolInvite (token)      [plano Scholar]
-Job (fila)   StripeEvent (idempotência)
+Teacher ─── Notification (kind, key, data, count, readAt)          [o sino; docs/notificacoes.md]
+Teacher ─── ProviderSubscription (id do provedor, plano, ciclo, status)   [Mercado Pago]
+Job (fila)   ProviderEvent (idempotência do gateway)
 ```
 
 **Perfil no `Teacher`**: `idiomas` (os que ele ensina, em ORDEM — o primeiro é o padrão da atividade
@@ -43,9 +45,11 @@ leitura. Só `$lib/server/billing/assinaturas.ts` escreve esses campos.
 
 `Activity.archivedAt` tira a atividade do estoque do plano e fecha o link para quem ainda não
 começou; `Activity.level` é o rótulo CEFR (`docs/adr-004-modulos-e-nivel.md`). `Delivery.envioId` e
-`moduleId` agrupam o envio de um módulo inteiro. `Delivery.porEmail` (padrão verdadeiro) é falso no
-envio de módulo "só disponibilizar" (`Programacao.canal === 'mapa'`): aí o convite nasce para TODOS
-os alunos — é ele que abre a fase no mapa — e nenhum e-mail entra na fila.
+`moduleId` agrupam a liberação de um módulo inteiro. `Delivery.porEmail` (padrão verdadeiro) é
+falso em TODA liberação de módulo (módulo não manda e-mail): o convite nasce para TODOS os alunos —
+é ele que abre a fase no mapa — e nenhum e-mail entra na fila. Os `Delivery` antigos com
+`porEmail` verdadeiro são de quando o módulo mandava e-mail. "Envio", nos nomes internos
+(`ModuleSend`, `enviada`, `processarEnviosDevidos`), é a liberação.
 
 **Apagar uma atividade de vez** obedece aos três FKs `RESTRICT` (`Publication→ActivityVersion`,
 `Attempt→Publication`, `AttemptItem→Item`): tentativas, depois publicações, depois a atividade —
@@ -55,6 +59,11 @@ apagar um professor leve respostas de aluno por acidente.
 `ContentUnit.targetLang` é a TAG DE IDIOMA do material (nula = sem idioma; `$lib/idiomas.ts`). Dentro
 de uma atividade é sempre a dela — `createForActivity` e `link` a gravam, e só dão tag a quem não tem.
 Na biblioteca, a escolhida; e ela só muda enquanto o material não está em atividade nenhuma.
+
+`Notification` é o aviso do sino (docs/notificacoes.md). `key` AGRUPA enquanto não lida — o evento
+com a mesma chave atualiza `count` e `data` em vez de criar outra linha —, e o texto NÃO é gravado:
+sai de `kind` + `data` na leitura (`$lib/notificacoes`), com Zod. Escreve só
+`$lib/server/notificacoes`; lê só `repos/notificacoes.ts`, escopado pelo professor.
 
 `CreditEntry` não tem contador ao lado: saldo = franquia do plano + soma dos lançamentos do ciclo.
 
@@ -70,7 +79,8 @@ atividade.
 
 `StudentAccount` é a conta OPCIONAL do aluno, com tabelas próprias de sessão e credencial (a
 segunda instância de Better Auth — auth.md). `Student.accountId` liga a ficha de chamada a ela, e
-só pelo token do convite; `Attempt.accountId` guarda quem respondeu LOGADO. Os dois são
+só por um token: o do convite de atividade ou o do convite de CONTA (`accountInviteToken`, único,
+com `accountInviteSentAt` marcando quando o e-mail saiu); `Attempt.accountId` guarda quem respondeu LOGADO. Os dois são
 independentes de `studentId`: dá para responder logado sem estar na chamada de ninguém, e para
 estar na chamada sem ter conta. Os três campos são `SetNull` — apagar conta ou aluno não apaga a
 resposta de terceiro.
@@ -152,26 +162,31 @@ O dono passou por quatro lugares, e a história é o desenho:
 
 O que a quarta resolve que as outras não: a atividade não depende de nada que o professor possa
 jogar fora, a mesma frase em dois materiais é UM arquivo, e regerar funciona sempre porque o
-texto está congelado no item (regra nº 7), não no material. A rede que tornou tudo isso seguro
-foi a entrada do Player REPOR o áudio vencido (server.md "TTS").
+texto está congelado no item (regra nº 7), não no material. A entrada do Player REPÕE o que
+faltar (server.md "TTS").
 
-Linha vencida é varrida por `enfileirarAudioFaltante`, que é onde se sabe que existe lixo: ela
-já contava como ausente em toda leitura, então não servia para mais nada.
+**O áudio de atividade não vence.** Ele vivia 10 dias (regra de ciclo de vida no bucket mais uma
+coluna `expiresAt` espelhando a data), e a entrada do Player resintetizava o vencido — um link de
+três semanas abria em "gerando áudio". Com o limite de atividades por plano o estoque é finito, e
+a coluna saiu (migration `audio_de_atividade_nao_vence`, que apagou antes as linhas vencidas:
+sem a coluna elas contariam como prontas apontando para objeto que já não existia). Linha que
+existe é arquivo que existe.
 
-`expiresAt` é a MESMA data que a regra de ciclo de vida do bucket vai usar (server.md "TTS"):
-o MinIO apaga o objeto sozinho, e esta coluna é o que permite a consulta saber disso sem ir ao
-storage. Toda leitura de mídia filtra por `expiresAt: { gt: new Date() }` — uma linha vencida
-conta como AUSENTE, e é isso que faz a entrada do Player pedir a síntese de novo em vez de
-servir uma URL morta.
+**Quem apaga é `limparAudioSemUso`** (`server/tts/limpeza.ts`), chamado por `apagarAtividade`:
+"hashes de todos os itens que ainda existem" contra "áudios do professor", e o que sobra sai —
+objeto primeiro, linha depois, para uma falha do bucket ser tentada de novo na próxima vez. A
+conta é por conteúdo de propósito: a mesma frase em duas atividades é um arquivo só, e apagar
+uma não leva o áudio da outra. Arquivar não apaga nada (desarquivar devolve tudo).
 
-Regenerar reescreve `url` e `expiresAt` na mesma linha (`upsert`), nunca cria uma segunda.
+Regenerar reescreve `url` na mesma linha (`upsert`), nunca cria uma segunda.
 
 ## A gravação do aluno — 7 dias, e só com autorização
 
 `AttemptItem.audioKey` guarda a CHAVE no bucket, não uma URL: o objeto é privado e quem serve é
 uma rota do Studio que confere o dono (auth.md "A gravação de voz"). `audioExpiresAt` espelha a
-regra de ciclo de vida de `fala/`, que são **7 dias** — menos que os 10 do áudio de atividade,
-porque aquele se regenera a partir do texto e este é a voz de uma pessoa, gravada uma vez.
+regra de ciclo de vida de `fala/`, que são **7 dias** — o único prazo que sobrou no bucket: o
+áudio de atividade é conteúdo do professor e não vence, e este é a voz de uma pessoa, gravada uma
+vez.
 
 As duas colunas só são preenchidas quando `Attempt.audioConsent` é verdadeiro. Esse campo fica
 na TENTATIVA e não no aluno porque é isso que a pergunta significa: ele autorizou esta atividade,
