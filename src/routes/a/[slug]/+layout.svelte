@@ -2,7 +2,15 @@
 	// Casca do Player. Ocupa a viewport inteira, sem barra lateral e sem chrome do
 	// Studio. No desktop (>=1120px) o conteúdo vira duas colunas dentro de um
 	// cartão centrado; abaixo disso é o layout do celular esticado.
+	import { onMount } from 'svelte';
+	import { instalarDiario } from '$lib/client/diario';
+
 	let { children }: { children: import('svelte').Snippet } = $props();
+
+	// O diário da tela (`$lib/client/diario.ts`) liga aqui, na casca: assim um
+	// erro na entrada ou entre duas questões também fica anotado para o relato
+	// de problema. Só na memória da aba; nada sai sem o aluno mandar.
+	onMount(instalarDiario);
 </script>
 
 <!-- A atividade é do professor e vai pelo link dele: fora da busca. A PRÉVIA do link continua (Metadados na entrada). -->

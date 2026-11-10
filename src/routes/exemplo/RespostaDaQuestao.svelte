@@ -12,7 +12,20 @@
 	// Onde se responde: a interação real do Player, o veredito que veio do
 	// servidor e a espera da correção por cima. Os mesmos componentes da `/q/[n]`
 	// — o exemplo não tem cópia própria de nenhum deles.
-	let { resposta, desktop = false }: { resposta: RespostaDoExemplo; desktop?: boolean } = $props();
+	let {
+		resposta,
+		desktop = false,
+		compacto = false
+	}: {
+		resposta: RespostaDoExemplo;
+		desktop?: boolean;
+		/**
+		 * O celular da home: a questão inteira tem de caber na tela do aparelho,
+		 * sem rolar. Sai a dica de teclado do "montar" e, depois de corrigir, as
+		 * peças que sobraram — a frase montada e o veredito ficam.
+		 */
+		compacto?: boolean;
+	} = $props();
 	const q = $derived(resposta.questao);
 
 	/**
@@ -32,7 +45,12 @@
 	{:else if q.interaction === 'type' || q.interaction === 'cloze'}
 		<ClozeInteraction item={q} bind:value={resposta.texto} feedback={resposta.feedback} />
 	{:else if q.interaction === 'assemble'}
-		<AssembleInteraction item={q} bind:chosen={resposta.montagem} />
+		<AssembleInteraction
+			item={q}
+			bind:chosen={resposta.montagem}
+			dicaDeTeclado={!compacto}
+			corrigida={compacto && resposta.feedback !== null}
+		/>
 	{:else if q.interaction === 'match'}
 		<MatchInteraction
 			item={q}
@@ -51,10 +69,13 @@
 			maxSegundos={resposta.gravacao.maxSegundos}
 			ouvido={resposta.ouvido}
 			ouvindo={resposta.ouvindo}
+			corrigida={compacto && resposta.feedback !== null}
 		/>
-		<p class="text-center text-[12px] leading-snug text-base-content/60">
-			A gravação é transcrita e descartada. Nada fica guardado.
-		</p>
+		{#if !(compacto && resposta.feedback)}
+			<p class="text-center text-[12px] leading-snug text-base-content/60">
+				A gravação é transcrita e descartada. Nada fica guardado.
+			</p>
+		{/if}
 	{/if}
 
 	{#if resposta.feedback}

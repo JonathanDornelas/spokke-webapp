@@ -387,9 +387,12 @@ recarregar a página. Arquivo lento que não carregou (síntese na fila, job que
 a tentativa — quem instrumenta isso é o `onplay` que a tela passa.
 
 No celular as pílulas de velocidade descem para uma linha própria rotulada "Velocidade": em
-largura de telefone elas espremem a onda contra o botão de tocar.
+largura de telefone elas espremem a onda contra o botão de tocar. **`emLinha` desliga isso**: tocar,
+onda e velocidade numa linha só em QUALQUER tela. É o celular da home — ele tem sempre a largura de
+um telefone, mas quem decide o breakpoint é a tela de quem o vê, e no celular de verdade a segunda
+linha empurrava a questão para fora da tela do aparelho.
 
-Props: `{ src: string; srcSlow?: string; onplay?: () => void; playing?: boolean; duration?: string; plays?: number }`
+Props: `{ src: string; srcSlow?: string; onplay?: () => void; playing?: boolean; duration?: string; plays?: number; emLinha?: boolean }`
 (`playing` é `$bindable`, padrão `false`). O bind existe só para catálogo/demo poder abrir já com
 a onda animada sem chamar `audio.play()` de verdade — nunca inicialize `playing` como `true`
 numa tela real do Player, isso violaria a regra de autoplay. `duration`/`plays` são opcionais e
@@ -1021,6 +1024,11 @@ Cada interação abre com um RÓTULO do que se espera ("Escolha uma resposta", "
 coluna da direita é um campo solto sem pergunta. Em `match` os cabeçalhos das colunas são os
 nomes dos idiomas, que chegam pelo runtime (`sourceLabel`/`targetLabel`) — não são gabarito.
 
+O celular da home passa três props que só ele usa (paginas.md "Exemplo"): `dicaDeTeclado={false}` no
+`AssembleInteraction`, e `corrigida` no `AssembleInteraction` (as peças que sobraram saem) e no
+`SpeakInteraction` (o microfone e o "Entendemos" saem — o veredito já diz o que se ouviu). Ali a
+questão inteira tem de caber na tela do aparelho; no Player elas ficam no padrão.
+
 `AssembleInteraction` ignora um id já escolhido: duplo clique rápido chega duas vezes antes do
 re-render tirar o token do banco, e o mesmo id duas vezes rebenta o `{#each}` com chave.
 
@@ -1141,3 +1149,27 @@ O cartão que é um link inteiro (peça do início, turma, atividade enviada, m�
 da home): sobe 3 px, a borda puxa para a cor da marca e ganha sombra na cor da marca; ao apertar, afunda
 um nada. Um gesto, uma utility — cada tela tinha o seu, com 2, 3 e 5 px e `transition-all`.
 Controle pequeno (chip, opção, token) não usa: sobe 2 px com `hover:-translate-y-0.5`.
+
+---
+
+## Google — `(auth)/BotaoGoogle.svelte` + `LigarGoogle.svelte`
+
+As duas portas do Google, e as duas só aparecem com ele ligado no servidor (auth.md "Login com
+Google"). A marca do Google é um arquivo (`static/marcas/google.svg`), não um SVG com cor de tema:
+as regras de marca do botão pedem o G original, com as cores dele.
+
+- `BotaoGoogle` — props `{ como: 'professor' | 'aluno'; destino; destinoDeQuemChega?; voltaComErro }`.
+  "Continuar com o Google" em entrar e em criar conta: escolhe o cliente pelo `como` e diz para onde
+  voltar (quem já tinha conta, quem acabou de criar, e a própria tela quando dá erro). Espera com a
+  `fila` até a página trocar.
+- `LigarGoogle` — props `{ como; email; ligado; temSenha; aqui }`. O corpo do cartão "Entrar com o
+  Google" da Conta e da área do aluno: liga (`linkSocial`, com o e-mail igual) e desliga só quando
+  sobra a senha. Lê a volta do Google (`?google=ligado` / `?google=erro&error=…`) e diz o que
+  aconteceu. A página põe a moldura do cartão.
+
+## Relatar problema — `a/[slug]/q/[n]/RelatarProblema.svelte`
+
+O `<dialog>` do relato de problema (paginas.md "Player"). Props `{ aberto ($bindable); questao;
+total; temAudio; fala; montar }` — `montar` é a função da tela que junta, NA HORA de enviar, o que
+vai além do motivo. É carregado com `import()` no primeiro clique, e o tipo da entrada sai da remote
+function (`Parameters<typeof relatarProblema>[0]`), sem importar nada de `$lib/server`.

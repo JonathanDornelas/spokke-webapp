@@ -74,6 +74,8 @@ model Teacher {
   modules               Module[]
   notifications         Notification[]
   providerSubscriptions ProviderSubscription[]
+  /// Os relatos de problema que alunos mandaram das atividades dele.
+  problemReports        ProblemReport[]
   /// A escola de que o professor faz parte, quando faz (uma por vez).
   schoolMembership      SchoolMembership?
 }
@@ -427,11 +429,59 @@ model Attempt {
   publicationId String
   publication   Publication @relation(fields: [publicationId], references: [id])
 
-  items AttemptItem[]
+  items          AttemptItem[]
+  /// Os relatos de problema mandados desta tentativa — saem junto com ela.
+  problemReports ProblemReport[]
 
   @@index([publicationId])
   @@index([studentId])
   @@index([accountId])
+}
+
+/// O RELATO DE PROBLEMA que o aluno manda de uma questão do Player ("Relatar
+/// problema"). Vai para a EQUIPE do Spokke — a intranet lê, e um aviso sai por
+/// e-mail para `CONTATO_PARA` —, nunca para o professor nem para outro aluno.
+///
+/// `contexto` é tudo o que ajuda a achar o erro, validado ao gravar
+/// (`server/relatos`): a questão como o aluno a viu (o runtime), o item de
+/// autoria (com o gabarito — fica no servidor e na intranet), a resposta dele
+/// NAQUELA questão, a correção refeita no servidor, o estado da tela e os dados
+/// técnicos do aparelho. Sem o nome do aluno e sem IP.
+///
+/// É dado do aluno, e por isso tem as garantias de auth.md "Dados do aluno e
+/// LGPD": ele manda porque quer, a tela diz o que vai junto, o relato vale 180
+/// dias (`server/relatos/retencao.ts`, pelo worker) e sai junto com a tentativa.
+model ProblemReport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// correcao | texto | audio | microfone | travou | outro
+  motivo    String
+  descricao String? @db.Text
+
+  /// aberto | resolvido | descartado. Quem muda é o worker, a pedido da intranet.
+  status     String    @default("aberto")
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  attemptId String
+  attempt   Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  activityId    String
+  publicationId String
+  itemId        String
+  /// A posição da questão na versão respondida (1 é a primeira).
+  itemIndex     Int
+  interaction   String
+
+  contexto Json
+
+  @@index([status, createdAt])
+  @@index([teacherId])
+  @@index([attemptId])
 }
 
 model AttemptItem {

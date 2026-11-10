@@ -32,6 +32,7 @@ Teacher ─┬─ Classroom ─── Student ─┬─ Invite ─── Deliver
 Teacher ─── Notification (kind, key, data, count, readAt)          [o sino; docs/notificacoes.md]
 Teacher ─── ProviderSubscription (id do provedor, plano, ciclo, status)   [Mercado Pago]
 Job (fila)   ProviderEvent (idempotência do gateway)
+Attempt ─── ProblemReport (motivo, status, contexto)      [relato do aluno; 180 dias]
 ```
 
 **Perfil no `Teacher`**: `idiomas` (os que ele ensina, em ORDEM — o primeiro é o padrão da atividade
@@ -64,6 +65,14 @@ Na biblioteca, a escolhida; e ela só muda enquanto o material não está em ati
 com a mesma chave atualiza `count` e `data` em vez de criar outra linha —, e o texto NÃO é gravado:
 sai de `kind` + `data` na leitura (`$lib/notificacoes`), com Zod. Escreve só
 `$lib/server/notificacoes`; lê só `repos/notificacoes.ts`, escopado pelo professor.
+
+`ProblemReport` é o relato de problema que o aluno manda de uma questão (auth.md "Dados do aluno e
+LGPD", a terceira coleta). `contexto` é Json validado ao gravar (`server/relatos/schema.ts` para o que
+o navegador manda; o resto o servidor monta do banco): a questão de autoria COM o gabarito, a
+resposta da tela, a correção refeita, o aparelho e o diário da página — sem nome e sem IP. Tem
+`teacherId` (para a intranet saber de quem é a atividade) e `attemptId` com `onDelete: Cascade`:
+apagar a tentativa leva o relato. Escreve o Player (`repos/relatos.ts`, criar) e o worker (marcar,
+purgar); LÊ só a intranet. Nenhuma tela do Spokke mostra relato, nem ao professor.
 
 `CreditEntry` não tem contador ao lado: saldo = franquia do plano + soma dos lançamentos do ciclo.
 

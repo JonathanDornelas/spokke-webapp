@@ -26,7 +26,11 @@
 		role="img"
 		aria-label="Spokke"
 	>
-		<path fill="currentColor" d={desenho.d} />
+		<!-- `evenodd` é o que abre os buracos: no traço do potrace os contornos de
+		     dentro (o miolo do "p", do "o" e do "e", os pontinhos do balão) giram
+		     no MESMO sentido dos de fora, e com a regra padrão (`nonzero`) eles
+		     eram pintados por cima. `marca.test.ts` confere. -->
+		<path fill="currentColor" fill-rule="evenodd" d={desenho.d} />
 	</svg>
 	{#if sub}
 		<span class="border-s border-line ps-3 text-sm text-base-content/65">{sub}</span>

@@ -25,6 +25,7 @@
 	import { adotarMinhasTentativas, gravarMeuAvatar } from './aluno.remote';
 	import { resumoDoMapa, type EstadoDaFase, type MapaDoModulo } from '$lib/modulos/mapa';
 	import { ICONE_PIXEL } from '$lib/modulos/pixel';
+	import LigarGoogle from '$lib/components/LigarGoogle.svelte';
 
 	/** A trilha curta do cartão de módulo: ícone por estado, nunca só cor. */
 	const TRILHA: Record<EstadoDaFase, { classe: string; icone: string }> = {
@@ -84,6 +85,8 @@
 		habilidades: Habilidade[];
 		/** Os mapas de módulo das turmas desta conta (docs/telas-modulos-aluno.md). */
 		modulos: MapaDoModulo[];
+		/** Como a conta entra (senha, Google) e se o Google está ligado no servidor. */
+		login: { googleDisponivel: boolean; google: boolean; senha: boolean };
 	}
 
 	let { data }: { data: PageData } = $props();
@@ -380,6 +383,27 @@
 				{/if}
 			</div>
 		</section>
+
+		<!-- Entrar com o Google: só com o Google ligado no servidor (ou já ligado
+		     nesta conta). É daqui que sai quem criou a conta com senha e quer
+		     entrar pelo Google — a tela de entrar manda para cá. -->
+		{#if data.login.googleDisponivel || data.login.google}
+			<section class="mb-[26px]">
+				<div class="mb-3.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
+					<h2 class="font-display text-lg font-semibold lg:text-xl">Entrar com o Google</h2>
+					<span class="text-[13px] text-base-content/65">opcional, no lugar da senha</span>
+				</div>
+				<div class="rounded-box border border-line bg-card p-4 lg:px-5 lg:py-[18px]">
+					<LigarGoogle
+						como="aluno"
+						email={data.account.email}
+						ligado={data.login.google}
+						temSenha={data.login.senha}
+						aqui={resolve('/aluno')}
+					/>
+				</div>
+			</section>
+		{/if}
 
 		<!-- ═══ 4. turmas ═══ -->
 		<section class="mb-[26px]">

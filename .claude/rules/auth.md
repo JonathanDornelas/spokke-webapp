@@ -106,6 +106,30 @@ Tudo pelo Better Auth, nas DUAS instâncias; nada de hash ou token escrito à m�
   também sai no console do servidor; em produção nunca — link de redefinição no log é senha no log.
 - Redefinir não abre sessão: a tela leva ao entrar (no modo certo) com "Senha nova salva".
 
+## Login com Google
+
+"Continuar com o Google" em entrar e em criar conta, **nas DUAS instâncias** (pedido do dono do
+repositório, 2026-11-09), cada uma com a sua URL de retorno (`/api/auth/callback/google` e
+`/api/auth-aluno/callback/google`). Pronto e desligado: sem `GOOGLE_CLIENT_ID` e
+`GOOGLE_CLIENT_SECRET` o provedor nem é registrado e as telas não mostram o botão
+(`server/auth/google.ts`, `(auth)/+layout.server.ts`).
+
+- **O Google diz QUEM é a pessoa, e só.** Escopos básicos, a foto do perfil descartada
+  (`mapProfileToUser`) e **nenhum token gravado** (`databaseHooks.account` com `semTokens`, mais
+  `updateAccountOnSignIn: false`) — o produto não chama API do Google em nome de ninguém, então
+  guardar acesso à conta seria risco sem uso. `google.test.ts` confere.
+- **Conta com senha não é ligada sozinha.** O cadastro por senha não verifica o e-mail; ligar no
+  login deixaria quem cadastrou o endereço de outra pessoa com uma porta (a senha) na conta que ela
+  abrisse pelo Google. O Better Auth já recusa (`requireLocalEmailVerified`, padrão): a volta traz
+  `?error=account_not_linked` e a tela explica (`(auth)/erro-do-google.ts`). Ligar é um BOTÃO com a
+  sessão aberta (`LigarGoogle.svelte`, `linkSocial`, e-mail igual exigido) — na Conta do professor
+  e na área do aluno. Desligar só aparece quando sobra a senha.
+- **Quem nasceu pelo Google cria a senha pelo link de "esqueci a senha"**, não por um campo na
+  Conta: uma sessão roubada não ganha, assim, uma porta permanente. O cadastro pelo Google passa
+  pelos mesmos hooks — trial e avatar sorteado no professor.
+- O cookie `<prefixo>.state` vive os 5 minutos da ida e volta ao Google (Cookies, em
+  `institucional.ts`).
+
 ## Superfície pública
 
 O Player é anônimo por design e nenhuma biblioteca de auth ajuda ali. Ver `.claude/rules/server.md`
@@ -184,7 +208,9 @@ um anônimo com o nome da conta, mesmo com o aluno na chamada. Há teste de repo
 duas fronteiras (`student-accounts.test.ts`).
 
 **Dado coletado: nome, e-mail e senha. Nada além disso.** Vale a mesma regra da seção abaixo —
-campo novo aqui é decisão do dono do repositório.
+campo novo aqui é decisão do dono do repositório. Entrar pelo Google (decisão dele, 2026-11-09)
+troca a senha pelo identificador da conta Google e traz o mesmo nome e e-mail — sem foto e sem
+token ("Login com Google", acima).
 
 ## Dados do aluno e LGPD
 
@@ -220,6 +246,19 @@ nome); e quem escolhe é a pessoa — a conta NASCE com um sorteado pelo sistema
 nenhum dado vem dela), e trocar é opcional. Quem não tem um gravado é desenhado pelo `avatarPadrao`
 do nome (`$lib/avatar/montar.ts`), sem gravar nada.
 Não tem prazo de retenção próprio porque não é observação sobre a pessoa: ele morre com a conta.
+
+**O RELATO DE PROBLEMA é a terceira coleta, também pedida pelo dono do repositório** (2026-11-09:
+"enviando um relatório com tudo possível para identificarmos o erro"), com as mesmas garantias:
+
+1. **É o aluno que manda, e a tela diz o que vai junto** — a questão, a resposta dele nela e os
+   detalhes do aparelho (navegador, tela, erros da página) — antes do botão de enviar.
+2. **Sem o nome dele e sem IP.** O que identifica a origem é a tentativa (`attemptId`), e o relato
+   vai para a EQUIPE (intranet e `CONTATO_PARA`), nunca para o professor nem para outro aluno.
+3. **Retenção explícita, por job: 180 dias** (`server/relatos/retencao.ts`, rodado pelo worker de
+   hora em hora), e apagar a tentativa leva os relatos (`onDelete: Cascade`).
+
+O diário de erros da página (`$lib/client/diario.ts`) fica só na memória da aba e anota o TIPO dos
+passos, nunca o que o aluno digita; ele só sai dali dentro de um relato.
 
 **Adotar tentativas soltas deixou de ser automático.** Entrar e criar conta não vinculam mais nada
 sozinhos: a área do aluno CONTA quantas há neste aparelho e oferece adotar. A suposição de que o

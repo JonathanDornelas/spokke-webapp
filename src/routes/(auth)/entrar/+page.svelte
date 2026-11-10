@@ -8,6 +8,8 @@
 	import { resolve } from '$app/paths';
 	import { authClient } from '$lib/client/auth';
 	import { authAlunoClient } from '$lib/client/auth-aluno';
+	import BotaoGoogle from '../BotaoGoogle.svelte';
+	import { mensagemDoGoogle } from '../erro-do-google';
 
 	// Entrar — professor OU aluno, numa tela só, com um seletor no topo. São
 	// duas contas diferentes por baixo (auth.md: duas instâncias de Better Auth,
@@ -45,6 +47,21 @@
 				...(voltar ? { voltar } : {}),
 				// Quem chegou aqui por um link protegido (o convite de escola, por
 				// exemplo) e ainda não tem conta volta para ele depois do cadastro.
+				...(redirectTo ? { redirectTo } : {})
+			}).toString()
+	);
+
+	// ── Google ── (só com as chaves no servidor: `(auth)/+layout.server.ts`)
+	const google = $derived(page.data.google === true);
+	/** A volta do Google com problema (`?error=…`, código do Better Auth). */
+	const erroGoogle = $derived(mensagemDoGoogle(page.url.searchParams.get('error'), como));
+	/** Esta mesma tela, no mesmo modo — é para onde a volta com erro aponta. */
+	const estaTela = $derived(
+		resolve('/(auth)/entrar') +
+			'?' +
+			new URLSearchParams({
+				...(como === 'aluno' ? { como: 'aluno' } : {}),
+				...(voltar ? { voltar } : {}),
 				...(redirectTo ? { redirectTo } : {})
 			}).toString()
 	);
@@ -151,7 +168,7 @@
 		</p>
 	{/if}
 
-	{#if error}
+	{#if error || erroGoogle}
 		<div
 			class="mb-4 flex gap-2.5 rounded-field border-s-[3px] border-error bg-base-200 px-4 py-3"
 			role="alert"
@@ -170,7 +187,34 @@
 					stroke-linecap="round"
 				/>
 			</svg>
-			<p class="text-[13px] leading-snug">E-mail ou senha incorretos.</p>
+			<p class="text-[13px] leading-snug">
+				{error ? 'E-mail ou senha incorretos.' : erroGoogle}
+			</p>
+		</div>
+	{/if}
+
+	{#if google}
+		<!-- O Google vem antes do e-mail: é o caminho de um toque. Quem não tem
+		     conta sai daqui com ela criada — por isso a linha dos Termos. -->
+		<BotaoGoogle
+			{como}
+			destino={como === 'professor'
+				? (redirectTo ?? resolve('/(studio)/inicio'))
+				: (voltar ?? resolve('/aluno'))}
+			destinoDeQuemChega={como === 'professor'
+				? (redirectTo ?? resolve('/(studio)/atividades'))
+				: (voltar ?? resolve('/aluno'))}
+			voltaComErro={estaTela}
+		/>
+		<p class="mt-2 text-center text-[12px] leading-relaxed text-base-content/60">
+			Primeira vez? A conta é criada na hora, e valem os
+			<a href={resolve('/(site)/termos')}>Termos de uso</a> e a
+			<a href={resolve('/(site)/privacidade')}>Política de privacidade</a>.
+		</p>
+		<div class="my-5 flex items-center gap-3 text-[12.5px] text-base-content/60" aria-hidden="true">
+			<span class="h-px flex-1 bg-line"></span>
+			ou com o seu e-mail
+			<span class="h-px flex-1 bg-line"></span>
 		</div>
 	{/if}
 

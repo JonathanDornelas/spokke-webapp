@@ -24,12 +24,15 @@ senha), `mercadopago` e `intranet` (a ação pedida pelo painel interno).
 ## A intranet
 
 O painel interno da equipe é o projeto `../spokke-intranet` (README de lá): números, clientes,
-pagamentos, o termômetro do bucket e conceder/encerrar plano sem vencimento. Processo, porta e banco
-de login próprios, com senha + autenticador obrigatórios e lista de IPs.
+pagamentos, o termômetro do bucket, os relatos de problema dos alunos e conceder/encerrar plano sem
+vencimento. Processo, porta e banco de login próprios, com senha + autenticador obrigatórios e
+lista de IPs.
 
 Ela entra no banco do Spokke com o papel `spokke_intranet_leitor`, criado por
 `../spokke-intranet/infra/papel-no-spokke.sql`: lê só as colunas listadas (nada de senha, sessão,
-nome ou e-mail de aluno, resposta, conteúdo de material) e insere só o job `intranet`, por RLS.
+nome ou e-mail de aluno, resposta, conteúdo de material — a única exceção é o relato de problema,
+que o aluno mandou para a equipe sabendo que ia a questão e a resposta dele) e insere só o job
+`intranet`, por RLS.
 **Rode o script de novo depois de uma migration que a intranet precise ler.** O RLS em `"Job"` vale
 para esse papel; o app do Spokke continua conectando como dono das tabelas, que o RLS ignora — se
 um dia não for o dono, o papel do app precisa de `BYPASSRLS`.
@@ -92,7 +95,8 @@ produto:
 | -------------------- | ----------------------------------------------------------------------------- |
 | `BILLING_PROVIDER`   | Vazio/`manual`: "Assinar" vira pedido atendido no painel (adr-002)            |
 | `PLATFORM_ADMIN_IDS` | IDs de `Teacher` com acesso ao `/admin` — IDs, nunca e-mails                  |
-| `CONTATO_PARA`       | Caixa da equipe: pedidos de plano e formulário de contato                     |
+| `CONTATO_PARA`       | Caixa da equipe: pedidos de plano, contato e relatos de problema dos alunos   |
+| `GOOGLE_CLIENT_ID`   | Com `GOOGLE_CLIENT_SECRET`, liga "Continuar com o Google"; vazio desliga      |
 | `LLM_PROVIDER`       | `gemini` liga "Gerar com IA"; vazio desliga (adr-003)                         |
 | `GEMINI_API_KEY`     | Chave de projeto **com faturamento** (a política promete não treinar)         |
 | `GEMINI_MODEL`       | Id do modelo — escolha o Flash estável vigente na página de modelos do Gemini |
@@ -105,6 +109,45 @@ produto:
 2. Pegue o id: `pnpm db:studio` (tabela `Teacher`) ou
    `SELECT id FROM "Teacher" WHERE email = 'voce@exemplo.com';`
 3. Ponha em `PLATFORM_ADMIN_IDS` e reinicie o web. `/admin` responde 404 para todo o resto.
+
+## Login com Google
+
+Pronto e desligado: sem `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` as telas não mostram o botão.
+Para ligar:
+
+1. **Tela de consentimento.** No Google Cloud Console, "APIs e serviços" › "Tela de consentimento
+   OAuth": tipo Externo, nome "Spokke", e-mail de suporte, o domínio e os links da política de
+   privacidade e dos termos. Os escopos são os básicos (`openid`, `email`, `profile`), que não
+   pedem verificação do Google.
+2. **O cliente.** "Credenciais" › "Criar credenciais" › "ID do cliente OAuth", tipo **Aplicativo da
+   Web**. Em "URIs de redirecionamento autorizados", as DUAS — professor e aluno são contas
+   separadas, cada uma com a sua volta:
+   - `https://<domínio>/api/auth/callback/google`
+   - `https://<domínio>/api/auth-aluno/callback/google`
+
+   Em desenvolvimento, as mesmas com `http://localhost:5173`. A origem tem de ser exatamente a do
+   `BETTER_AUTH_URL` em produção.
+
+3. **As chaves** no `.env` do web (o worker não precisa) e reinicie.
+
+O que o login faz e não faz (auth.md "Login com Google"): guarda só nome, e-mail e o identificador
+da conta Google — nenhum token, nenhuma foto. **Conta criada com senha não é ligada sozinha**: quem
+tenta entrar pelo Google com um e-mail que já tem senha recebe a explicação e liga o Google por
+dentro (Conta, no professor; a área do aluno, no aluno). Quem nasceu pelo Google cria uma senha
+pelo link de "esqueci a senha" (o cartão Senha da Conta manda o link).
+
+## Relatos de problema
+
+O "Relatar problema" do Player (o ícone de bandeira no cabeçalho da questão) grava um
+`ProblemReport` e põe um aviso para a equipe na fila (`aviso-equipe`, para `CONTATO_PARA`), com o
+código `R-XXXXXX`, o motivo, a atividade e a questão. O relato inteiro — a questão com o gabarito, a
+resposta que estava na tela, a correção refeita pelo servidor com a forma normalizada dos dois
+lados, o aparelho e o diário de erros da página — fica na intranet, em **Relatos**, onde a equipe
+marca como resolvido ou descarta (um job `intranet` aplicado pelo worker).
+
+Sem o nome do aluno e sem IP. O relato vale **180 dias** (o worker apaga os vencidos de hora em
+hora) e sai junto com a tentativa. Teto: 8 relatos por IP a cada 10 minutos, 15 por tentativa, e
+a mesma questão não é relatada duas vezes em um minuto.
 
 ## Mercado Pago — ligar o gateway
 

@@ -34,6 +34,7 @@
 	import { fracaoDeUso, type ResumoDoAcesso } from '$lib/billing/resumo';
 	import { LIMITES, TRIAL } from '$lib/billing/catalogo';
 	import { gravarMeuAvatar } from '../studio.remote';
+	import LigarGoogle from '$lib/components/LigarGoogle.svelte';
 	import {
 		agendarCancelamento,
 		cancelarPedido,
@@ -56,6 +57,8 @@
 			desde: Date;
 		};
 		contagens: { turmas: number; alunos: number };
+		/** Como a conta entra: senha, Google (`server/auth/google.ts`), ou os dois. */
+		login: { googleDisponivel: boolean; google: boolean; senha: boolean };
 		acesso: ResumoDoAcesso;
 		cobranca: { provedor: 'manual' | 'mercadopago'; podeDesfazerCancelamento: boolean };
 		/** A volta do checkout do Mercado Pago, com o que ele respondeu. */
@@ -76,6 +79,7 @@
 			desde: new Date('2026-02-12')
 		},
 		contagens: { turmas: 3, alunos: 64 },
+		login: { googleDisponivel: false, google: false, senha: true },
 		acesso: {
 			plano: 'basico',
 			rotulo: 'Período de teste',
@@ -200,6 +204,31 @@
 			erroSenha = 'Não deu para trocar a senha agora. Tente de novo em instantes.';
 		} finally {
 			salvandoSenha = false;
+		}
+	}
+
+	// ── criar uma senha ── Para a conta que nasceu pelo Google e só entra por ele.
+	// Não há senha atual para conferir, então o caminho é o de "esqueci a
+	// senha": o link vai para o e-mail da conta, e é ele que prova quem pede —
+	// uma sessão roubada não ganharia, assim, uma porta permanente.
+	let pedindoLink = $state(false);
+	let linkPedido = $state(false);
+	let erroLink = $state<string | null>(null);
+	async function pedirLinkDeSenha() {
+		if (pedindoLink) return;
+		pedindoLink = true;
+		erroLink = null;
+		try {
+			const { error } = await authClient.requestPasswordReset({
+				email: data.teacher.email,
+				redirectTo: resolve('/(auth)/redefinir-senha')
+			});
+			if (error) erroLink = 'Não deu para mandar o link agora. Tente de novo em instantes.';
+			else linkPedido = true;
+		} catch {
+			erroLink = 'Não deu para mandar o link agora. Tente de novo em instantes.';
+		} finally {
+			pedindoLink = false;
 		}
 	}
 
@@ -667,7 +696,33 @@
 						</span>
 						<h2 class="font-display text-[18px] font-semibold">Senha</h2>
 					</div>
-					{#if trocandoSenha}
+					{#if !data.login.senha}
+						<!-- A conta nasceu pelo Google: não há senha para trocar. -->
+						<p class="mb-4 text-[13px] leading-relaxed text-pretty text-base-content/65">
+							Você entra pelo Google. Para entrar também com e-mail e senha, mandamos um link para
+							<strong class="font-semibold text-base-content">{data.teacher.email}</strong> criar a senha.
+							Ele vale por 1 hora.
+						</p>
+						{#if linkPedido}
+							<p class="mb-3 text-[13px] font-semibold text-primary" role="status">
+								Link enviado. Confira a caixa de entrada (e o spam).
+							</p>
+						{/if}
+						{#if erroLink}
+							<p class="mb-3 text-[13px] font-semibold text-error" role="alert">{erroLink}</p>
+						{/if}
+						<button
+							type="button"
+							onclick={pedirLinkDeSenha}
+							disabled={pedindoLink}
+							class="btn min-h-11 w-full motion-tap gap-2 btn-neutral font-semibold"
+						>
+							{#if pedindoLink}
+								<Loading variant="fila" size={10} tone="current" label="Mandando o link" />
+							{/if}
+							{linkPedido ? 'Mandar de novo' : 'Mandar o link para criar a senha'}
+						</button>
+					{:else if trocandoSenha}
 						<!-- Abre NO cartão, como os formulários da turma: trocar a senha não
 						     tira o professor da conta. -->
 						<form onsubmit={trocarSenha} class="grid gap-3" novalidate>
@@ -756,6 +811,26 @@
 						>
 					{/if}
 				</section>
+
+				{#if data.login.googleDisponivel || data.login.google}
+					<section class="rounded-[14px] border border-line bg-card p-4 lg:p-6">
+						<div class="mb-3 flex items-center gap-3">
+							<span
+								class="grid size-9 shrink-0 place-items-center rounded-field bg-base-300 text-primary"
+							>
+								{@render icone('M15 7.5a3 3 0 10-6 0 3 3 0 006 0zM5.5 20a6.5 6.5 0 0113 0')}
+							</span>
+							<h2 class="font-display text-[18px] font-semibold">Entrar com o Google</h2>
+						</div>
+						<LigarGoogle
+							como="professor"
+							email={data.teacher.email}
+							ligado={data.login.google}
+							temSenha={data.login.senha}
+							aqui={resolve('/(studio)/conta')}
+						/>
+					</section>
+				{/if}
 
 				<section class="rounded-[14px] border border-error/30 bg-card p-4 lg:p-6">
 					<div class="mb-3 flex items-center gap-3">

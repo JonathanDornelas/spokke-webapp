@@ -379,10 +379,19 @@
 			</div>
 
 			<!-- celular ao vivo: as questões respondem de verdade -->
-			<div class="relative flex min-h-[640px] items-center justify-center">
+			<div class="relative flex min-h-[760px] items-center justify-center">
+				<!-- As formas passam da coluna do celular para os lados, e no desktop a
+				     borda esquerda delas cai DENTRO da coluna do texto. Com o recorte
+				     (`overflow-hidden`) o triângulo, ao girar e andar para a esquerda,
+				     era cortado numa linha reta ali — parecia que o bloco da esquerda o
+				     engolia. No desktop a camada não recorta e fica ACIMA da coluna do
+				     texto (`z-3`, o celular em `z-4` acima dela); nada mudou de lugar, e
+				     o `pointer-events-none` deixa os botões de baixo clicáveis. No
+				     celular o texto vem EM CIMA do aparelho, e lá o recorte continua:
+				     sem ele as formas de cima passariam por cima dos botões. -->
 				<div
 					aria-hidden="true"
-					class="pointer-events-none absolute -inset-x-[18%] -inset-y-[10%] overflow-hidden"
+					class="pointer-events-none absolute -inset-x-[18%] -inset-y-[10%] overflow-hidden lg:z-3 lg:overflow-visible"
 				>
 					<div
 						class="absolute top-[8%] left-[6%] size-[190px] animate-[en-float-a_17s_ease-in-out_infinite]
@@ -415,12 +424,17 @@
 			     no hero. -->
 				<section
 					aria-label="Exemplo para responder como aluno"
-					class="relative z-1 flex flex-col items-center"
+					class="relative z-1 flex flex-col items-center lg:z-4"
 					{@attach vigiarUso}
 				>
+					<!-- 700 px de altura: com 600 a área útil era de 437 px e escuta,
+					     montar e fala passavam dela, rolando dentro do aparelho. Com 700
+					     cada questão cabe inteira antes de responder, e o celular fica na
+					     proporção de um de verdade (~2:1). A medida está em
+					     e2e/home.spec.ts. -->
 					<div
 						style="--i: 3"
-						class="flex h-[600px] w-[344px] animate-entrada flex-col overflow-hidden rounded-[40px]
+						class="flex h-[700px] w-[344px] animate-entrada flex-col overflow-hidden rounded-[40px]
 					       border-[9px] border-bezel bg-base-100 shadow-[0_30px_70px_-34px_rgb(var(--shadow)/0.55)]
 					       em-sequencia"
 					>
@@ -442,7 +456,7 @@
 								{#key demo}
 									<div class="flex flex-1 animate-entrada flex-col">
 										<EnunciadoDaQuestao resposta={atual} compacto />
-										<RespostaDaQuestao resposta={atual} />
+										<RespostaDaQuestao resposta={atual} compacto />
 									</div>
 								{/key}
 							</div>

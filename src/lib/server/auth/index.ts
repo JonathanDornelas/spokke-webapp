@@ -8,6 +8,7 @@ import { prisma } from '$lib/server/db/client';
 import { camposDoTrial, registrar } from '$lib/server/billing/assinaturas';
 import { sortearCodigo } from '$lib/avatar/montar';
 import { VALIDADE_DO_LINK_S, pedirRedefinicaoDeSenha } from './senha';
+import { provedoresSociais, semTokensDoGoogle } from './google';
 
 // `user` é renomeado para `teacher` porque é o modelo de conta do produto — ver
 // prisma/schema.prisma e .claude/rules/auth.md. Os campos extras são o estado de
@@ -65,7 +66,18 @@ export const auth = betterAuth({
 					});
 				}
 			}
-		}
+		},
+		// Entrar com o Google não deixa token do Google no banco (`./google.ts`).
+		account: semTokensDoGoogle
+	},
+	// Login com o Google — só existe com as duas chaves no ambiente (`./google.ts`).
+	// O cadastro por ele passa pelos MESMOS hooks acima: nasce em trial e com
+	// avatar sorteado, e os campos de cobrança continuam `input: false`.
+	socialProviders: provedoresSociais(),
+	account: {
+		// Cada nova entrada pelo Google não regrava nada na linha da conta: não há
+		// token a renovar (ver `semTokensDoGoogle`).
+		updateAccountOnSignIn: false
 	},
 	emailAndPassword: {
 		enabled: true,

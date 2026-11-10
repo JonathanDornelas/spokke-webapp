@@ -64,11 +64,12 @@ export const privacidade: LegalSection[] = [
 		['Guardamos o que o produto usa para funcionar. Nenhum dado é vendido.'],
 		{
 			l: [
-				'Do professor: nome, e-mail e senha, guardada de forma irreversível. Se você preencher, também os idiomas que ensina e a língua dos seus alunos, que viram o padrão ao criar atividades e turmas, e o avatar que você monta, um desenho e não uma foto.',
+				'Do professor: nome, e-mail e senha, guardada de forma irreversível. Quem entra com o Google não tem senha: do Google recebemos só o nome, o e-mail e o identificador da conta, sem foto e sem acesso nenhum à conta Google. Se você preencher, também os idiomas que ensina e a língua dos seus alunos, que viram o padrão ao criar atividades e turmas, e o avatar que você monta, um desenho e não uma foto.',
 				'O material da aula: as frases, os textos, o vocabulário e os diálogos que você cadastra, as questões montadas a partir deles e as mudanças que você faz.',
 				'Das turmas: o nome de cada aluno e, se você quiser mandar convites, o e-mail dele.',
 				'De quem responde: o nome ou apelido digitado na entrada, as respostas, o tempo em cada questão e o resultado.',
-				'Da conta do aluno, que é opcional: nome, e-mail, senha e o avatar escolhido.',
+				'Da conta do aluno, que é opcional: nome, e-mail, senha (ou o Google, no lugar dela, com o mesmo cuidado) e o avatar escolhido.',
+				'O relato de problema, quando o aluno manda um de uma questão: o que ele escreveu, a questão, a resposta dele nela e os dados do aparelho (navegador, tela e os erros da página). Sem o nome dele, e só para a equipe do Spokke achar o erro.',
 				'A gravação da voz do aluno, só quando ele marca a autorização antes de começar. Sem a marca, a fala é transcrita para a correção e descartada na hora.',
 				'Dados técnicos: endereço IP, navegador, data e hora dos acessos e registros de erro.',
 				'Da cobrança: o plano, o ciclo e o histórico da assinatura. O pagamento com cartão acontece no ambiente do Mercado Pago, e o número do cartão nunca passa por nós.'
@@ -78,7 +79,7 @@ export const privacidade: LegalSection[] = [
 	P('Para que usamos e com que base legal', ['Cada uso tem uma base do art. 7º da LGPD:'], {
 		l: [
 			'Execução do contrato (art. 7º, V): manter a sua conta, montar as questões a partir do seu material, aplicar as atividades e mostrar os resultados.',
-			'Legítimo interesse (art. 7º, IX): prevenir abuso e manter a plataforma segura. É por isso que o formulário de contato e a atividade de exemplo têm limite de uso por endereço IP.',
+			'Legítimo interesse (art. 7º, IX): prevenir abuso e manter a plataforma segura, e corrigir os erros que os alunos relatam. É por isso que o formulário de contato, a atividade de exemplo e o relato de problema têm limite de uso por endereço IP.',
 			'Consentimento (art. 7º, I): guardar a gravação da voz do aluno por 7 dias. Ele decide antes de começar, e responder sem marcar funciona igual.',
 			'Obrigação legal (art. 7º, II): guardar os registros de acesso pelo prazo do art. 15 do Marco Civil da Internet e os documentos fiscais pelo prazo da lei.'
 		]
@@ -91,6 +92,7 @@ export const privacidade: LegalSection[] = [
 				'Hospedagem e armazenamento: onde ficam o banco de dados e os arquivos de áudio.',
 				'Resend, o serviço de e-mail: recebe o endereço e o texto dos convites, dos avisos de conta e dos links de recuperação de senha.',
 				'Google, pelo Gemini: só quando você usa "Gerar com IA", e só o pedido que você escreveu com os nomes dos idiomas.',
+				'Google, no login: só quando você escolhe "Continuar com o Google". Ele confirma quem você é; nada do Spokke vai para ele além do pedido de entrada.',
 				'Mercado Pago: os dados da cobrança, nos planos pagos.',
 				'Autoridades públicas, diante de ordem judicial ou obrigação legal.'
 			],
@@ -121,6 +123,7 @@ export const privacidade: LegalSection[] = [
 		{
 			l: [
 				'A gravação da voz do aluno: 7 dias, e ela some sozinha.',
+				'O relato de problema de uma questão: 180 dias, e ele também sai quando a tentativa é apagada.',
 				'O áudio das questões de escuta: enquanto alguma atividade sua usar aquela frase. Apagar a atividade apaga o áudio que só ela usava.',
 				'Respostas, alunos e turmas: até você apagar, a qualquer momento.',
 				'Registros de acesso e documentos fiscais: pelo prazo que a lei manda.'
@@ -223,6 +226,7 @@ export const cookies: LegalSection[] = [
 			l: [
 				'better-auth.session_token: mantém o professor conectado. Vale 7 dias e se renova enquanto você usa.',
 				'spokke-aluno.session_token: o mesmo, para quem entra com a conta de aluno.',
+				'better-auth.state e spokke-aluno.state: só durante a entrada pelo Google, para conferir que a volta é da mesma ida. Vale 5 minutos.',
 				'spokke_anon: identifica o aparelho que respondeu, para o aluno continuar de onde parou e, se criar conta, levar as respostas junto. Vale 180 dias.',
 				'spokke_attempt_<atividade>: a tentativa em andamento naquela atividade. Vale 7 dias.',
 				'spokke_aluno_<atividade>: quem chegou pelo link pessoal do convite, para a resposta sair com o nome certo. Vale 30 dias.',

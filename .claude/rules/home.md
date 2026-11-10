@@ -70,6 +70,15 @@ por captura estática nem por maquete.
   que a home promete é o "quase" que o aluno recebe, e o gabarito não chega ao browser. A tela é
   `routes/exemplo/EnunciadoDaQuestao.svelte` (`compacto`) + `RespostaDaQuestao.svelte`, com os
   componentes do Player.
+- **Cada questão cabe INTEIRA no aparelho, sem rolar** — antes e depois de responder, no desktop e
+  no celular de verdade. O aparelho tem 700 px de altura (com 600 a área útil era de 437 px e três das
+  quatro questões passavam dela) e a resposta vai `compacto` (paginas.md "Exemplo"). `e2e/home.spec.ts`
+  mede: conteúdo contra área visível, em cada pastilha.
+- **As formas da coluna do celular ficam ACIMA da coluna do texto no desktop** (`lg:z-3`, o celular
+  em `lg:z-4`) e a camada delas não recorta ali (`lg:overflow-visible`): a borda esquerda da camada
+  cai dentro da coluna do texto, e o triângulo, ao girar, era cortado numa linha reta. No celular o
+  texto vem em cima do aparelho e o recorte continua — sem ele as formas de cima passariam por cima
+  dos botões.
 - **O ritmo**: sozinho, 9 s por tela (dá para ler a questão inteira). Quem escolhe uma pastilha
   ou toca no celular passa para 24 s, e cada toque recomeça a contagem.
 - **O ciclo para** com o ponteiro ou o foco dentro do celular, gravando, esperando a correção e

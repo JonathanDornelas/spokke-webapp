@@ -16,6 +16,22 @@ type ContaAluno = { id: string };
 export function contaAluno(conta: ContaAluno) {
 	return {
 		/**
+		 * Por onde esta conta entra: senha (`credential`), Google, ou os dois. Só
+		 * o nome do provedor — a linha inteira carrega o hash da senha (auth.md
+		 * "Serialização").
+		 */
+		async formasDeEntrar(): Promise<{ google: boolean; senha: boolean }> {
+			const linhas = await prisma.studentCredential.findMany({
+				where: { userId: conta.id },
+				select: { providerId: true }
+			});
+			return {
+				google: linhas.some((l) => l.providerId === 'google'),
+				senha: linhas.some((l) => l.providerId === 'credential')
+			};
+		},
+
+		/**
 		 * As fichas de chamada desta pessoa, com a turma e o professor. É o que
 		 * responde "de quais turmas eu faço parte" na área do aluno.
 		 */

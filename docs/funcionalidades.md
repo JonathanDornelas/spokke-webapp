@@ -72,6 +72,7 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 | Conta opcional         | Histórico em qualquer aparelho, "Como você vem indo", adotar respostas soltas                                                                   |
 | Avatar                 | Pixel art de 18 números, sem foto                                                                                                               |
 | Mapa do módulo         | Fases em 8 bits, estrelas onde o professor liberou o resultado                                                                                  |
+| Relatar problema       | Bandeira em toda questão: o aluno diz o que houve e a equipe recebe a questão, a resposta dele e o aparelho, sem o nome                         |
 
 ## Acompanhar
 
@@ -102,12 +103,14 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 - Limites de estoque (atividades, materiais) e créditos de IA por mês, com o uso na aba Assinatura.
 - Pedir, trocar e cancelar plano no fim do período. Com o Mercado Pago desligado, a equipe ativa no painel interno; ligado, o professor paga no checkout dele e o plano libera quando o pagamento é confirmado.
 - Trocar senha e "esqueci a senha" para professor e aluno.
+- Entrar e criar conta com o Google, para professor e aluno, quando as chaves estão configuradas (sem foto e sem token guardados; conta com senha liga o Google por dentro).
 - Tema claro e escuro, com a escolha guardada.
 - Atividade de exemplo pública em `/exemplo`.
 
 ## Não existe ainda (não prometa)
 
 - Mercado Pago ligado de verdade (o código está pronto; faltam as credenciais e o teste no sandbox); preços da vitrine são placeholder.
+- Login com Google em produção: o código está pronto; falta criar o cliente OAuth no Google Cloud (docs/operacao.md).
 - Upload de áudio próprio, de imagem e de vídeo; IA a partir de imagem ou vídeo.
 - Oito geradores da tabela do kernel (`vocab-image-choice`, `speak-vocab` e outros).
 - Correção de escrita livre por IA (a rubrica é do professor).

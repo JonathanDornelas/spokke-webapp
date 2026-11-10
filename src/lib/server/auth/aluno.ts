@@ -7,6 +7,7 @@ import { baseURL, trustedOrigins } from './base-url';
 import { prisma } from '$lib/server/db/client';
 import { sortearCodigo } from '$lib/avatar/montar';
 import { VALIDADE_DO_LINK_S, pedirRedefinicaoDeSenha } from './senha';
+import { provedoresSociais, semTokensDoGoogle } from './google';
 
 /**
  * A conta do ALUNO. Segunda instância do Better Auth, com tabelas próprias e
@@ -59,14 +60,26 @@ export const authAluno = betterAuth({
 		}
 	},
 	session: { modelName: 'studentSession' },
-	account: { modelName: 'studentCredential' },
+	// `updateAccountOnSignIn: false`: entrar de novo pelo Google não regrava a
+	// linha — não há token a renovar (`./google.ts`).
+	account: { modelName: 'studentCredential', updateAccountOnSignIn: false },
 	verification: { modelName: 'studentVerification' },
 	// A conta nasce com um avatar SORTEADO — enfeite gerado pelo sistema, não
 	// dado coletado (a nota do campo acima vale igual): sem isto o aluno
 	// aparecia como iniciais até abrir o editor.
 	databaseHooks: {
-		user: { create: { before: async (user) => ({ data: { ...user, avatar: sortearCodigo() } }) } }
+		user: { create: { before: async (user) => ({ data: { ...user, avatar: sortearCodigo() } }) } },
+		// Entrar com o Google não deixa token do Google no banco (`./google.ts`).
+		account: semTokensDoGoogle
 	},
+	/**
+	 * **Entrar com o Google também vale para o aluno — decisão do dono do
+	 * repositório (2026-11-09).** O que chega do Google é o que esta conta já
+	 * guardava: nome e e-mail, mais o identificador da conta Google, que é o
+	 * que reconhece a pessoa na volta. Sem foto e sem token (`./google.ts`), e a
+	 * senha deixa de ser obrigatória para quem entra assim. Ver auth.md.
+	 */
+	socialProviders: provedoresSociais(),
 	emailAndPassword: {
 		enabled: true,
 		// O mesmo caminho do professor (`./senha.ts`): e-mail pela fila, link de 1 hora.

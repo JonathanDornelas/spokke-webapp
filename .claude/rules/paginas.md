@@ -75,6 +75,12 @@ congelada.
 encontrado". A confirmação de recuperação também: "se esse e-mail existir". As duas coisas
 existem para não vazar quem tem conta.
 
+**"Continuar com o Google" vem antes do e-mail** em entrar e em criar conta, para professor e
+aluno (`(auth)/BotaoGoogle.svelte`), e só existe com o Google ligado no servidor. Em entrar, uma
+linha diz que a primeira vez cria a conta, com os Termos e a Política. A volta com problema
+(`?error=`) vira frase com o próximo passo (`(auth)/erro-do-google.ts`) — a mais comum é "este
+e-mail já tem conta com senha: entre com ela e ligue o Google por dentro".
+
 **Cobrança não afeta o aluno.** Pagamento atrasado bloqueia criar e publicar; os links já
 publicados continuam funcionando. Voltar do checkout não significa pago — a confirmação vem
 do provedor, e existe um estado "confirmando" para isso.
@@ -342,6 +348,18 @@ desabilitado — foi um bug real. Três merecem nota:
   repete o áudio engolia o espaço entre as palavras de "Ouça e escreva" — dava para digitar
   qualquer coisa, menos uma frase.
 
+**"Relatar problema" mora no cabeçalho de toda questão** — a bandeira ao lado do volume, com
+"Relatar problema" escrito no desktop. No cabeçalho e não no rodapé: o rodapé é da ação principal, e
+o relato vale antes e depois de responder. Abre um `<dialog>` (`q/[n]/RelatarProblema.svelte`,
+baixado só no primeiro clique — orçamento de peso do Player) com o motivo em rádios (o áudio só
+aparece em questão com áudio; o microfone, só na de fala), um campo opcional e, ANTES do botão, o
+que vai junto e que o nome não vai (auth.md "Dados do aluno e LGPD"). Enviado, a tela mostra o
+código `R-XXXXXX` em azul, nunca em verde (não é acerto). O relato leva o que só o navegador sabe —
+a resposta NA TELA (pode não ter sido enviada), o veredito mostrado, o microfone, o teclado, o
+aparelho e o diário de erros (`$lib/client/diario.ts`) —, e o servidor acrescenta a questão com o
+gabarito e a correção refeita (`server/relatos`). Vai para a equipe (intranet "Relatos"), nunca
+para o professor.
+
 **Toda questão de escrever no idioma alvo vem com o teclado dele — e só ela.** Em japonês (kana),
 mandarim (pinyin com tom), árabe e híndi a questão de digitar mostra a grade do script
 **encaixada acima do rodapé**, no lugar do teclado do aparelho — a questão rola por cima dela e
@@ -456,6 +474,10 @@ professor sentir o que o aluno recebe antes de criar conta. Pública (`hooks.ser
   depois de a tela final entrar: primeiro a pessoa vê como foi, depois quanto custa levar para a
   turma. É a MESMA `PlanosTabela`: sem conta o botão leva ao cadastro (trial); com professor
   logado vira pedido, como em `/planos`. Fechar devolve a tela final, que tem "Ver os planos".
+- O celular da home tem **700 px de altura** e cada questão cabe nele INTEIRA, sem rolar — antes e
+  depois de responder (`e2e/home.spec.ts` mede). Para isso a resposta vai `compacto`: o player de
+  áudio numa linha só em qualquer tela (`AudioPlayer emLinha`), sem a dica de teclado do "montar",
+  e, corrigida, sem as peças que sobraram e sem o microfone (não há como regravar ali).
 - O celular da home usa as quatro primeiras questões (`QUESTOES_DA_HOME`) com os mesmos
   componentes (`EnunciadoDaQuestao`, `RespostaDaQuestao`, `RespostaDoExemplo`).
 - O áudio da escuta é estático (`static/demo/exemplo-escuta*.mp3`), gerado pelo serviço de áudio
@@ -982,6 +1004,12 @@ escola, telefone ou faixa etária não teriam uso no produto, e a política prom
 a tela AINDA NÃO SABE (o destino dos links publicados, Apêndice A) em vez de afirmar qualquer
 coisa.
 
+**Senha e Google.** O cartão "Senha" troca a senha de quem tem uma; quem nasceu pelo Google não tem
+senha atual para conferir, e o cartão manda o link de criar uma (o mesmo de "esqueci a senha"). O
+cartão "Entrar com o Google" (`LigarGoogle.svelte`, só com o Google ligado no servidor) liga o
+Google na conta — é para onde a tela de entrar manda quem tentou o Google num e-mail com senha — e
+desliga quando sobra a senha (auth.md "Login com Google").
+
 **"Seu avatar" vem ANTES de nome e e-mail**, e é a única ação desta tela que já grava de verdade
 (`gravarMeuAvatar`, em `studio.remote.ts`). A ordem não é arbitrária: o avatar é o que o ALUNO vê
 — ele aparece na turma e no convite —, e nome e e-mail são o que o professor confere. Dezoito
@@ -1172,6 +1200,9 @@ dentro sem ninguém ter dito nada. O convite fica no topo da área, com a CONTAG
 aparelho. `adotarMinhasTentativas` continua sendo a única escrita de histórico da área.
 O `e/[token]` (link pessoal) segue vinculando sozinho — ali a identidade vem do professor, não de
 um palpite sobre o aparelho.
+
+**"Entrar com o Google"** vem depois do avatar, com o mesmo componente da Conta do professor: ligar
+o Google numa conta de aluno criada com senha. Só aparece com o Google ligado no servidor.
 
 **"Seu avatar"** é a outra escrita: dezoito números, nunca uma imagem (`$lib/avatar/montar.ts`).
 "Sortear" grava direto; "Montar peça por peça" abre o `AvatarEditor`.

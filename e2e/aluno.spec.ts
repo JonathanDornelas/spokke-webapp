@@ -151,3 +151,49 @@ test('o link da atividade tem prévia própria, fora da busca e sem gabarito', a
 	expect(html).not.toMatch(/<link[^>]+rel="canonical"/);
 	expect(html).not.toContain(GABARITO.digitar);
 });
+
+test('relatar um problema manda a questão e a resposta para a equipe, sem o nome do aluno', async ({
+	page
+}) => {
+	const { prisma } = await import('../src/lib/server/db/client.ts');
+	const nome = 'Relato E2E Pereira';
+	const descricao = `relato do e2e ${Date.now()}`;
+	await comecar(page, slugCom(), nome);
+
+	// A resposta ainda NA TELA, sem verificar: o relato leva o que está ali.
+	await page.getByRole('button', { name: new RegExp(GABARITO.distrator) }).click();
+	await page.getByRole('button', { name: 'Relatar um problema nesta questão' }).click();
+
+	// O nome do diálogo muda para 'Relato enviado' depois de mandar: o seletor é
+	// pelo papel, e o título é conferido à parte.
+	const dialogo = page.getByRole('dialog');
+	await expect(dialogo.getByRole('heading', { name: 'Relatar um problema' })).toBeVisible();
+	await dialogo.getByLabel('Minha resposta estava certa e foi marcada como errada').check();
+	await dialogo.getByLabel(/Quer contar mais/).fill(descricao);
+	await dialogo.getByRole('button', { name: 'Enviar relato' }).click();
+	await expect(dialogo.getByRole('heading', { name: 'Relato enviado' })).toBeVisible();
+	await expect(dialogo.getByText(/Código do relato: R-[A-Z0-9]{6}/)).toBeVisible();
+
+	// No banco: um relato, com a questão de autoria e a resposta da tela.
+	const linhas = await prisma.problemReport.findMany({ where: { descricao } });
+	expect(linhas).toHaveLength(1);
+	const contexto = JSON.stringify(linhas[0]!.contexto);
+	expect(linhas[0]).toMatchObject({ motivo: 'correcao', itemIndex: 1, interaction: 'choice' });
+	expect(contexto).toContain(GABARITO.escolha); // a autoria, com o gabarito
+	expect(contexto).toContain('"respostaNaTela"');
+	expect(contexto).not.toContain(nome);
+
+	// Fechar volta para a questão, que continua respondível.
+	await dialogo.getByRole('button', { name: 'Voltar para a questão' }).click();
+	await expect(dialogo).toBeHidden();
+	await expect(page.getByRole('button', { name: 'Verificar' })).toBeEnabled();
+
+	// O aviso da equipe que este relato pôs na fila (a tentativa sai no teardown,
+	// e o relato com ela).
+	await prisma.job.deleteMany({
+		where: {
+			type: 'aviso-equipe',
+			payload: { path: ['assunto'], string_contains: 'E2E com resultado' }
+		}
+	});
+});

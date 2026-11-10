@@ -57,6 +57,7 @@
 			srcSlow={q.audioSlow}
 			plays={resposta.plays}
 			onplay={() => resposta.plays++}
+			emLinha={compacto}
 		/>
 	</div>
 {/if}

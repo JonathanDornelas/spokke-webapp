@@ -31,6 +31,8 @@ import {
 	encerrarSemVencimento
 } from '../src/lib/server/billing/assinaturas.ts';
 import { origemDoWorker, processarEnviosDevidos } from '../src/lib/server/modulos/programacao.ts';
+import { relatosRepo } from '../src/lib/server/db/repos/relatos.ts';
+import { purgarRelatosVencidos } from '../src/lib/server/relatos/retencao.ts';
 
 // Fila em tabela Postgres, sem Redis — ver .claude/rules/server.md "Fila". O
 // `SELECT ... FOR UPDATE SKIP LOCKED` é a primitiva de exclusão mútua entre
@@ -230,6 +232,12 @@ async function processMercadoPago(payload: unknown): Promise<void> {
 async function processIntranet(payload: unknown): Promise<void> {
 	const job = intranetJobSchema.parse(payload);
 	const ator = `admin:intranet:${job.admin}` as const;
+	if (job.acao === 'marcar-relato') {
+		const achou = await relatosRepo.marcar(job.relatoId, job.status, ator);
+		if (!achou) throw new Error('O relato não existe mais (venceu ou a tentativa foi apagada).');
+		console.info(`[intranet] relato ${job.relatoId} marcado como ${job.status}`);
+		return;
+	}
 	if (job.acao === 'plano-sem-vencimento') {
 		const mudou = await concederSemVencimento(job.teacherId, job.plano, ator, {
 			motivo: job.motivo
@@ -322,8 +330,30 @@ async function drenar(): Promise<number> {
 	return lote.length;
 }
 
+/**
+ * A manutenção de hora em hora, sem cron (a mesma decisão da fila): hoje, a
+ * retenção dos relatos de problema (`server/relatos/retencao.ts`, 180 dias —
+ * auth.md "Dados do aluno e LGPD" pede prazo aplicado por job). Falhar aqui
+ * não derruba a fila: tenta de novo na hora seguinte.
+ */
+const MANUTENCAO_A_CADA_MS = 60 * 60 * 1000;
+let proximaManutencao = 0;
+
+async function manutencao(): Promise<void> {
+	if (Date.now() < proximaManutencao) return;
+	proximaManutencao = Date.now() + MANUTENCAO_A_CADA_MS;
+	try {
+		const apagados = await purgarRelatosVencidos();
+		if (apagados > 0)
+			console.info(`[manutenção] ${apagados} relato(s) de problema vencido(s) apagado(s)`);
+	} catch (err) {
+		console.error('[manutenção] não deu para apagar os relatos vencidos', err);
+	}
+}
+
 async function main(): Promise<void> {
 	for (;;) {
+		await manutencao();
 		// **Só dorme quando não há o que fazer.** Antes o `setTimeout` rodava
 		// depois de CADA job, então publicar dez áudios custava vinte segundos de
 		// sono puro — mais do que a síntese inteira levava. Medido nos mesmos dez

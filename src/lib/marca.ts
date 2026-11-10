@@ -10,6 +10,13 @@
  *
  * O favicon (`$lib/assets/favicon.svg`), o `favicon.ico` e o
  * `apple-touch-icon.png` de `static/` saíram do MESMO traço do ícone.
+ *
+ * **Quem desenha usa `fill-rule="evenodd"`.** Todos os contornos daqui giram no
+ * mesmo sentido, os de fora e os de dentro — o miolo do "p", do "o" e do "e" e
+ * os três pontinhos do balão. Com a regra padrão (`nonzero`) os de dentro são
+ * pintados por cima e os buracos somem; com `evenodd`, cada contorno de dentro
+ * abre um buraco. `marca.test.ts` confere os dois lados: o sentido dos traços e
+ * que o `Logo` e o favicon declaram a regra.
  */
 
 /** O ícone sozinho: o S com o balão de fala. Quase quadrado. */

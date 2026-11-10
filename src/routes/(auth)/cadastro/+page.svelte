@@ -10,6 +10,8 @@
 	import { authAlunoClient } from '$lib/client/auth-aluno';
 	import { IDIOMAS } from '$lib/idiomas';
 	import { gravarMeusIdiomas } from '../../(studio)/conta/conta.remote';
+	import BotaoGoogle from '../BotaoGoogle.svelte';
+	import { mensagemDoGoogle } from '../erro-do-google';
 
 	// Criar conta — professor OU aluno, com o mesmo seletor de "/entrar". As duas
 	// contas são separadas por baixo (auth.md); o que muda aqui é a copy, o
@@ -53,6 +55,20 @@
 			}).toString()
 	);
 
+	// ── Google ── (só com as chaves no servidor: `(auth)/+layout.server.ts`). Os
+	// idiomas que ensina não vão por ele: são opcionais e se escolhem na Conta.
+	const google = $derived(page.data.google === true);
+	const erroGoogle = $derived(mensagemDoGoogle(page.url.searchParams.get('error'), como));
+	const estaTela = $derived(
+		resolve('/(auth)/cadastro') +
+			'?' +
+			new URLSearchParams({
+				...(como === 'aluno' ? { como: 'aluno' } : {}),
+				...(voltar ? { voltar } : {}),
+				...(redirectTo ? { redirectTo } : {})
+			}).toString()
+	);
+
 	const strength = $derived(Math.min(4, Math.floor(password.length / 4)));
 	const strengthLabel = $derived(['', 'Fraca', 'Razoável', 'Boa', 'Ótima'][strength]);
 
@@ -74,7 +90,7 @@
 			itens: [
 				'Seu histórico de respostas em qualquer aparelho',
 				'Os módulos da sua turma num mapa de fases',
-				'Só nome, e-mail e senha. Nada além disso.'
+				'Só nome, e-mail e senha (ou o Google, no lugar da senha). Nada além disso.'
 			],
 			nota: 'É opcional. Toda atividade abre sem conta.'
 		}
@@ -184,6 +200,35 @@
 				Ela guarda o que você responde e te acompanha em qualquer aparelho.
 				<strong class="font-semibold text-base-content">É opcional:</strong> as atividades abrem sem conta.
 			</p>
+		{/if}
+
+		{#if erroGoogle}
+			<p
+				class="mb-4 rounded-field border-s-[3px] border-error bg-base-200 px-4 py-3 text-[13px] leading-snug"
+				role="alert"
+			>
+				{erroGoogle}
+			</p>
+		{/if}
+
+		{#if google}
+			<!-- Um toque, e a conta nasce com o nome e o e-mail do Google — sem
+			     senha. O professor entra no teste de 14 dias do mesmo jeito. -->
+			<BotaoGoogle
+				{como}
+				destino={como === 'professor'
+					? (redirectTo ?? resolve('/(studio)/atividades'))
+					: (voltar ?? resolve('/aluno'))}
+				voltaComErro={estaTela}
+			/>
+			<div
+				class="my-5 flex items-center gap-3 text-[12.5px] text-base-content/60"
+				aria-hidden="true"
+			>
+				<span class="h-px flex-1 bg-line"></span>
+				ou com o seu e-mail
+				<span class="h-px flex-1 bg-line"></span>
+			</div>
 		{/if}
 
 		<form class="grid gap-3.5" onsubmit={onSubmit}>

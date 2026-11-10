@@ -239,4 +239,13 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   por coluna (`infra/papel-no-spokke.sql` de lá), que precisa ser rodado de novo quando uma
   migration mexer no que ela lê. O `/admin` daqui continua sendo onde se atende pedido de plano;
   falta decidir se ele migra inteiro para a intranet.
+- **Login com Google, pronto e desligado** (auth.md "Login com Google"): professor E aluno, com
+  `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`. Guarda só nome, e-mail e o id da conta Google — sem
+  foto, sem token. Conta com senha NÃO é ligada no login (o cadastro não verifica e-mail); liga por
+  dentro, na Conta ou na área do aluno. **Falta criar o cliente OAuth** (docs/operacao.md), com as
+  duas URLs de retorno.
+- **Relato de problema** (`ProblemReport`, auth.md "Dados do aluno e LGPD"): a bandeira no
+  cabeçalho de toda questão. Vai para a equipe — intranet "Relatos" e um aviso em `CONTATO_PARA` —
+  com a questão (gabarito incluído), a resposta da tela, a correção refeita, o aparelho e o diário de
+  erros da página. Sem nome e sem IP; 180 dias, apagado pelo worker.
 - Operação, variáveis e a rotina da equipe sem gateway: `docs/operacao.md`.

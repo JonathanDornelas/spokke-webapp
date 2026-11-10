@@ -13,6 +13,10 @@ import { getInteraction } from '$lib/kernel/interactions/registry';
 import { gradingSchema, interactionSchema, localeSchema } from '$lib/kernel/item';
 import { getProfile } from '$lib/kernel/language/profiles';
 import { payloadParaCorrigir } from '$lib/server/escrita';
+import { criarLimite } from '$lib/server/limite-por-ip';
+import { registrarRelato } from '$lib/server/relatos';
+import { relatoSchema } from '$lib/server/relatos/schema';
+import { dev, version } from '$app/environment';
 import type { Prisma } from '../../../../generated/prisma/client.ts';
 
 /**
@@ -321,3 +325,28 @@ export const finalizarTentativa = command(
 		return { showFeedback: true as const, tally: { correct, partial, incorrect } };
 	}
 );
+
+/**
+ * "Relatar problema", de dentro de uma questão. Sem sessão, como o resto do
+ * Player: a prova de onde o relato veio é a tentativa (o `attemptId` não é
+ * adivinhável) e a questão tem de ser dela. Quem monta e grava é
+ * `$lib/server/relatos` (testável sem SvelteKit); aqui ficam o teto por IP —
+ * é endpoint público, e cada relato vira um e-mail para a equipe — e a
+ * tradução da recusa em erro HTTP.
+ */
+const limiteDeRelatos = criarLimite({ maximo: 8, janelaMs: 10 * 60 * 1000 });
+
+export const relatarProblema = command(relatoSchema, async (entrada) => {
+	const evento = getRequestEvent();
+	if (!limiteDeRelatos.permitir(evento.getClientAddress())) {
+		error(429, 'Muitos relatos em pouco tempo. Espere alguns minutos e tente de novo.');
+	}
+	const desfecho = await registrarRelato(entrada, {
+		userAgent: evento.request.headers.get('user-agent'),
+		idiomaDoNavegador: evento.request.headers.get('accept-language'),
+		versao: version,
+		ambiente: dev ? 'desenvolvimento' : 'producao'
+	});
+	if (!desfecho.ok) error(desfecho.status, desfecho.mensagem);
+	return { codigo: desfecho.codigo };
+});

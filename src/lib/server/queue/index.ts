@@ -205,6 +205,13 @@ export const intranetJobSchema = z.discriminatedUnion('acao', [
 		teacherId: z.string().min(1),
 		admin: z.string().email(),
 		motivo: z.string().trim().min(3).max(300)
+	}),
+	// O estado de um relato de problema (`ProblemReport`), de "Relatos" na intranet.
+	z.object({
+		acao: z.literal('marcar-relato'),
+		relatoId: z.string().min(1),
+		status: z.enum(['aberto', 'resolvido', 'descartado']),
+		admin: z.string().email()
 	})
 ]);
 export type IntranetJob = z.infer<typeof intranetJobSchema>;

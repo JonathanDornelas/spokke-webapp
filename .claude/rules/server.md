@@ -40,8 +40,9 @@ adicionar material um a um ou colando uma lista, editar/remover material, trazer
 biblioteca, gerar itens, descartar e restaurar item, aceitar todos, criar item manual, salvar
 item, publicar) e
 `a/[slug]/player.remote.ts` (as três funções do aluno, mais a validação do código de acesso, as
-duas da retomada e o `naoSouEu` do link pessoal) e `(studio)/turmas/turmas.remote.ts` (turmas,
-alunos e o envio de convite).
+duas da retomada, o `naoSouEu` do link pessoal e o `relatarProblema` — sem sessão, com a tentativa
+como prova de origem, teto por IP e a lógica testável em `$lib/server/relatos`) e
+`(studio)/turmas/turmas.remote.ts` (turmas, alunos e o envio de convite).
 E `aluno/aluno.remote.ts` (`adotarMinhasTentativas` e `gravarMeuAvatar`, as duas escritas da área
 do aluno) — que abre pelo `requireAluno`, não pelo `requireTeacher`: usar o guard errado daria
 acesso de professor a quem não é.
@@ -178,10 +179,14 @@ que é a primitiva que dá exclusão mútua entre workers concorrentes.
 Job { id, type, payload JSON, status, attempts, lockedUntil, runAfter, lastError }
 ```
 
-Tipos: `tts`, `convite`, `convite-escola`, `convite-conta`, `aviso-equipe`, `envio-programado`, `redefinir-senha`, `mercadopago` (a notificação do gateway, conferida pelo webhook — billing.md), `intranet` (a ação pedida pelo painel interno, `../spokke-intranet` — o ÚNICO tipo que outro processo insere, e só ele: RLS em `"Job"` para o papel `spokke_intranet_leitor`; o schema `intranetJobSchema` tem um espelho lá). (`convite-modulo` saiu com o e-mail do módulo.) O `convite-conta` não carrega o endereço: o worker lê a ficha na hora e não manda para quem já tem conta, para link que foi trocado nem pedido que já saiu (`conviteAindaVale`). Cada um tem o schema e o
+Tipos: `tts`, `convite`, `convite-escola`, `convite-conta`, `aviso-equipe`, `envio-programado`, `redefinir-senha`, `mercadopago` (a notificação do gateway, conferida pelo webhook — billing.md), `intranet` (a ação pedida pelo painel interno, `../spokke-intranet` — o ÚNICO tipo que outro processo insere, e só ele: RLS em `"Job"` para o papel `spokke_intranet_leitor`; o schema `intranetJobSchema` tem um espelho lá; as ações são conceder/encerrar plano sem vencimento e `marcar-relato`, o estado de um relato de problema). (`convite-modulo` saiu com o e-mail do módulo.) O `convite-conta` não carrega o endereço: o worker lê a ficha na hora e não manda para quem já tem conta, para link que foi trocado nem pedido que já saiu (`conviteAindaVale`). Cada um tem o schema e o
 `enqueue…` em `server/queue/index.ts` e o caso em `worker/index.ts`. **Suba o worker antes (ou junto)
 do web** quando criar um tipo: tipo desconhecido lança erro e vai para `failed`. Os jobs falhados
 aparecem no painel interno (`/admin`), com "Tentar de novo".
+
+**A manutenção de hora em hora mora no mesmo laço do worker** (`manutencao()`, sem cron): hoje, a
+retenção dos relatos de problema (180 dias, `server/relatos/retencao.ts`). Falhar ali não derruba a
+fila; tenta de novo na hora seguinte.
 
 Regras: todo job é idempotente, tem número máximo de tentativas, e falha com backoff.
 Um job que estourou as tentativas vai para `failed` e aparece no painel — nunca some em silêncio.
