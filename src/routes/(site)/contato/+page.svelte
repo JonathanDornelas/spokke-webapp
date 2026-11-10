@@ -5,14 +5,28 @@
 	import { resolve } from '$app/paths';
 	import SiteHero from '$lib/components/SiteHero.svelte';
 	import { canais } from '$lib/content/institucional';
+	import { registrarEvento } from '$lib/client/medicao';
+	import { untrack } from 'svelte';
 
 	let {
 		data,
 		form
 	}: {
-		data: { assunto: string; assuntos: string[] };
+		data: { assunto: string; assuntos: string[]; origem: string | null };
 		form?: { ok?: boolean; error?: string } | null;
 	} = $props();
+
+	// A conversão do contato (só registra com a medição aceita): o pedido de
+	// escola vindo do blog é a mais valiosa, e a origem diz de qual artigo.
+	$effect(() => {
+		if (!form?.ok) return;
+		untrack(() =>
+			registrarEvento('generate_lead', {
+				assunto_inicial: data.assunto,
+				origem: data.origem ?? 'direto'
+			})
+		);
+	});
 </script>
 
 <Metadados
@@ -59,6 +73,7 @@
 			<div class="absolute -start-[9999px] h-px w-px overflow-hidden" aria-hidden="true">
 				<label>Site <input name="site" tabindex="-1" autocomplete="off" /></label>
 			</div>
+			{#if data.origem}<input type="hidden" name="origem" value={data.origem} />{/if}
 			<div class="grid gap-4 sm:grid-cols-2">
 				<label class="block min-w-0">
 					<span class="mb-1.5 block text-[13px] font-semibold">Nome</span>

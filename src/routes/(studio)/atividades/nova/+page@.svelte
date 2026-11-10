@@ -61,7 +61,7 @@
 	const teto = (skill: Skill) => TETO_POR_HABILIDADE[skill];
 </script>
 
-<svelte:head><title>Nova atividade — Spokke</title></svelte:head>
+<svelte:head><title>Nova atividade · Spokke</title></svelte:head>
 
 <form {...criarAtividade}>
 	<WizardShell

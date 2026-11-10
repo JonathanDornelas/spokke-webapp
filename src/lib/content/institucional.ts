@@ -12,7 +12,8 @@
  *
  * O CNPJ, a razão social e o endereço entram quando existirem de verdade — o
  * CNPJ fica fora do site a pedido do dono do repositório. Os e-mails usam o
- * domínio `spokke.app`, que ainda é PLACEHOLDER (docs/operacao.md).
+ * domínio do site, `spokke.com.br` (decidido em 2026-11-10); as caixas ainda
+ * precisam ser criadas (docs/operacao.md).
  */
 
 export interface LegalSection {
@@ -32,7 +33,9 @@ export const legalName = 'Spokke';
 export const empresa = { legalName };
 
 /** A data que as quatro páginas legais mostram no topo. Mudou o texto, muda aqui. */
-export const atualizadoEm = '9 de novembro de 2026';
+export const atualizadoEm = '10 de novembro de 2026';
+/** A mesma data em AAAA-MM-DD: o `lastmod` das páginas legais no sitemap (um teste confere as duas). */
+export const atualizadoEmIso = '2026-11-10';
 
 /**
  * Selos que aparecem no rodapé. Só entra selo VERIFICÁVEL: o link leva à página
@@ -53,6 +56,71 @@ export interface Selo {
 }
 
 export const selos: Selo[] = [];
+
+/**
+ * O domínio do site (o mesmo dos e-mails acima). Os selos de verificação o
+ * usam fora de produção; lá o link sai do domínio em que o site está aberto
+ * (`SiteFooter.svelte`), que é este mesmo.
+ */
+export const dominioDoSite = 'spokke.com.br';
+
+/**
+ * Os dois selos de VERIFICAÇÃO do rodapé, a pedido do dono do repositório:
+ * certificado SSL e Google Safe Browsing. Nenhum dos dois tem imagem oficial de
+ * selo, então eles não afirmam nada sozinhos: são links para a verificação AO
+ * VIVO de um terceiro (a nota do certificado no SSL Labs e o status do domínio
+ * no Transparency Report do Google), com o texto convidando a conferir. Se um
+ * dia a verificação der problema, o selo mostra o problema — e aí ele sai daqui
+ * (roteiro em `docs/selos-e-seguranca.md`, "Os dois selos do rodapé").
+ */
+export interface SeloDeVerificacao {
+	/** Quem verifica. */
+	nome: string;
+	/** O que o link faz. */
+	acao: string;
+	/** A página do terceiro com o resultado para o domínio. */
+	verificacao: string;
+	/**
+	 * O selo em PNG, em `static/selos/` (2x; `largura` e `altura` são as de
+	 * exibição). NÃO é imagem de emissor: nem o Google nem a Let's Encrypt têm
+	 * selo oficial, e usar a marca deles num "selo" sugeriria um endosso que não
+	 * existe. É um selo do Spokke, nas cores da marca, que leva à verificação
+	 * do terceiro — feito por `scripts/gerar-selos.mjs`.
+	 */
+	imagem: { arquivo: string; largura: number; altura: number };
+}
+
+export function selosDeVerificacao(dominio: string): SeloDeVerificacao[] {
+	const d = encodeURIComponent(dominio);
+	return [
+		{
+			nome: 'Certificado SSL',
+			acao: 'Ver a nota no SSL Labs',
+			verificacao: `https://www.ssllabs.com/ssltest/analyze.html?d=${d}&latest`,
+			imagem: { arquivo: 'ssl.png', largura: 180, altura: 52 }
+		},
+		{
+			nome: 'Google Safe Browsing',
+			acao: 'Ver o status do site',
+			verificacao: `https://transparencyreport.google.com/safe-browsing/search?url=${d}&hl=pt_BR`,
+			imagem: { arquivo: 'safe-browsing.png', largura: 204, altura: 52 }
+		}
+	];
+}
+
+/**
+ * As redes sociais do rodapé. Sem `url` o ícone aparece sem link (os perfis
+ * ainda não existem); com ela, vira link para o perfil, em nova aba.
+ */
+export interface Rede {
+	nome: 'Instagram' | 'YouTube';
+	url: string | null;
+}
+
+export const redes: Rede[] = [
+	{ nome: 'Instagram', url: null },
+	{ nome: 'YouTube', url: null }
+];
 
 export const privacidade: LegalSection[] = [
 	P('Quem somos e o que esta política cobre', [
@@ -81,6 +149,7 @@ export const privacidade: LegalSection[] = [
 			'Execução do contrato (art. 7º, V): manter a sua conta, montar as questões a partir do seu material, aplicar as atividades e mostrar os resultados.',
 			'Legítimo interesse (art. 7º, IX): prevenir abuso e manter a plataforma segura, e corrigir os erros que os alunos relatam. É por isso que o formulário de contato, a atividade de exemplo e o relato de problema têm limite de uso por endereço IP.',
 			'Consentimento (art. 7º, I): guardar a gravação da voz do aluno por 7 dias. Ele decide antes de começar, e responder sem marcar funciona igual.',
+			'Consentimento (art. 7º, I): medir a audiência das páginas públicas (a página inicial, os planos e o blog) com o Google Analytics, quando você aceita no aviso dessas páginas. Recusar não muda nada no site, e a medição nunca roda no painel do professor nem nas atividades dos alunos.',
 			'Obrigação legal (art. 7º, II): guardar os registros de acesso pelo prazo do art. 15 do Marco Civil da Internet e os documentos fiscais pelo prazo da lei.'
 		]
 	}),
@@ -93,6 +162,7 @@ export const privacidade: LegalSection[] = [
 				'Resend, o serviço de e-mail: recebe o endereço e o texto dos convites, dos avisos de conta e dos links de recuperação de senha.',
 				'Google, pelo Gemini: só quando você usa "Gerar com IA", e só o pedido que você escreveu com os nomes dos idiomas.',
 				'Google, no login: só quando você escolhe "Continuar com o Google". Ele confirma quem você é; nada do Spokke vai para ele além do pedido de entrada.',
+				'Google, pelo Google Analytics: só nas páginas públicas e só com o seu aceite. Recebe dados de navegação, como a página visitada, o tipo de aparelho e de onde veio a visita, sem nome nem e-mail.',
 				'Mercado Pago: os dados da cobrança, nos planos pagos.',
 				'Autoridades públicas, diante de ordem judicial ou obrigação legal.'
 			],
@@ -107,7 +177,7 @@ export const privacidade: LegalSection[] = [
 			'Com crianças e adolescentes, o tratamento segue o melhor interesse deles (art. 14 da LGPD), e cabe à escola colher o consentimento dos responsáveis quando a lei exigir.'
 		],
 		{
-			note: 'Se você é responsável por um aluno e quer saber que dados existem sobre ele, escreva para privacidade@spokke.app. O professor também apaga as respostas e o cadastro de um aluno quando quiser, pela tela da turma.'
+			note: 'Se você é responsável por um aluno e quer saber que dados existem sobre ele, escreva para privacidade@spokke.com.br. O professor também apaga as respostas e o cadastro de um aluno quando quiser, pela tela da turma.'
 		}
 	),
 	P('Seu material e a IA', [
@@ -128,7 +198,7 @@ export const privacidade: LegalSection[] = [
 				'Respostas, alunos e turmas: até você apagar, a qualquer momento.',
 				'Registros de acesso e documentos fiscais: pelo prazo que a lei manda.'
 			],
-			note: 'Para encerrar a sua conta, escreva para suporte@spokke.app. Encerrar pelo próprio painel ainda não está disponível.'
+			note: 'Para encerrar a sua conta, escreva para suporte@spokke.com.br. Encerrar pelo próprio painel ainda não está disponível.'
 		}
 	),
 	P('Transferência internacional', [
@@ -151,10 +221,10 @@ export const privacidade: LegalSection[] = [
 		note: 'Respondemos em até 15 dias, como a lei pede. Antes, confirmamos que o pedido é seu, para não entregar dados à pessoa errada.'
 	}),
 	P('Cookies', [
-		'Usamos só o necessário para o produto funcionar, como manter a sua sessão e lembrar onde o aluno parou. Não há cookie de análise nem de publicidade, e cada um está descrito na página de Cookies.'
+		'Usamos o necessário para o produto funcionar, como manter a sua sessão e lembrar onde o aluno parou. Nas páginas públicas, os cookies de medição do Google Analytics só são gravados se você aceitar o aviso. Não há cookie de publicidade, e cada um está descrito na página de Cookies.'
 	]),
 	P('Encarregado de dados', [
-		'Pedidos sobre dados pessoais vão para privacidade@spokke.app.',
+		'Pedidos sobre dados pessoais vão para privacidade@spokke.com.br.',
 		'Você também pode levar o pedido direto à Autoridade Nacional de Proteção de Dados (ANPD).'
 	]),
 	P('Mudanças nesta política', [
@@ -171,7 +241,7 @@ export const termos: LegalSection[] = [
 		'As decisões de ensino são suas: o material, o que entra na atividade e a revisão antes de publicar.'
 	]),
 	P('Conta e responsabilidade', [
-		'Você guarda a sua senha e responde pelo que acontece na sua conta. Se suspeitar de acesso indevido, escreva para suporte@spokke.app.',
+		'Você guarda a sua senha e responde pelo que acontece na sua conta. Se suspeitar de acesso indevido, escreva para suporte@spokke.com.br.',
 		'A conta de professor é para maiores de 18 anos. O aluno responde pelo link, sem cadastro, e a conta de aluno é opcional: serve para ele reencontrar o que já respondeu.'
 	]),
 	P('Conteúdo que você envia', [
@@ -199,14 +269,14 @@ export const termos: LegalSection[] = [
 	]),
 	P('Disponibilidade e suporte', [
 		'Trabalhamos para manter o Spokke no ar, mas não prometemos funcionamento sem interrupção. Um plano vencido nunca tira do ar uma atividade publicada.',
-		'O suporte é por e-mail, em suporte@spokke.app.'
+		'O suporte é por e-mail, em suporte@spokke.com.br.'
 	]),
 	P('Limitação de responsabilidade', [
 		'Na extensão máxima que a lei permite, a responsabilidade total do Spokke por qualquer reclamação ligada ao serviço fica limitada ao que você pagou nos 12 meses anteriores ao fato.',
 		'Não respondemos por lucro cessante nem por dano indireto. Nada aqui afasta os direitos do consumidor que a lei torna irrenunciáveis.'
 	]),
 	P('Encerramento', [
-		'Para encerrar a sua conta, escreva para suporte@spokke.app. Podemos suspender ou encerrar contas que violem estes termos, avisando antes sempre que a situação permitir.'
+		'Para encerrar a sua conta, escreva para suporte@spokke.com.br. Podemos suspender ou encerrar contas que violem estes termos, avisando antes sempre que a situação permitir.'
 	]),
 	P('Lei aplicável e foro', [
 		'Estes termos seguem a lei brasileira. Quem contrata como consumidor pode acionar a Justiça no foro do próprio domicílio.'
@@ -244,13 +314,25 @@ export const cookies: LegalSection[] = [
 				'spokke-volume: o volume do som de acerto e de erro.',
 				'spokke-pronuncia: se o teclado virtual mostra a pronúncia nas teclas.',
 				'spokke-mapa-<módulo>: até onde o personagem do mapa já andou, para a animação não se repetir.',
-				'spokke:draft:<tentativa>: o rascunho de uma resposta longa, para ele não sumir se a página recarregar.'
+				'spokke:draft:<tentativa>: o rascunho de uma resposta longa, para ele não sumir se a página recarregar.',
+				'spokke-medicao: a sua resposta ao aviso de medição das páginas públicas (aceitou ou recusou).'
 			]
 		}
 	),
-	P('Cookies de análise e de publicidade', [
-		'Não usamos. Não há pixel de rede social, ferramenta de análise de terceiros nem rastreamento entre sites.'
-	]),
+	P(
+		'Cookies de medição e de publicidade',
+		[
+			'De publicidade, não usamos nenhum: não há pixel de rede social nem rastreamento entre sites.',
+			'Para saber quais páginas públicas ajudam os professores (a página inicial, os planos e o blog), o site pode usar o Google Analytics, e só depois que você aceita o aviso dessas páginas. Sem o aceite, nenhum cookie de medição é gravado, e a medição nunca roda no painel do professor nem nas atividades dos alunos.'
+		],
+		{
+			l: [
+				'_ga: distingue as visitas de forma anônima para o Google Analytics. Vale 2 anos.',
+				'_ga_<identificador>: guarda o estado da visita para o Google Analytics. Vale 2 anos.'
+			],
+			note: 'Para mudar de ideia, use "Preferências de cookies" no rodapé das páginas públicas: recusar apaga esses cookies e para a medição.'
+		}
+	),
 	P('Como controlar', [
 		'Você apaga cookies e armazenamento local pelas configurações do navegador. Apagar os essenciais desconecta a sua sessão e faz o aparelho esquecer a tentativa em andamento; as respostas já enviadas continuam guardadas.'
 	])
@@ -278,7 +360,7 @@ export const acessibilidade: LegalSection[] = [
 		]
 	}),
 	P('Como reportar uma barreira', [
-		'Escreva para acessibilidade@spokke.app contando a tela, o que você tentou fazer e a tecnologia assistiva que usa.',
+		'Escreva para acessibilidade@spokke.com.br contando a tela, o que você tentou fazer e a tecnologia assistiva que usa.',
 		'Barreira que impede um aluno de terminar uma atividade passa na frente de tudo.'
 	])
 ];
@@ -295,21 +377,21 @@ export interface Canal {
 export const canais: Canal[] = [
 	{
 		label: 'Suporte',
-		value: 'suporte@spokke.app',
+		value: 'suporte@spokke.com.br',
 		note: 'Dúvidas de uso e problemas técnicos.',
-		href: 'mailto:suporte@spokke.app'
+		href: 'mailto:suporte@spokke.com.br'
 	},
 	{
 		label: 'Privacidade',
-		value: 'privacidade@spokke.app',
+		value: 'privacidade@spokke.com.br',
 		note: 'Pedidos sobre dados pessoais (LGPD).',
-		href: 'mailto:privacidade@spokke.app'
+		href: 'mailto:privacidade@spokke.com.br'
 	},
 	{
 		label: 'Escolas e redes',
-		value: 'escolas@spokke.app',
+		value: 'escolas@spokke.com.br',
 		note: 'Plano Scholar e contrato da escola.',
-		href: 'mailto:escolas@spokke.app'
+		href: 'mailto:escolas@spokke.com.br'
 	}
 ];
 

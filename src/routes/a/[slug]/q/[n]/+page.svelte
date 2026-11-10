@@ -678,7 +678,7 @@
 	}
 </script>
 
-<svelte:head><title>Questão {data.index} — {data.activity.title}</title></svelte:head>
+<svelte:head><title>Questão {data.index} · {data.activity.title} · Spokke</title></svelte:head>
 <svelte:window onkeydown={onKey} />
 
 <header

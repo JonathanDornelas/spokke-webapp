@@ -50,6 +50,10 @@ function isPublicPath(pathname: string): boolean {
 	// A atividade de exemplo e a fala dela: o "Responder um exemplo" da home é
 	// para quem ainda não tem conta.
 	if (pathname === '/exemplo' || pathname.startsWith('/exemplo/')) return true;
+	// O blog e o sitemap: a porta de entrada por busca orgânica (docs/blog.md).
+	if (pathname === '/blog' || pathname.startsWith('/blog/')) return true;
+	// O índice de sitemaps e as partes dele (sitemap.xml, sitemap-paginas.xml, sitemap-blog.xml).
+	if (/^\/sitemap(-[a-z]+)?\.xml$/.test(pathname)) return true;
 	if (PUBLIC_PATHS.includes(pathname)) return true;
 	return false;
 }

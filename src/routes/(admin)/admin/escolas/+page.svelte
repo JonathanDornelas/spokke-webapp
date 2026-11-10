@@ -53,7 +53,7 @@
 	};
 </script>
 
-<svelte:head><title>Escolas — painel interno</title></svelte:head>
+<svelte:head><title>Escolas · Painel interno · Spokke</title></svelte:head>
 
 <div class="mb-5 flex flex-wrap items-end gap-3">
 	<h1 class="flex-1 font-display text-title font-semibold tracking-[-0.022em]">Escolas</h1>

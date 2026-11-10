@@ -169,7 +169,7 @@
 	};
 </script>
 
-<svelte:head><title>Revisar itens — Spokke</title></svelte:head>
+<svelte:head><title>Revisar questões · {data.activity.title} · Spokke</title></svelte:head>
 
 <WizardShell
 	step={3}

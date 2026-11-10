@@ -142,7 +142,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.activity.title} — resultados</title></svelte:head>
+<svelte:head><title>{data.activity.title} · Resultados · Spokke</title></svelte:head>
 
 <div class="flex min-h-full flex-col">
 	<header

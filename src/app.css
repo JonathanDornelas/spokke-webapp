@@ -713,6 +713,132 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Texto do artigo do blog — o HTML que sai do Markdown (`$lib/server/blog`).
+   Ele chega sem classe nenhuma, então o desenho mora aqui, por elemento, e
+   SÓ no bloco de texto: os blocos com componente (exemplo, questão, "No
+   Spokke", perguntas) ficam fora desta classe e têm o desenho deles. As
+   medidas são as do "Blog Artigo" do Claude Design: 17 a 18 px, entrelinha
+   1,7, no máximo 68 caracteres por linha.
+--------------------------------------------------------------------------- */
+@utility prosa-do-blog {
+	font-size: 17px;
+	line-height: 1.7;
+	@media (width >= 48rem) {
+		font-size: 18px;
+	}
+	& p {
+		max-width: 68ch;
+		margin: 0 0 1.25rem;
+		text-wrap: pretty;
+	}
+	& h2 {
+		margin: 3.5rem 0 1rem;
+		scroll-margin-top: 6rem;
+		font-family: var(--font-display);
+		font-size: 24px;
+		font-weight: 600;
+		line-height: 1.18;
+		letter-spacing: -0.015em;
+		text-wrap: balance;
+		@media (width >= 48rem) {
+			font-size: 28px;
+		}
+	}
+	& h3,
+	& h4 {
+		margin: 2rem 0 0.625rem;
+		scroll-margin-top: 6rem;
+		font-family: var(--font-display);
+		font-size: 20px;
+		font-weight: 600;
+		line-height: 1.25;
+	}
+	& :is(ul, ol) {
+		display: grid;
+		gap: 0.5rem;
+		max-width: 66ch;
+		margin: 0 0 1.25rem;
+		padding-inline-start: 1.375rem;
+		line-height: 1.6;
+	}
+	& ul {
+		list-style: disc;
+	}
+	& ol {
+		list-style: decimal;
+	}
+	& li::marker {
+		color: var(--color-primary);
+	}
+	& a {
+		color: var(--color-primary);
+		text-decoration: underline;
+		text-decoration-thickness: 1.5px;
+		text-underline-offset: 3px;
+	}
+	& a:hover {
+		color: color-mix(in oklab, var(--color-primary) 78%, var(--color-base-content));
+	}
+	& strong {
+		font-weight: 700;
+	}
+	& em {
+		font-style: italic;
+	}
+	& code {
+		padding: 0.1em 0.35em;
+		border-radius: 6px;
+		background: var(--color-base-200);
+		font-family: var(--font-mono);
+		font-size: 0.88em;
+	}
+	& blockquote {
+		max-width: 64ch;
+		margin: 0 0 1.25rem;
+		padding-inline-start: 1rem;
+		border-inline-start: 3px solid var(--color-line);
+		color: color-mix(in oklab, var(--color-base-content) 75%, transparent);
+	}
+	& hr {
+		margin: 2.5rem 0;
+		border-color: var(--color-line);
+	}
+	/* Frase no idioma alvo dentro do texto (<span lang="en">): a fonte de conteúdo. */
+	& [lang]:not([lang|='pt']) {
+		font-family: var(--font-content);
+	}
+	/* A tabela rola de lado dentro da moldura dela, nunca a página. */
+	& .tabela {
+		margin: 0 0 1.25rem;
+		overflow-x: auto;
+		border: 1px solid var(--color-line);
+		border-radius: 12px;
+	}
+	& table {
+		width: 100%;
+		min-width: 480px;
+		border-collapse: collapse;
+		font-size: 15px;
+		line-height: 1.5;
+	}
+	& th {
+		padding: 12px 14px;
+		border-bottom: 1px solid var(--color-line);
+		background: var(--color-base-200);
+		font-weight: 700;
+		text-align: start;
+	}
+	& td {
+		padding: 12px 14px;
+		border-bottom: 1px solid var(--color-line);
+		vertical-align: top;
+	}
+	& tbody tr:last-child td {
+		border-bottom: 0;
+	}
+}
+
+/* ---------------------------------------------------------------------------
    Movimento — só transform e opacity. Nenhuma dependência JS no Player.
 --------------------------------------------------------------------------- */
 /* O TOQUE em tudo que se aperta. Afunda RÁPIDO (120 ms) e volta com uma sobra

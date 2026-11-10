@@ -207,7 +207,7 @@
 	];
 </script>
 
-<svelte:head><title>Módulos — Spokke</title></svelte:head>
+<svelte:head><title>Módulos · Spokke</title></svelte:head>
 <svelte:window onclick={aoClicarFora} onkeydown={aoTeclar} />
 
 {#snippet icone(d: string, classe = 'size-3')}

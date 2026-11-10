@@ -18,8 +18,26 @@
 	import EnunciadoDaQuestao from './exemplo/EnunciadoDaQuestao.svelte';
 	import RespostaDaQuestao from './exemplo/RespostaDaQuestao.svelte';
 	import { RespostaDoExemplo, type QuestaoNaTela } from './exemplo/resposta.svelte';
+	import { TRIAL } from '$lib/billing/catalogo';
 
 	let { data }: { data: { exemplo: QuestaoNaTela[] } } = $props();
+
+	/**
+	 * O letreiro entre o hero e as habilidades: quatro respostas que o hero deixa
+	 * no ar, cada uma uma frase (um "10" solto não diz de quê). Texto revisado
+	 * pela voz do Cérebro (`../spokke-seo`, artifacts/contents/home/draft.md
+	 * "1b"); o desenho é o "Faixa Letreiro" do Claude Design. Os números saem do
+	 * código: o teste de `TRIAL`; os idiomas são os de `languageLabels` — o mesmo
+	 * "dez" do bloco de idiomas, mais abaixo.
+	 */
+	const destaques = [
+		'Escreva só no idioma que você ensina. A tradução vem pronta para você conferir.',
+		'Seu aluno responde sem criar conta e sem instalar nada.',
+		'10 idiomas, do inglês ao árabe.',
+		`Você testa tudo grátis por ${TRIAL.dias} dias.`
+	];
+	/** Quatro voltas da lista: as duas metades iguais fecham o laço do `-50%` em qualquer largura. */
+	const VOLTAS = [0, 1, 2, 3];
 
 	// O celular do hero é a atividade de exemplo de verdade (`/exemplo`): as
 	// mesmas questões, os mesmos componentes do Player e a correção do servidor.
@@ -379,7 +397,7 @@
 			</div>
 
 			<!-- celular ao vivo: as questões respondem de verdade -->
-			<div class="relative flex min-h-[760px] items-center justify-center">
+			<div class="relative flex min-h-[640px] items-center justify-center">
 				<!-- As formas passam da coluna do celular para os lados, e no desktop a
 				     borda esquerda delas cai DENTRO da coluna do texto. Com o recorte
 				     (`overflow-hidden`) o triângulo, ao girar e andar para a esquerda,
@@ -427,68 +445,78 @@
 					class="relative z-1 flex flex-col items-center lg:z-4"
 					{@attach vigiarUso}
 				>
-					<!-- 700 px de altura: com 600 a área útil era de 437 px e escuta,
-					     montar e fala passavam dela, rolando dentro do aparelho. Com 700
-					     cada questão cabe inteira antes de responder, e o celular fica na
-					     proporção de um de verdade (~2:1). A medida está em
-					     e2e/home.spec.ts. -->
+					<!-- O APARELHO tem o tamanho de um celular (344 × 600) e não muda: quem
+					     encolhe é a TELA dele. Com a interface em tamanho cheio, escuta,
+					     montar e fala passavam da área útil e rolavam dentro do aparelho;
+					     esticar o celular para 700 px resolvia, mas desfigurava o aparelho
+					     (pedido do dono do repositório: o tamanho estava bom). O `zoom`
+					     reduz a tela inteira por igual, como a escala de interface de um
+					     celular de verdade, e é de LAYOUT, não de pintura: as caixas
+					     encolhem junto e a rolagem continua medindo certo. A conta: a tela
+					     tem 326 × 582 visíveis e pede ~682 de altura em tamanho cheio,
+					     então 0,85. A medida está em e2e/home.spec.ts. -->
 					<div
 						style="--i: 3"
-						class="flex h-[700px] w-[344px] animate-entrada flex-col overflow-hidden rounded-[40px]
+						class="flex h-[600px] w-[344px] animate-entrada flex-col overflow-hidden rounded-[40px]
 					       border-[9px] border-bezel bg-base-100 shadow-[0_30px_70px_-34px_rgb(var(--shadow)/0.55)]
 					       em-sequencia"
 					>
-						<div class="flex items-center gap-3 p-4 pb-3">
-							<Avatar nome="Júlia" size={34} radius="rounded-full" />
-							<div class="h-2.5 flex-1 overflow-hidden rounded-full bg-base-300">
-								<div
-									class="h-full origin-left rounded-full bg-primary transition-transform duration-500"
-									style="transform: scaleX({(demo + 1) / respostas.length})"
-								></div>
-							</div>
-							<span class="font-mono text-xs text-base-content/60"
-								>{demo + 1}/{respostas.length}</span
-							>
-						</div>
-
-						<form onsubmit={verificarNoCelular} class="flex min-h-0 flex-1 flex-col">
-							<div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pt-2 pb-4">
-								{#key demo}
-									<div class="flex flex-1 animate-entrada flex-col">
-										<EnunciadoDaQuestao resposta={atual} compacto />
-										<RespostaDaQuestao resposta={atual} compacto />
-									</div>
-								{/key}
-							</div>
-
-							<div class="flex gap-2.5 border-t border-line px-5 pt-3 pb-5">
-								{#if atual.questao.skippable && !atual.feedback}
-									<button
-										type="button"
-										onclick={proxima}
-										disabled={atual.verificando}
-										class="btn min-h-[50px] motion-tap btn-neutral font-semibold"
-									>
-										Pular
-									</button>
-								{/if}
-								<button
-									type={atual.feedback ? 'button' : 'submit'}
-									onclick={atual.feedback ? proxima : undefined}
-									disabled={atual.feedback ? false : !atual.pronta || atual.verificando}
-									class="btn min-h-[50px] flex-1 motion-tap gap-2 btn-primary text-base font-bold"
+						<div
+							class="flex h-[calc(582px/var(--escala))] w-[calc(326px/var(--escala))] [zoom:var(--escala)]
+							       flex-col [--escala:0.85]"
+						>
+							<div class="flex items-center gap-3 p-4 pb-3">
+								<Avatar nome="Júlia" size={34} radius="rounded-full" />
+								<div class="h-2.5 flex-1 overflow-hidden rounded-full bg-base-300">
+									<div
+										class="h-full origin-left rounded-full bg-primary transition-transform duration-500"
+										style="transform: scaleX({(demo + 1) / respostas.length})"
+									></div>
+								</div>
+								<span class="font-mono text-xs text-base-content/60"
+									>{demo + 1}/{respostas.length}</span
 								>
-									{#if atual.verificando}
-										<Loading variant="fila" size={12} tone="current" label="Verificando" />
-										Verificando…
-									{:else if atual.feedback}
-										Próxima
-									{:else}
-										Verificar
-									{/if}
-								</button>
 							</div>
-						</form>
+
+							<form onsubmit={verificarNoCelular} class="flex min-h-0 flex-1 flex-col">
+								<div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pt-2 pb-4">
+									{#key demo}
+										<div class="flex flex-1 animate-entrada flex-col">
+											<EnunciadoDaQuestao resposta={atual} compacto />
+											<RespostaDaQuestao resposta={atual} compacto />
+										</div>
+									{/key}
+								</div>
+
+								<div class="flex gap-2.5 border-t border-line px-5 pt-3 pb-5">
+									{#if atual.questao.skippable && !atual.feedback}
+										<button
+											type="button"
+											onclick={proxima}
+											disabled={atual.verificando}
+											class="btn min-h-[50px] motion-tap btn-neutral font-semibold"
+										>
+											Pular
+										</button>
+									{/if}
+									<button
+										type={atual.feedback ? 'button' : 'submit'}
+										onclick={atual.feedback ? proxima : undefined}
+										disabled={atual.feedback ? false : !atual.pronta || atual.verificando}
+										class="btn min-h-[50px] flex-1 motion-tap gap-2 btn-primary text-base font-bold"
+									>
+										{#if atual.verificando}
+											<Loading variant="fila" size={12} tone="current" label="Verificando" />
+											Verificando…
+										{:else if atual.feedback}
+											Próxima
+										{:else}
+											Verificar
+										{/if}
+									</button>
+								</div>
+							</form>
+						</div>
 					</div>
 
 					<div
@@ -515,7 +543,47 @@
 				</section>
 			</div>
 		</section>
+	</div>
 
+	<!-- 1b · O letreiro (o desenho "Faixa Letreiro" do Claude Design): de ponta a
+	     ponta, por isso fora do contêiner de 1200px. As quatro frases correm
+	     separadas por uma estrelinha na cor da marca, com as pontas sumindo em
+	     degradê, e param com o ponteiro em cima. É o segundo laço infinito da
+	     home, ao lado do carrossel de idiomas (home.md "Movimento"), e o mesmo
+	     `en-marquee`; com `prefers-reduced-motion` ele fica parado.
+	     **O que se move é `aria-hidden`**: o leitor de tela lê a lista parada
+	     logo acima, uma vez, em vez de quatro cópias no meio de uma animação. -->
+	<section aria-label="Destaques" class="bg-base-300 text-base-content">
+		<ul class="sr-only">
+			{#each destaques as destaque (destaque)}
+				<li>{destaque}</li>
+			{/each}
+		</ul>
+		<div
+			aria-hidden="true"
+			class="group overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_40px,#000_calc(100%-40px),transparent)]
+			       py-3"
+		>
+			<div
+				class="flex w-max animate-[en-marquee_60s_linear_infinite] items-center gap-[22px] pe-[22px]
+				       text-[13.5px] leading-5 font-semibold whitespace-nowrap group-hover:[animation-play-state:paused]"
+			>
+				{#each VOLTAS as volta (volta)}
+					{#each destaques as destaque, i (`${volta}-${i}`)}
+						<span>{destaque}</span>
+						<svg class="size-3 shrink-0 text-primary" viewBox="0 0 24 24">
+							<path
+								d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"
+								fill="currentColor"
+							/>
+						</svg>
+					{/each}
+				{/each}
+			</div>
+		</div>
+	</section>
+
+	<div class="mx-auto max-w-[1200px] px-7">
 		<!-- 2 · Quatro habilidades -->
 		<section id="habilidades" class="pt-[72px]">
 			<div class="mb-9 max-w-[62ch] reveal-row" use:reveal>

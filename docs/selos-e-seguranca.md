@@ -85,10 +85,12 @@ O gateway é o Mercado Pago, pronto e desligado (`docs/adr-002-billing.md`, seç
 - [ ] Na tela de planos, o direito de arrependimento (CDC, art. 49: sete dias para compra fora
       do estabelecimento) e como cancelar. O cancelamento no fim do período já existe.
 
-### 5. Verificações técnicas · não viram selo, evitam alerta
+### 5. Verificações técnicas · evitam alerta (e duas viraram selo)
 
-Nada disto vai para o rodapé. São as coisas que, quando faltam, fazem o navegador ou o e-mail
-avisar o professor de que algo está errado.
+São as coisas que, quando faltam, fazem o navegador ou o e-mail avisar o professor de que algo
+está errado. Duas delas, o SSL e o Google Safe Browsing, aparecem no rodapé desde 2026-11-10, a
+pedido do dono do repositório, como LINK para a verificação ao vivo (veja "Os dois selos do
+rodapé", logo abaixo); as outras continuam fora dele.
 
 - [ ] **Domínio de e-mail verificado** com SPF, DKIM e DMARC (no Resend, `CLAUDE.md`
       "Pendências"). Sem isso o convite cai no spam e qualquer um pode mandar e-mail "do
@@ -98,6 +100,58 @@ avisar o professor de que algo está errado.
       securityheaders.com ou no Mozilla Observatory.
 - [ ] Domínio limpo no Google Safe Browsing (Transparency Report) e cadastrado no Search
       Console, que avisa se o site for marcado.
+
+### 5b. Os dois selos do rodapé · SSL e Google Safe Browsing
+
+No extremo direito do rodapé, oposto ao "© 2026 Spokke" (`SiteFooter.svelte`, lendo
+`selosDeVerificacao` de `src/lib/content/institucional.ts`). Cada selo é uma imagem PNG (2x, em
+`static/selos/`) que é o próprio link para a verificação de um terceiro, com o texto convidando a
+conferir ("Verificar no SSL Labs", "Verificar o status do site"), nunca "site seguro". O emblema é
+um certificado e um escudo numa roseta azul, não um cadeado.
+
+**As imagens são nossas, e de propósito.** Procuramos o selo oficial dos dois em novembro de 2026 e
+ele não existe: a Let's Encrypt não oferece selo e pede para tirar do ar os "badges" feitos com o
+logo dela; o Google não tem selo do Safe Browsing, e os termos do serviço proíbem sugerir endosso.
+As imagens que circulam na web com essas marcas são cópias não oficiais — usar uma seria exatamente
+a decoração que afirma segurança que a regra do começo proíbe. Os PNGs saem de
+`scripts/gerar-selos.mjs` (HTML com as cores da marca, renderizado pelo Chromium do Playwright, como
+as imagens de `static/og/`); mudou o texto, rode de novo e confira as medidas que ele imprime contra
+as de `selosDeVerificacao`. Se um dia o certificado vier de uma autoridade com programa de selo
+(Sectigo, DigiCert), o selo OFICIAL dela pode substituir o do SSL, com o link de verificação dela.
+
+**O domínio é o do site aberto.** Em produção o link sai do endereço em que o visitante está
+(`page.url`), então `spokke.com.br` é verificado sem configurar nada no deploy. Em
+desenvolvimento (localhost, IP, `.local`) ele usa `dominioDoSite` (`spokke.com.br`), só para os
+selos aparecerem iguais.
+
+O que fazer quando o site for para o ar em `spokke.com.br`, nesta ordem:
+
+1. **HTTPS de verdade no domínio e no `www`.** Certificado válido (Let's Encrypt pelo proxy na
+   frente do `adapter-node`, ou o do provedor), redirecionamento de `http://` para `https://` e
+   de `www.spokke.com.br` para `spokke.com.br` (ou o contrário, mas um só). `ORIGIN` do
+   adapter-node com `https://spokke.com.br`.
+2. **Nota A no SSL Labs.** Rode o teste em
+   `https://www.ssllabs.com/ssltest/analyze.html?d=spokke.com.br` e corrija o que ele apontar:
+   - só TLS 1.2 e 1.3;
+   - cadeia de certificados completa;
+   - HSTS com `max-age` de pelo menos seis meses (`Strict-Transport-Security: max-age=15552000;
+includeSubDomains`).
+
+   Não marque "Do not show the results on the boards" se quiser que o link mostre a nota
+   guardada; o selo usa `&latest`, que abre o último resultado em vez de testar de novo a cada
+   clique.
+
+3. **Search Console com a propriedade de DOMÍNIO** (`spokke.com.br`, verificada por registro
+   TXT no DNS). É ele que avisa por e-mail se o Google marcar o site como inseguro, em
+   "Segurança e ações manuais > Problemas de segurança".
+4. **Conferir o Transparency Report**:
+   `https://transparencyreport.google.com/safe-browsing/search?url=spokke.com.br&hl=pt_BR` tem de
+   dizer que não há conteúdo não seguro. Um domínio novo pode aparecer como "sem dados" nos
+   primeiros dias; isso não é problema, mas espere ele aparecer antes de divulgar o link.
+5. **Se uma das verificações der problema, tire o selo** (deixe `selosDeVerificacao` devolvendo
+   só o que está bom) até resolver: o link mostraria o problema para quem clicasse.
+6. Opcional, depois de meses com HSTS estável: pedir a inclusão em `hstspreload.org`. É difícil
+   de desfazer, então só com todos os subdomínios já em HTTPS.
 
 ### 6. Acessibilidade · declaração, não selo
 
@@ -135,7 +189,9 @@ kit da Parte 2 responde quase tudo que uma escola pergunta.
 
 ## O que NÃO colocar
 
-- "Site seguro", "100% protegido", cadeado desenhado, selo de certificado SSL comum.
+- "Site seguro", "100% protegido", cadeado desenhado, imagem de "selo SSL" que não leva a
+  verificação nenhuma. (Os dois selos do rodapé, seção 5b, são LINKS para a verificação ao vivo,
+  com o texto convidando a conferir: é isso que os separa destes.)
 - "LGPD Compliant" ou "Certificado LGPD" de consultoria.
 - Número de usuários, notas ou depoimentos que não existem (`home.md` "Voz").
 - Logo de escola cliente sem autorização por escrito.

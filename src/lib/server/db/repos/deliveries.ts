@@ -7,7 +7,7 @@ type TeacherScope = { id: string };
  * O token do link pessoal. É a IDENTIDADE do aluno no Player — não existe
  * senha, e o e-mail é o canal, não a credencial. Por isso ele precisa ser
  * imprevisível: `crypto.randomUUID()` sem os hífens, em três grupos, para
- * caber legível no corpo do e-mail (`spokke.app/e/8fk2-jp7q-...`).
+ * caber legível no corpo do e-mail (`spokke.com.br/e/8fk2-jp7q-...`).
  */
 export function gerarTokenConvite(): string {
 	const bruto = crypto.randomUUID().replace(/-/g, '');

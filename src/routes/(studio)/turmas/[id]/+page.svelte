@@ -390,7 +390,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.classroom.name} — Spokke</title></svelte:head>
+<svelte:head><title>{data.classroom.name} · Turmas · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a

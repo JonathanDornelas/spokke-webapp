@@ -83,7 +83,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const published = await repo.published(params.id);
 
 	return {
-		activity: { id: activity.id },
+		activity: { id: activity.id, title: activity.title },
 		itemCount: draft.items.length,
 		// "Questão anterior"/"Próxima" andam pelo rascunho na ordem dele. `null`
 		// na ponta é o que desabilita o botão — não escondê-lo, senão a barra do

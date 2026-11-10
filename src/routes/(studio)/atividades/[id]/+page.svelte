@@ -95,7 +95,7 @@
 		estado: 'no-ar',
 		modulos: { dela: [], outros: [] },
 		audio: { done: 6, total: 6 },
-		link: 'https://spokke.app/a/atv_01',
+		link: 'https://spokke.com.br/a/atv_01',
 		qr: '',
 		access: { requireCode: true, code: 'KQTP', showResult: true },
 		items: [
@@ -325,7 +325,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.activity.title} — Spokke</title></svelte:head>
+<svelte:head><title>{data.activity.title} · Atividades · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a

@@ -943,6 +943,16 @@ A tabela de planos, UMA para a home (seção `#planos`) e para `(site)/planos`. 
 **Os preços são PLACEHOLDER e vivem em `$lib/content/planos.ts`, nunca aqui** — ver paginas.md
 "Planos e preços". O componente desenha o que aquele arquivo diz.
 
+**É um carrossel** (pedido do dono do repositório): o cartão em foco fica no centro em tamanho
+cheio e os vizinhos aparecem a 92%, esmaecidos, com as pontas do trilho sumindo em degradê. **Abre
+no Pro.** Embaixo, as setas ‹ › e um ponto por plano (no centro, porque nas laterais elas cobririam
+as pontas dos vizinhos no celular). Também andam as setas do teclado com o foco dentro, o arrasto
+com o dedo e o clique num cartão do lado (menos no botão dele, que age). O Tab até o botão de um
+cartão o traz ao centro (`onfocusin`). **A posição é CSS**: a largura do cartão sai do contêiner
+(`@container`, `100cqw`) e o trilho anda `índice × (cartão + vão)` por `translate` — o servidor já
+manda o Pro no centro, sem medir nada em JS e sem salto na hidratação. Padrão da APG: região
+rotulada, um `group` por cartão ("Pro, 2 de 4") e um `aria-live` com o cartão em foco.
+
 O cartão do plano atual ganha "Seu plano agora", e esse selo vence o destaque de marketing. Recurso
 ausente é um **traço apagado, não um X vermelho**: vermelho é a semântica de correção e não decora
 comparação de plano. Cada item traz um `sr-only` dizendo "incluído"/"não incluído" — ícone sozinho
@@ -1099,7 +1109,9 @@ de voz", "corrigida pelo professor").
 
 ## Metadados e prévia de compartilhamento — `Metadados.svelte`
 
-Props: `{ titulo; descricao; tituloDaAba?; imagem?; imagemAlt?; tipo?: 'website' | 'article'; indexar? }`.
+Props: `{ titulo; descricao; tituloDaAba?; imagem?; imagemAlt?; tipo?: 'website' | 'article'; indexar?; publicadoEm?; atualizadoEm?; secao? }`.
+As três últimas são do artigo do blog (`tipo="article"`): `article:published_time`,
+`article:modified_time` e `article:section`. **Não existe `article:author`**: o blog não assina.
 Toda página PÚBLICA abre com ele no lugar de um `<svelte:head>` solto: título da aba, descrição,
 canonical, Open Graph (`og:title`, `og:description`, `og:image` com 1200×630 e `alt`, `og:url`,
 `og:type`, `og:locale` `pt_BR`, `og:site_name`) e Twitter Card `summary_large_image`.
@@ -1111,7 +1123,8 @@ canonical, Open Graph (`og:title`, `og:description`, `og:image` com 1200×630 e 
 - **As imagens são duas, em `static/og/`**: `spokke.png` (a marca e a promessa, padrão) e
   `atividade.png` (o link que o professor manda para a turma e o convite de turma). Foram
   desenhadas em HTML com os tokens da marca e renderizadas pelo Chromium do Playwright; mudar a
-  promessa pede gerar de novo, no mesmo tamanho.
+  promessa pede gerar de novo, no mesmo tamanho. No artigo do blog a imagem é a capa dele (JPEG
+  em `static/blog/capas/`), e o `og:image:type` sai da extensão do arquivo.
 - **`indexar={false}`** dá `noindex` e tira o canonical, mas MANTÉM a prévia: é o caso do link da
   atividade (`a/[slug]`: o título dela e "N questões de inglês, uns M minutos" — nunca uma
   questão, e `e2e/aluno.spec.ts` confere que o gabarito não aparece) e do convite de turma.
@@ -1120,6 +1133,13 @@ canonical, Open Graph (`og:title`, `og:description`, `og:image` com 1200×630 e 
   cadastro não. O `robots.txt` bloqueia só `/api/`: bloquear `/a/` impediria o robô da prévia de
   ler o título do link.
 - **Título da aba com "·", nunca travessão** (voz do projeto de SEO): "Planos e preços · Spokke".
+  **O padrão vale para o site INTEIRO** — páginas públicas, Studio, Player, painel interno e erro:
+  **o que é a página · onde ela fica · Spokke**, do mais específico para o mais geral, e a marca
+  sempre por último. "Atividades · Spokke", "Present perfect · Atividades · Spokke", "Publicar ·
+  Present perfect · Spokke", "Questão 3 · Present perfect · Spokke", "Pedidos · Painel interno ·
+  Spokke", "Assinatura · Conta · Spokke". Sem termo interno ("Revisar questões", não "Revisar
+  itens"). A ÚNICA que começa pela marca é a home, que é a que conta para busca. Havia "— Spokke",
+  "— painel interno" e "— resultados" misturados, e três telas do Player sem a marca.
 
 ## Casca das páginas públicas — `SiteHeader.svelte`, `SiteFooter.svelte`, `SiteHero.svelte`, `LegalPage.svelte`
 
@@ -1128,6 +1148,28 @@ só, não dois parecidos. `(site)/+layout.svelte` monta `SiteHeader`/`SiteFooter
 monta os dois também, e só ela usa o snippet `extra` de `SiteHeader` pra acrescentar o toggle de
 tema manual (home.md "Toggle de tema" — nenhuma outra página pública tem esse controle, seguem
 `prefers-color-scheme` puro).
+
+O rodapé tem, no bloco da marca, os ícones das redes (`redes` em `institucional.ts`: sem `url` o
+ícone fica sem link, com o mesmo hover do que terá link — a fileira não muda quando os perfis
+entrarem) e, na linha de baixo, oposto ao "©", os selos de
+verificação (SSL e Google Safe Browsing, `selosDeVerificacao`), em PNG próprio
+(`static/selos/`, gerado por `scripts/gerar-selos.mjs`): a imagem é o link, e o `alt` diz o que
+ele faz. O domínio verificado é o da página
+aberta (`page.url`), com `dominioDoSite` (`spokke.com.br`) só em localhost — ver
+`docs/selos-e-seguranca.md` "5b".
+
+**No celular a navegação do `SiteHeader` vive num menu** (o "Blog Cabecalho" do Claude Design): o
+botão de três linhas abre, abaixo da barra, os links e o "Entrar no Studio" em largura inteira;
+Esc e o clique num link fecham. No desktop nada muda. O link da rota em que se está ganha
+`aria-current="page"` (as âncoras da home nunca contam). **O "Blog" é item fixo**: o último da nav da
+home (`defaultNav`) e da de `(site)`, e um link da coluna "Plataforma" do rodapé.
+
+**Medição — `MedicaoDoSite.svelte`**, no layout raiz. Sem `PUBLIC_GA_ID` não renderiza nada. Com
+ele, mostra o aviso de medição (no celular, menos de um oitavo da altura) só nas páginas públicas
+(`rotaMedida` em `$lib/client/medicao.ts`), e o Google Analytics só carrega depois do "Aceitar".
+Um ouvinte de clique registra os elementos marcados com `data-evento` (mais `data-rotulo` e
+`data-artigo`): a tela marca o HTML e não importa nada. O rodapé tem "Preferências de cookies"
+(só com a medição ligada), que revoga e faz o aviso voltar.
 
 `SiteHeader` recebe `nav` (array `{ href, label }`) com default apontando pras âncoras da home
 (`/#habilidades` etc.) — páginas fora da home passam a própria lista. **Resolva rota real com
@@ -1140,6 +1182,37 @@ próprias colunas; `(site)/+layout.svelte` faz o mesmo pra `nav`).
 com a mesma composição de formas de ambiente confinada a uma faixa lateral sem texto.
 `LegalPage` compõe `SiteHero` com um índice numerado fixo à esquerda no desktop — recebe
 `sections: LegalSection[]` de `$lib/content/institucional.ts`, nunca texto solto na rota.
+
+---
+
+## Blog — `src/lib/components/blog/`
+
+Os desenhos do projeto "Blog" do Claude Design, **menos o autor** (nenhum componente desenha nome,
+foto ou caixa de autor). Regras de rota em paginas.md "Blog"; conteúdo em `docs/blog.md`.
+
+- `CartaoDoArtigo` — `{ artigo: ResumoDoArtigo; variante?: 'padrao' | 'destaque' | 'compacto'; selo? }`.
+  O cartão inteiro é clicável pelo `::after` do link do TÍTULO (o leitor de tela lê um link com o
+  nome do artigo). Chips: tema, "Para escolas" (público escola/ambos) e "Rascunho" (só em dev).
+  `padrao` sem capa não tem imagem; o `destaque` sem capa mostra a composição de formas de
+  `IlustracaoDoArtigo` (três, escolhida pelo slug). Só o rascunho fica sem capa: todo artigo no ar
+  tem uma foto (docs/blog.md "Capas"). Hover: `cartao-interativo`.
+- `ConversaoDoBlog` — `{ publico; slug?; variante?: 'escura' | 'clara'; titulo? }`: a faixa final.
+  Texto e destinos saem de `conversaoDoPublico` (`$lib/blog/links.ts`), com `?origem=`.
+- `NoSpokke` — o bloco "No Spokke" / "Na sua escola": filete de 4px na marca, o texto e UMA chamada.
+- `ExemploPronto` — as frases no idioma alvo (`data-content-lang`, `lang` e `dir` do profile, que o
+  servidor já resolveu), a tradução embaixo e "Copiar a lista" (só as frases, uma por linha: o
+  formato da lista colada). Sem área de transferência, o botão diz para copiar à mão.
+- `SumarioDoArtigo` — `formato: 'celular'` é um `<details>` nativo; `'lateral'` é a coluna fixa que
+  marca a seção atual (a última cujo título passou de 160px do topo) com `aria-current="location"`.
+- `PerguntasFrequentes` (`<details>`, a primeira aberta), `CompartilharArtigo` (copiar link e
+  WhatsApp, sem script de terceiro), `Migalhas` (a página atual sem link), `ChipsDeTemas` (temas
+  como links, mais "Para escolas"), `PaginacaoDoBlog` (links de verdade, não a `Pagination` do
+  Studio), `IndiceDoBlog` e `HubDoBlog` (o corpo das páginas) e `DadosEstruturados` (o JSON-LD, com
+  `<` escapado e a tag montada por partes — o nome dela inteiro dentro do `<script>` do componente
+  confunde o parser do Svelte e o do Prettier).
+
+O texto do Markdown é desenhado pela utility `prosa-do-blog` (`app.css`), aplicada SÓ nos blocos de
+texto: dentro de um componente ela pintaria o `<ol>` e o `<p>` dele.
 
 ---
 

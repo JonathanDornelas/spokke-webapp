@@ -198,7 +198,7 @@
 	let previaTurma = $derived(primeiraTurma);
 </script>
 
-<svelte:head><title>{data.modulo.name} — Módulos — Spokke</title></svelte:head>
+<svelte:head><title>{data.modulo.name} · Módulos · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<div>

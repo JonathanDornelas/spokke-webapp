@@ -91,7 +91,7 @@
 	const assentosLivres = $derived(data.resumo.assentos - data.resumo.ocupados);
 </script>
 
-<svelte:head><title>Escola — Spokke</title></svelte:head>
+<svelte:head><title>Escola · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<HeaderCard

@@ -227,7 +227,7 @@
 	const chipOff = 'border-[1.5px] border-line bg-base-100 hover:border-primary';
 </script>
 
-<svelte:head><title>Materiais — Spokke</title></svelte:head>
+<svelte:head><title>Materiais · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<div class="mb-4 flex flex-wrap items-end gap-x-4 gap-y-3">

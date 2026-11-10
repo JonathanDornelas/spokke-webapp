@@ -69,7 +69,7 @@
 	}
 </script>
 
-<svelte:head><title>Prévia — Spokke</title></svelte:head>
+<svelte:head><title>Prévia · {data.activity.title} · Spokke</title></svelte:head>
 
 <svelte:window onkeydown={aoTeclar} />
 

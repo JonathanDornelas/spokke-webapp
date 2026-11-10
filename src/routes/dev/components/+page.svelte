@@ -311,7 +311,7 @@
 </script>
 
 <svelte:head>
-	<title>Catálogo de componentes — Spokke</title>
+	<title>Catálogo de componentes · Spokke</title>
 </svelte:head>
 
 <div class="min-h-dvh">

@@ -319,7 +319,7 @@
 		<footer
 			class="hidden flex-wrap items-center gap-x-[18px] gap-y-2 px-[30px] py-[15px] text-[12.5px] text-base-content/60 lg:flex"
 		>
-			<span>© 2026 Spokke</span>
+			<span>Copyright © 2026 Spokke. Todos os direitos reservados.</span>
 			<a href={resolve('/(site)/privacidade')} class="text-inherit no-underline">Privacidade</a>
 			<a href={resolve('/(site)/termos')} class="text-inherit no-underline">Termos</a>
 			<a href={resolve('/(site)/ajuda')} class="text-inherit no-underline">Central de ajuda</a>

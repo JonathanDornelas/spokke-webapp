@@ -153,7 +153,7 @@
 	const CABECALHO = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
 </script>
 
-<svelte:head><title>Calendário de liberações — Módulos — Spokke</title></svelte:head>
+<svelte:head><title>Calendário · Módulos · Spokke</title></svelte:head>
 
 {#snippet icone(d: string, classe = 'size-3')}
 	<svg class="{classe} flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"

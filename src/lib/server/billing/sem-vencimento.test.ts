@@ -11,7 +11,7 @@ import { situacaoDaCobranca } from './entitlements';
  */
 describe('plano sem vencimento', () => {
 	const ids = { a: crypto.randomUUID(), b: crypto.randomUUID() };
-	const ATOR = 'admin:intranet:equipe@spokke.app' as const;
+	const ATOR = 'admin:intranet:equipe@spokke.com.br' as const;
 
 	beforeAll(async () => {
 		for (const id of Object.values(ids)) {

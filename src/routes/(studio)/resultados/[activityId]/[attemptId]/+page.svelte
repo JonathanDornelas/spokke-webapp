@@ -202,7 +202,9 @@
 	}
 </script>
 
-<svelte:head><title>{data.attempt.name} — tentativa</title></svelte:head>
+<svelte:head
+	><title>Tentativa de {data.attempt.name} · {data.activity.title} · Spokke</title></svelte:head
+>
 
 <div>
 	<div

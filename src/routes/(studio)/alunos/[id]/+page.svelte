@@ -110,7 +110,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.student.name} — Spokke</title></svelte:head>
+<svelte:head><title>{data.student.name} · Alunos · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a

@@ -180,7 +180,7 @@
 	}
 </script>
 
-<svelte:head><title>Atividades — Spokke</title></svelte:head>
+<svelte:head><title>Atividades · Spokke</title></svelte:head>
 
 {#if data.totalCount === 0}
 	<div class="relative flex min-h-[70vh] items-center overflow-hidden px-4 py-12 lg:px-7 lg:py-14">

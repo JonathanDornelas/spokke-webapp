@@ -225,7 +225,7 @@
 		'flex min-w-0 flex-col gap-3 rounded-[18px] border border-line p-4.5 text-base-content no-underline cartao-interativo hover:text-base-content';
 </script>
 
-<svelte:head><title>Início — Spokke</title></svelte:head>
+<svelte:head><title>Início · Spokke</title></svelte:head>
 
 {#snippet icone(d: string, classe = 'size-4', traco = '2')}
 	<svg class="{classe} flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"

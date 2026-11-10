@@ -13,33 +13,35 @@ específico de rota. Contexto completo de cada página (dados, estados, regras q
 
 ## Mapa
 
-| Rota                                                                               | Papel                                                   |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `/`                                                                                | Home pública (regras em `home.md`)                      |
-| `(auth)/entrar` `cadastro` `esqueci-senha` `redefinir-senha`                       | Acesso — professor e aluno, num seletor                 |
-| `+error.svelte`                                                                    | 404 e 500                                               |
-| `(site)/planos`                                                                    | Planos e preços — e o destino de quem bate num bloqueio |
-| `(site)/contato` `sobre` `ajuda` `privacidade` `termos` `cookies` `acessibilidade` | Páginas institucionais                                  |
-| `(studio)/inicio`                                                                  | Início — uma peça por área; é para onde o login leva    |
-| `(studio)/atividades`                                                              | Lista — **com zero atividades vira o onboarding**       |
-| `(studio)/atividades/[id]`                                                         | A atividade aberta: questões, link, QR, envios          |
-| `(studio)/atividades/nova` → `[id]/materiais` → `revisar` → `publicar`             | Wizard de criação                                       |
-| `(studio)/atividades/[id]/itens/[itemId]`                                          | Editor de item                                          |
-| `(studio)/atividades/[id]/previa`                                                  | Prévia do aluno, sem criar tentativa                    |
-| `(studio)/materiais`                                                               | Biblioteca reusável                                     |
-| `(studio)/resultados` → `[activityId]` → `[attemptId]`                             | Resultados — e a correção, na própria resposta          |
-| `(studio)/turmas` → `[id]` (`nova` só redireciona para a bandeja)                  | Turmas e alunos                                         |
-| `(studio)/alunos/[id]`                                                             | O aluno e o histórico de respostas dele                 |
-| `(studio)/modulos` → `[id]` → `[id]/mapa` · `calendario`                           | Módulos, turmas e programação de envio · calendário     |
-| `(studio)/escola` · `escola/convite/[token]`                                       | Coordenação da escola (só números) · aceite do convite  |
-| `(studio)/conta` (`?aba=assinatura`; `/assinatura` redireciona)                    | Conta e assinatura, em duas abas                        |
-| `(admin)/admin` → `professores` `pedidos` `escolas`                                | Painel interno da plataforma (404 para os outros)       |
-| `a/[slug]` `codigo` `q/[n]` `resultado` `revisao`                                  | Player                                                  |
-| `exemplo`                                                                          | Atividade de exemplo, pública e sem gravar nada         |
-| `e/[token]`                                                                        | Link pessoal do convite (redireciona, não é tela)       |
-| `aluno` (`aluno/entrar` só redireciona para `/entrar?como=aluno`)                  | Área do aluno: conta OPCIONAL e histórico dele          |
-| `aluno/modulos/[id]`                                                               | O mapa do módulo do aluno, no tema 8 bits               |
-| `aluno/convite/[token]`                                                            | Convite de conta: criar/entrar e ligar à turma (botão)  |
+| Rota                                                                                 | Papel                                                   |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| `/`                                                                                  | Home pública (regras em `home.md`)                      |
+| `(auth)/entrar` `cadastro` `esqueci-senha` `redefinir-senha`                         | Acesso — professor e aluno, num seletor                 |
+| `+error.svelte`                                                                      | 404 e 500                                               |
+| `(site)/planos`                                                                      | Planos e preços — e o destino de quem bate num bloqueio |
+| `(site)/contato` `sobre` `ajuda` `privacidade` `termos` `cookies` `acessibilidade`   | Páginas institucionais                                  |
+| `(site)/blog` → `pagina/[n]` · `tema/[tema]` · `para-escolas` · `[slug]`             | Blog (`docs/blog.md`): índice, hubs e artigo, sem autor |
+| `sitemap.xml` (índice) · `sitemap-paginas.xml` · `sitemap-blog.xml` · `blog/rss.xml` | Sitemaps do site (docs/seo) e o feed do blog            |
+| `(studio)/inicio`                                                                    | Início — uma peça por área; é para onde o login leva    |
+| `(studio)/atividades`                                                                | Lista — **com zero atividades vira o onboarding**       |
+| `(studio)/atividades/[id]`                                                           | A atividade aberta: questões, link, QR, envios          |
+| `(studio)/atividades/nova` → `[id]/materiais` → `revisar` → `publicar`               | Wizard de criação                                       |
+| `(studio)/atividades/[id]/itens/[itemId]`                                            | Editor de item                                          |
+| `(studio)/atividades/[id]/previa`                                                    | Prévia do aluno, sem criar tentativa                    |
+| `(studio)/materiais`                                                                 | Biblioteca reusável                                     |
+| `(studio)/resultados` → `[activityId]` → `[attemptId]`                               | Resultados — e a correção, na própria resposta          |
+| `(studio)/turmas` → `[id]` (`nova` só redireciona para a bandeja)                    | Turmas e alunos                                         |
+| `(studio)/alunos/[id]`                                                               | O aluno e o histórico de respostas dele                 |
+| `(studio)/modulos` → `[id]` → `[id]/mapa` · `calendario`                             | Módulos, turmas e programação de envio · calendário     |
+| `(studio)/escola` · `escola/convite/[token]`                                         | Coordenação da escola (só números) · aceite do convite  |
+| `(studio)/conta` (`?aba=assinatura`; `/assinatura` redireciona)                      | Conta e assinatura, em duas abas                        |
+| `(admin)/admin` → `professores` `pedidos` `escolas`                                  | Painel interno da plataforma (404 para os outros)       |
+| `a/[slug]` `codigo` `q/[n]` `resultado` `revisao`                                    | Player                                                  |
+| `exemplo`                                                                            | Atividade de exemplo, pública e sem gravar nada         |
+| `e/[token]`                                                                          | Link pessoal do convite (redireciona, não é tela)       |
+| `aluno` (`aluno/entrar` só redireciona para `/entrar?como=aluno`)                    | Área do aluno: conta OPCIONAL e histórico dele          |
+| `aluno/modulos/[id]`                                                                 | O mapa do módulo do aluno, no tema 8 bits               |
+| `aluno/convite/[token]`                                                              | Convite de conta: criar/entrar e ligar à turma (botão)  |
 
 ## Regras que atravessam várias telas
 
@@ -474,8 +476,9 @@ professor sentir o que o aluno recebe antes de criar conta. Pública (`hooks.ser
   depois de a tela final entrar: primeiro a pessoa vê como foi, depois quanto custa levar para a
   turma. É a MESMA `PlanosTabela`: sem conta o botão leva ao cadastro (trial); com professor
   logado vira pedido, como em `/planos`. Fechar devolve a tela final, que tem "Ver os planos".
-- O celular da home tem **700 px de altura** e cada questão cabe nele INTEIRA, sem rolar — antes e
-  depois de responder (`e2e/home.spec.ts` mede). Para isso a resposta vai `compacto`: o player de
+- O celular da home tem **344 × 600, com a tela em `zoom: 0.85`** (home.md) e cada questão cabe nele
+  INTEIRA, sem rolar — antes e depois de responder (`e2e/home.spec.ts` mede). Para isso a resposta
+  vai `compacto`: o player de
   áudio numa linha só em qualquer tela (`AudioPlayer emLinha`), sem a dica de teclado do "montar",
   e, corrigida, sem as peças que sobraram e sem o microfone (não há como regravar ali).
 - O celular da home usa as quatro primeiras questões (`QUESTOES_DA_HOME`) com os mesmos
@@ -984,7 +987,7 @@ vem da URL, não de estado de componente: é o que deixa a barra lateral apontar
 assinatura.
 
 **O topo é o da CONTA, não o de uma aba** — o mesmo `HeaderCard` das telas de turma e de atividade:
-o avatar grande (com "Montar avatar" e "Sortear outro" ao lado), o nome, o e-mail, "no Spokke
+o avatar grande (com "Montar avatar" ao lado), o nome, o e-mail, "no Spokke
 desde…" e quatro números (atividades, materiais, turmas, alunos). No celular, uma informação por
 linha. As abas vêm depois dele.
 
@@ -1013,8 +1016,9 @@ desliga quando sobra a senha (auth.md "Login com Google").
 **"Seu avatar" vem ANTES de nome e e-mail**, e é a única ação desta tela que já grava de verdade
 (`gravarMeuAvatar`, em `studio.remote.ts`). A ordem não é arbitrária: o avatar é o que o ALUNO vê
 — ele aparece na turma e no convite —, e nome e e-mail são o que o professor confere. Dezoito
-números, nunca imagem (`$lib/avatar/montar.ts`) — o que NÃO se escreve na tela; "Sortear outro"
-grava direto, "Montar avatar" abre o `AvatarEditor` — os dois moram no topo, ao lado do avatar.
+números, nunca imagem (`$lib/avatar/montar.ts`) — o que NÃO se escreve na tela; "Montar avatar",
+no topo ao lado do avatar, abre o `AvatarEditor`, e sortear acontece lá dentro (o "Sortear" do
+palco). Houve um "Sortear outro" ao lado dele, que gravava direto; saiu.
 
 **Assinatura** desenha as situações do `ResumoDoAcesso` — trial (com os dias que faltam), ativa
 (ou "encerra no fim do período"), renovação pendente (carência), pausada (trial ou plano vencido),
@@ -1043,7 +1047,8 @@ NÃO se perdeu (o rascunho continua salvo, os links continuam no ar).
 **`motivo` é validado contra uma LISTA FECHADA** no loader, como o `?voltar=` da prévia: um
 parâmetro de query que vira texto na tela é texto que qualquer pessoa escolhe.
 
-A tabela é **UM componente** (`PlanosTabela.svelte`), usado na home (seção `#planos`) e aqui —
+A tabela é **UM componente** (`PlanosTabela.svelte`, um CARROSSEL que abre no Pro — components.md),
+usado na home (seção `#planos`), no modal do exemplo e aqui —
 duas cópias divergiriam no primeiro ajuste de preço. Quem tem o plano marcado ganha "Seu plano
 agora", e esse selo VENCE o "o mais escolhido": propaganda no cartão de quem já assinou aquele
 plano é propaganda para dentro.
@@ -1257,7 +1262,34 @@ cookies e as chaves de armazenamento local de VERDADE — mudou um nome no códi
 **A página de Status saiu**: mostrava uptime e incidentes que ninguém media, e um "Online" verde no
 rodapé do painel. Ela volta quando houver monitoramento de verdade por trás (docs/selos-e-seguranca.md).
 O CNPJ, a razão social e o endereço entram quando existirem; o CNPJ fica fora do site a pedido do
-dono. Os e-mails usam o domínio `spokke.app`, ainda placeholder.
+dono. Os e-mails usam o domínio do site, `spokke.com.br` (as caixas ainda precisam ser criadas).
 
 Pendências de produto: o encarregado de dados com nome (a LGPD pede a identidade dele pública), e
 encerrar a conta pelo próprio painel (hoje a política manda escrever para o suporte).
+
+## Blog
+
+`(site)/blog/**` — o como e o porquê em `docs/blog.md`; o desenho é o projeto "Blog" do Claude
+Design. O que vale como regra de tela:
+
+- **Sem autor, em lugar nenhum.** O topo do artigo diz "Publicado em", "Atualizado em" (quando
+  houve) e o tempo de leitura. Não há nome, foto, caixa de autor nem página de autor — decisão do
+  dono em 2026-11-10. O JSON-LD leva a marca como autora.
+- **"Blog" é item fixo do menu e do rodapé**, e um teste garante artigo no ar (sem nenhum, as rotas
+  do blog seriam 404). Rascunho e artigo agendado aparecem só em `pnpm dev`, com o selo "Rascunho".
+  O topo do índice é o artigo com `destaque: true`.
+- **Índice**: H1 com ponto de vista (não "Blog"), os temas como LINKS para os hubs, o guia em
+  destaque, a faixa escura "Dirige uma escola de idiomas?" levando a `/blog/para-escolas`, a grade de
+  cartões com a chamada do meio depois do sexto e a paginação com links de verdade.
+- **Hub** (tema e escolas): migalhas, H1, abertura própria, o guia em destaque, todos os artigos,
+  "Outros temas" e a conversão do público do hub. Menos de 3 artigos = `noindex`.
+- **Artigo**: migalhas até o tema, chip do tema (e "Para escolas"), H1, linha fina, datas; o
+  sumário em `<details>` no celular e em coluna fixa no desktop, a partir de quatro seções; a foto
+  de capa (todo artigo no ar tem uma) e o corpo;
+  compartilhar (copiar link e WhatsApp); a ponte para as escolas no artigo de professor; "Leia
+  também" com três cartões compactos; a faixa de conversão escura.
+- **A questão embutida corrige no servidor** (`corrigirExemplo`), com as mesmas peças do celular da
+  home. Nada de correção no navegador, mesmo sendo demonstração.
+- **No máximo três chamadas por artigo**, e a conversão segue o `publico` (professor → cadastro;
+  escola → `/contato?assunto=escolas`), sempre com `?origem=blog-<slug>`. O contato repassa a
+  origem ao aviso da equipe.

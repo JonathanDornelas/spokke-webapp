@@ -275,12 +275,12 @@ describe('o relato de problema', () => {
 
 	it('marcar muda o estado e quem resolveu; apagar a tentativa leva os relatos', async () => {
 		const [um] = await prisma.problemReport.findMany({ where: { attemptId }, take: 1 });
-		expect(await relatosRepo.marcar(um!.id, 'resolvido', 'admin:intranet:equipe@spokke.app')).toBe(
-			true
-		);
+		expect(
+			await relatosRepo.marcar(um!.id, 'resolvido', 'admin:intranet:equipe@spokke.com.br')
+		).toBe(true);
 		expect(await prisma.problemReport.findUnique({ where: { id: um!.id } })).toMatchObject({
 			status: 'resolvido',
-			resolvedBy: 'admin:intranet:equipe@spokke.app'
+			resolvedBy: 'admin:intranet:equipe@spokke.com.br'
 		});
 		expect(await relatosRepo.marcar('nao-existe', 'resolvido', 'x')).toBe(false);
 

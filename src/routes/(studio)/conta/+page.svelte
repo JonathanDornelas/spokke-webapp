@@ -30,7 +30,7 @@
 	import HeaderCard from '$lib/components/HeaderCard.svelte';
 	import { IDIOMAS } from '$lib/idiomas';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
-	import { CODIGO_PADRAO, avatarPadrao, sortearCodigo } from '$lib/avatar/montar';
+	import { CODIGO_PADRAO, avatarPadrao } from '$lib/avatar/montar';
 	import { fracaoDeUso, type ResumoDoAcesso } from '$lib/billing/resumo';
 	import { LIMITES, TRIAL } from '$lib/billing/catalogo';
 	import { gravarMeuAvatar } from '../studio.remote';
@@ -140,12 +140,6 @@
 	function abrirEditorDeAvatar() {
 		codigoDoAvatar = data.teacher.avatar ?? avatarPadrao(data.teacher.name);
 		editorDeAvatarAberto = true;
-	}
-
-	async function sortearEUsar() {
-		const sorteado = sortearCodigo();
-		codigoDoAvatar = sorteado;
-		await usarAvatar(sorteado);
 	}
 
 	// ── trocar a senha ──
@@ -480,7 +474,9 @@
 	}
 </script>
 
-<svelte:head><title>Conta — Spokke</title></svelte:head>
+<svelte:head
+	><title>{data.aba === 'assinatura' ? 'Assinatura · Conta' : 'Conta'} · Spokke</title></svelte:head
+>
 
 {#snippet icone(d: string, classe = 'size-4')}
 	<svg class="{classe} shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"
@@ -531,21 +527,6 @@
 			>
 				{@render icone('M5 19h3l10-10-3-3L5 16z')}
 				Montar avatar
-			</button>
-			<!-- Grava direto, sem abrir o editor (paginas.md "Conta"). -->
-			<button
-				type="button"
-				onclick={sortearEUsar}
-				disabled={salvandoAvatar}
-				class="btn h-[42px] motion-tap gap-2 btn-plain text-[13.5px] font-semibold"
-			>
-				{#if salvandoAvatar}
-					<Loading variant="fila" size={10} tone="current" label="Salvando" />
-					Salvando…
-				{:else}
-					{@render icone('M4 4h16v16H4zM9 9h.01M15 15h.01M15 9h.01M9 15h.01')}
-					Sortear outro
-				{/if}
 			</button>
 		{/snippet}
 	</HeaderCard>

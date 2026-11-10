@@ -91,17 +91,63 @@ apaga o cenário anterior e o recria recente. Recusa `NODE_ENV=production`.
 As de infraestrutura (banco, storage, áudio, e-mail) estão comentadas no `.env.example`. As do
 produto:
 
-| Variável             | Para quê                                                                      |
-| -------------------- | ----------------------------------------------------------------------------- |
-| `BILLING_PROVIDER`   | Vazio/`manual`: "Assinar" vira pedido atendido no painel (adr-002)            |
-| `PLATFORM_ADMIN_IDS` | IDs de `Teacher` com acesso ao `/admin` — IDs, nunca e-mails                  |
-| `CONTATO_PARA`       | Caixa da equipe: pedidos de plano, contato e relatos de problema dos alunos   |
-| `GOOGLE_CLIENT_ID`   | Com `GOOGLE_CLIENT_SECRET`, liga "Continuar com o Google"; vazio desliga      |
-| `LLM_PROVIDER`       | `gemini` liga "Gerar com IA"; vazio desliga (adr-003)                         |
-| `GEMINI_API_KEY`     | Chave de projeto **com faturamento** (a política promete não treinar)         |
-| `GEMINI_MODEL`       | Id do modelo — escolha o Flash estável vigente na página de modelos do Gemini |
-| `TRANSLATE_PROVIDER` | `audiotext` liga a tradução automática do material; vazio desliga (adr-006)   |
-| `WORKER_CONCURRENCY` | Jobs em paralelo (padrão 3). Acelera e-mail, não TTS                          |
+| Variável                          | Para quê                                                                      |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `BILLING_PROVIDER`                | Vazio/`manual`: "Assinar" vira pedido atendido no painel (adr-002)            |
+| `PLATFORM_ADMIN_IDS`              | IDs de `Teacher` com acesso ao `/admin` — IDs, nunca e-mails                  |
+| `CONTATO_PARA`                    | Caixa da equipe: pedidos de plano, contato e relatos de problema dos alunos   |
+| `GOOGLE_CLIENT_ID`                | Com `GOOGLE_CLIENT_SECRET`, liga "Continuar com o Google"; vazio desliga      |
+| `LLM_PROVIDER`                    | `gemini` liga "Gerar com IA"; vazio desliga (adr-003)                         |
+| `GEMINI_API_KEY`                  | Chave de projeto **com faturamento** (a política promete não treinar)         |
+| `GEMINI_MODEL`                    | Id do modelo — escolha o Flash estável vigente na página de modelos do Gemini |
+| `TRANSLATE_PROVIDER`              | `audiotext` liga a tradução automática do material; vazio desliga (adr-006)   |
+| `WORKER_CONCURRENCY`              | Jobs em paralelo (padrão 3). Acelera e-mail, não TTS                          |
+| `PUBLIC_GA_ID`                    | ID do Google Analytics 4 ("G-…"); vazio desliga a medição (seção abaixo)      |
+| `PUBLIC_GOOGLE_SITE_VERIFICATION` | Meta tag do Search Console; vazio não emite nada                              |
+
+## Analytics e Search Console
+
+**Meio caminho andado** (novembro de 2026): o código está pronto e desligado. Sem `PUBLIC_GA_ID`, nenhum
+script de terceiro carrega e nenhum aviso aparece. Com ele, as páginas públicas (home, `(site)` com o
+blog, cadastro e exemplo) mostram um aviso de medição, e o Google Analytics 4 só carrega depois do
+"Aceitar" (consentimento básico). O painel do professor e as atividades dos alunos nunca são medidos.
+O código é `$lib/client/medicao.ts` e `MedicaoDoSite.svelte` (no layout raiz).
+
+O que já é medido, quando a pessoa aceita:
+
+| Evento          | Quando                                                               | Parâmetros                  |
+| --------------- | -------------------------------------------------------------------- | --------------------------- |
+| `page_view`     | cada página pública, inclusive nas trocas de tela do SvelteKit       | (os do GA)                  |
+| `sign_up`       | cadastro de professor por e-mail concluído                           | `method`, `origem`          |
+| `generate_lead` | formulário de contato enviado                                        | `assunto_inicial`, `origem` |
+| `cta_blog`      | clique numa chamada do blog (bloco "No Spokke", faixa final, índice) | `rotulo`, `artigo`          |
+| `copiar_lista`  | "Copiar a lista" num exemplo pronto do blog                          | `idioma`                    |
+
+A `origem` é a do link que trouxe a pessoa (`?origem=blog-<artigo>`, docs/blog.md). O cadastro pelo
+Google ainda não registra `sign_up` (a volta do OAuth não passa pela tela de cadastro).
+
+**Depois do deploy, para ligar:**
+
+1. No Google Analytics, criar uma propriedade GA4 para `spokke.com.br` e um fluxo de dados da Web.
+   Copiar o ID de medição (`G-…`).
+2. Pôr `PUBLIC_GA_ID` no ambiente de produção e reiniciar o web (é lido em tempo de execução, sem
+   rebuild). Abrir o site, aceitar o aviso e conferir em "Relatórios > Tempo real" e no DebugView.
+3. Em "Administrador > Eventos", marcar `sign_up` e `generate_lead` como eventos principais
+   (conversões). Em "Definições personalizadas", criar as dimensões de evento `origem`, `artigo` e
+   `rotulo`, para o relatório dizer qual artigo trouxe cada cadastro.
+4. Em "Coleta de dados", conferir que "Indicadores do Google" e personalização de anúncios estão
+   desligados (o site nega `ad_storage` no consentimento) e ajustar a retenção de dados.
+5. No Search Console, adicionar a propriedade de **domínio** `spokke.com.br` e verificar pelo registro
+   TXT no DNS (cobre o site inteiro). Sem acesso ao DNS, usar a propriedade de prefixo de URL com a
+   meta tag: o `content` vai em `PUBLIC_GOOGLE_SITE_VERIFICATION`.
+6. No Search Console, enviar `https://spokke.com.br/sitemap.xml` em "Sitemaps" e vincular a
+   propriedade ao Google Analytics.
+7. Opcional: o Bing Webmaster Tools importa a propriedade do Search Console; se preferir a meta tag,
+   o valor vai em `PUBLIC_BING_SITE_VERIFICATION`.
+
+**O texto legal já fala da medição** (política de privacidade e página de Cookies, em
+`$lib/content/institucional.ts`): ela é descrita como opcional, com aceite. Se um dia o site medir
+sem aviso, ou com outra ferramenta, os dois textos mudam junto.
 
 ## O primeiro admin
 
@@ -194,8 +240,9 @@ botão do professor e a própria conta do pagador no Mercado Pago fazem isso).
 
 - Verificar um domínio no Resend (sem isso ele só entrega para o e-mail da conta).
 - Preços reais em `src/lib/billing/precos.ts` (a vitrine e o checkout leem dali).
-- Dados reais da empresa em `src/lib/content/institucional.ts`. O domínio `spokke.app` dos e-mails
-  e links de exemplo é PLACEHOLDER, como era o `entendo.app`.
+- Dados reais da empresa em `src/lib/content/institucional.ts`. O domínio é `spokke.com.br`
+  (decidido em 2026-11-10): os e-mails do site (`suporte@`, `privacidade@`, `escolas@`,
+  `acessibilidade@`) já apontam para ele, e as caixas ainda precisam ser criadas.
 
 ## Migração do nome (entendo → Spokke, novembro de 2026)
 

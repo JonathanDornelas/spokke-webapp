@@ -42,7 +42,7 @@
 	const c = $derived(copy[reason]);
 </script>
 
-<svelte:head><title>{c.title} — Spokke</title></svelte:head>
+<svelte:head><title>{c.title} · Spokke</title></svelte:head>
 
 <div class="flex min-h-dvh items-center justify-center bg-base-100 px-6 py-8">
 	<div class="w-full max-w-[440px]">

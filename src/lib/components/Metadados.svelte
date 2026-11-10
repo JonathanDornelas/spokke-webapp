@@ -15,7 +15,10 @@
 		imagem = '/og/spokke.png',
 		imagemAlt = 'Spokke: exercícios de idioma com o material da sua aula.',
 		tipo = 'website',
-		indexar = true
+		indexar = true,
+		publicadoEm,
+		atualizadoEm,
+		secao
 	}: {
 		/** O título na prévia (og:title). Curto: a prévia corta perto de 60 caracteres. */
 		titulo: string;
@@ -32,10 +35,24 @@
 		 * compartilhamento continua — é justamente o link que vai para o grupo.
 		 */
 		indexar?: boolean;
+		/** Artigo do blog (`tipo="article"`): o dia em que saiu, AAAA-MM-DD. Sem autor: o blog não assina (docs/blog.md). */
+		publicadoEm?: string;
+		/** O dia da última mudança de conteúdo, quando houve. */
+		atualizadoEm?: string | null;
+		/** O tema do artigo (`article:section`). */
+		secao?: string;
 	} = $props();
 
 	const url = $derived(page.url.origin + page.url.pathname);
 	const imagemAbsoluta = $derived(/^https?:\/\//.test(imagem) ? imagem : page.url.origin + imagem);
+	/** O tipo sai da extensão: as imagens do site são PNG, as capas do blog são JPEG. */
+	const tipoDaImagem = $derived(
+		/\.jpe?g(?:[?#]|$)/i.test(imagem)
+			? 'image/jpeg'
+			: /\.webp(?:[?#]|$)/i.test(imagem)
+				? 'image/webp'
+				: 'image/png'
+	);
 </script>
 
 <svelte:head>
@@ -54,10 +71,15 @@
 	<meta property="og:description" content={descricao} />
 	<meta property="og:url" content={url} />
 	<meta property="og:image" content={imagemAbsoluta} />
-	<meta property="og:image:type" content="image/png" />
+	<meta property="og:image:type" content={tipoDaImagem} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta property="og:image:alt" content={imagemAlt} />
+	{#if tipo === 'article' && publicadoEm}
+		<meta property="article:published_time" content={publicadoEm} />
+		<meta property="article:modified_time" content={atualizadoEm ?? publicadoEm} />
+		{#if secao}<meta property="article:section" content={secao} />{/if}
+	{/if}
 
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={titulo} />

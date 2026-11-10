@@ -40,13 +40,14 @@ Nove blocos, nesta ordem. Cada um responde a uma pergunta e nenhum repete o ante
 | #   | Bloco                 | O que resolve                                                |
 | --- | --------------------- | ------------------------------------------------------------ |
 | 1   | Hero + Player ao vivo | O que é, e como se parece na mão do aluno                    |
+| 1b  | Letreiro              | Quatro respostas curtas que o hero deixa no ar               |
 | 2   | Quatro habilidades    | Por que não é só múltipla escolha                            |
 | 3   | Tudo que vem junto    | O que a conta inclui, do criar ao acompanhar, e a escola     |
 | 4   | Para o aluno (escura) | O que o aluno ganha no aprendizado: correção, fala, o porquê |
 | 5   | Correção              | Existe o quase; parcial é um estado próprio                  |
 | 6   | Do rascunho ao link   | Três passos, incluindo versão publicada imutável             |
 | 7   | Qualquer idioma       | RTL, CJK, normalização de acento                             |
-| 8   | Planos                | A mesma `PlanosTabela` de `/planos`                          |
+| 8   | Planos                | A mesma `PlanosTabela` de `/planos`, em carrossel            |
 | 9   | CTA + rodapé          | "Você precisa de uma conta. Seus alunos, não."               |
 
 **"Tudo que vem junto"** é o desenho "Home Funcionalidades" do Claude Design: quatro grupos de
@@ -57,8 +58,25 @@ escolhidos", e foram trocados. Ícones e checks na cor da marca, não no verde e
 
 **O rodapé não tem indicador de status.** O "Todos os sistemas operando" era um ponto verde fixo;
 no lugar entrou a identificação da empresa (o nome empresarial — o CNPJ não aparece no site, a
-pedido do dono do repositório) e, quando houver, a faixa de selos
-verificáveis (`selos` em `institucional.ts`; roteiro em `docs/selos-e-seguranca.md`).
+pedido do dono do repositório) e, no extremo oposto, os dois selos de VERIFICAÇÃO — SSL e Google
+Safe Browsing —, em PNG, que levam à verificação ao vivo do terceiro para o domínio aberto
+(`selosDeVerificacao` em `institucional.ts`; roteiro e o passo a passo do domínio `spokke.com.br`
+em `docs/selos-e-seguranca.md` "5b"). **As imagens são do Spokke, não dos terceiros**: nem o
+Google nem a Let's Encrypt têm selo oficial, e as imagens "de selo" com a marca deles que circulam
+na web sugerem um endosso que não existe (a Let's Encrypt pede para tirar do ar). Saem de
+`scripts/gerar-selos.mjs`, em HTML com as cores da marca, como as imagens de `static/og/`. Os
+selos com imagem de emissor (`selos`, o Reclame Aqui um dia) entram ao lado. No bloco da marca ficam os ícones do Instagram e
+do YouTube (`redes`), SEM link enquanto os perfis não existem — e sem `href="#"`.
+
+**O letreiro (1b)** vem logo depois do hero, de ponta a ponta — o desenho "Faixa Letreiro" do
+Claude Design: uma tira em `base-300` onde quatro frases (a tradução automática, o aluno sem conta,
+os dez idiomas, o teste de 14 dias) correm em laço, separadas por uma estrelinha na cor da marca,
+com as pontas sumindo em degradê e parando com o ponteiro em cima. Frase, e não "número grande com
+rótulo": um "10" sozinho não diz de quê. O texto passou pela voz do Cérebro
+(`artifacts/contents/home/draft.md` "1b"); o 14 sai de `TRIAL`. **O que se move é
+`aria-hidden`**: o leitor de tela lê a lista parada, uma vez, em vez de quatro cópias no meio de
+uma animação. Houve uma versão em faixa azul de quatro colunas; o dono do repositório trocou pelo
+letreiro.
 
 O hero mostra um **celular que RESPONDE de verdade** e cicla entre quatro questões (escuta,
 escrita tolerante, montar frase, fala). Esse é o argumento mais forte da página: não substitua
@@ -71,9 +89,12 @@ por captura estática nem por maquete.
   `routes/exemplo/EnunciadoDaQuestao.svelte` (`compacto`) + `RespostaDaQuestao.svelte`, com os
   componentes do Player.
 - **Cada questão cabe INTEIRA no aparelho, sem rolar** — antes e depois de responder, no desktop e
-  no celular de verdade. O aparelho tem 700 px de altura (com 600 a área útil era de 437 px e três das
-  quatro questões passavam dela) e a resposta vai `compacto` (paginas.md "Exemplo"). `e2e/home.spec.ts`
-  mede: conteúdo contra área visível, em cada pastilha.
+  no celular de verdade. **O aparelho tem o tamanho de um celular (344 × 600) e não muda; quem encolhe
+  é a TELA dele**, com `zoom: 0.85` num invólucro de 326 × 582 visíveis (a interface em tamanho cheio
+  pede ~682 de altura). Houve uma versão de 700 px de altura: cabia, mas desfigurava o aparelho, e o
+  dono do repositório pediu o tamanho de volta. `zoom` e não `transform: scale` porque é de LAYOUT:
+  as caixas encolhem junto e a rolagem continua medindo certo. A resposta vai `compacto`
+  (paginas.md "Exemplo"). `e2e/home.spec.ts` mede: conteúdo contra área visível, em cada pastilha.
 - **As formas da coluna do celular ficam ACIMA da coluna do texto no desktop** (`lg:z-3`, o celular
   em `lg:z-4`) e a camada delas não recorta ali (`lg:overflow-visible`): a borda esquerda da camada
   cai dentro da coluna do texto, e o triângulo, ao girar, era cortado numa linha reta. No celular o
@@ -130,6 +151,10 @@ Todas as durações e curvas vêm de `design-system.md`. Específico da home:
   5 formas fixas para um bloco de tamanho fixo).
 - **Carrossel de idiomas**: `en-marquee` linear infinito, lista duplicada, borda resolvida com
   `mask-image` em fade horizontal. `aria-hidden` — é ilustração, não conteúdo.
+- **O letreiro (1b)** é o segundo laço infinito da página, com o mesmo `en-marquee` (60 s, quatro
+  voltas da lista para as duas metades fecharem o laço em qualquer largura) e as mesmas regras:
+  pontas em degradê, `aria-hidden` no que se move, parado com `prefers-reduced-motion`. São as
+  duas exceções da home ao "nada fica em loop" do design-system.
 - **Hover**: cartão usa `cartao-interativo` (sobe 3 px, borda puxando para a cor da marca); linha de estado de correção desliza
   4px na horizontal. Botão usa `motion-tap`.
 

@@ -291,7 +291,7 @@
 	});
 </script>
 
-<svelte:head><title>Resultado — {data.activity.title}</title></svelte:head>
+<svelte:head><title>Resultado · {data.activity.title} · Spokke</title></svelte:head>
 
 <header
 	class="flex shrink-0 items-center gap-3.5 border-b border-line px-5 py-4 lg:px-10 lg:py-[18px]"

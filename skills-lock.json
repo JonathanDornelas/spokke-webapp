@@ -24,6 +24,18 @@
       "sourceType": "github",
       "skillPath": "pm-marketing-growth/skills/product-name/SKILL.md",
       "computedHash": "3a5bad48c840519b2c775bdb5d69fed37537de77001a8822aa31676a21cf163e"
+    },
+    "robots-txt": {
+      "source": "kostja94/marketing-skills",
+      "sourceType": "github",
+      "skillPath": "skills/seo/technical/robots/SKILL.md",
+      "computedHash": "0a9e6b75c8ecb6d5dfd472734e1aaea76c60c260417dac25bd1b083776ca3cf6"
+    },
+    "seo-sitemap": {
+      "source": "agricidaniel/claude-seo",
+      "sourceType": "github",
+      "skillPath": "skills/seo-sitemap/SKILL.md",
+      "computedHash": "3aa575cf0b14e1f6df9614954ae225fec406d156eeb6cb31342fe73ef9fe3421"
     }
   }
 }

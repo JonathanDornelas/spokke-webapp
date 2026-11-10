@@ -85,7 +85,7 @@
 	]);
 </script>
 
-<svelte:head><title>Suas respostas — {data.activity.title}</title></svelte:head>
+<svelte:head><title>Suas respostas · {data.activity.title} · Spokke</title></svelte:head>
 
 <div class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-gutter py-gutter">
 	<AmbientShapes edges="both" />

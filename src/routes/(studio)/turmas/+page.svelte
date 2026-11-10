@@ -153,7 +153,7 @@
 	});
 </script>
 
-<svelte:head><title>Turmas — Spokke</title></svelte:head>
+<svelte:head><title>Turmas · Spokke</title></svelte:head>
 
 {#if data.classrooms.length === 0}
 	<!-- **O vazio é uma escolha legítima**, não uma pendência: sem turma o

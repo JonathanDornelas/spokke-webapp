@@ -350,7 +350,7 @@
 			: `${partes.slice(0, -1).join(', ')} nem de ${partes.at(-1)}`;
 </script>
 
-<svelte:head><title>Questão {data.item.index} — Spokke</title></svelte:head>
+<svelte:head><title>Questão {data.item.index} · {data.activity.title} · Spokke</title></svelte:head>
 
 {#snippet icone(d: string, classe = 'size-4')}
 	<svg class="{classe} flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"

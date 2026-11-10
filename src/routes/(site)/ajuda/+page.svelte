@@ -19,7 +19,7 @@
 <SiteHero
 	eyebrow="Central de ajuda"
 	title="Perguntas frequentes"
-	lede="Se a sua pergunta não estiver aqui, escreva para suporte@spokke.app."
+	lede="Se a sua pergunta não estiver aqui, escreva para suporte@spokke.com.br."
 />
 
 <div class="mx-auto w-full max-w-[1100px] px-7 py-8 lg:px-10 lg:py-10">

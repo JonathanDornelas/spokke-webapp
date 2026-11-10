@@ -248,4 +248,22 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   cabeçalho de toda questão. Vai para a equipe — intranet "Relatos" e um aviso em `CONTATO_PARA` —
   com a questão (gabarito incluído), a resposta da tela, a correção refeita, o aparelho e o diário de
   erros da página. Sem nome e sem IP; 180 dias, apagado pelo worker.
+- **Blog, no ar com 15 artigos** (`docs/blog.md`): a porta de entrada por busca orgânica
+  para os dois públicos, o PROFESSOR (dúvida da rotina, terminando na atividade de exemplo e no
+  cadastro) e a ESCOLA de idiomas (dúvida de gestão, terminando na conversa sobre o plano da escola,
+  com hub próprio em `/blog/para-escolas`). Markdown em `src/content/blog/`, validado por Zod, com
+  blocos de componente (exemplo pronto, "No Spokke", questão de exemplo respondível, perguntas).
+  Cada artigo tem foto de capa, do Pexels (licença livre; regra e créditos em docs/blog.md "Capas").
+  **Sem autor**: o artigo mostra só a data de publicação (e a de atualização) — decisão do dono em
+  2026-11-10; o frontmatter recusa `autor`. "Blog" é item fixo do menu. Os artigos saíram da
+  pesquisa de palavras-chave do projeto de SEO (autocomplete e amostra de resultados, **sem volume**:
+  o DataForSEO segue sem configurar): quatro para o professor, dois para a escola e um por idioma do
+  produto, para quem ensina cada um. O sitemap é um índice (páginas e blog, `docs/seo/`) e o
+  robots.txt libera os robôs de busca com IA e fecha os de treino de modelos. Falta: um falante
+  conferir as frases de exemplo fora do inglês e do português, e medir o volume das palavras.
+- **Analytics, meio caminho andado** (docs/operacao.md "Analytics e Search Console"): Google
+  Analytics 4 e Search Console prontos e DESLIGADOS (`PUBLIC_GA_ID`, `PUBLIC_GOOGLE_SITE_VERIFICATION`).
+  Ligado, mede só as páginas públicas e só depois do "Aceitar" no aviso; nunca o Studio nem o
+  Player. Conversões: `sign_up` e `generate_lead`, com a origem do link do blog. Falta criar a
+  propriedade depois do deploy.
 - Operação, variáveis e a rotina da equipe sem gateway: `docs/operacao.md`.

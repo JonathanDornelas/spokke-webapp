@@ -10,6 +10,7 @@
 	import { authAlunoClient } from '$lib/client/auth-aluno';
 	import { IDIOMAS } from '$lib/idiomas';
 	import { gravarMeusIdiomas } from '../../(studio)/conta/conta.remote';
+	import { registrarEvento } from '$lib/client/medicao';
 	import BotaoGoogle from '../BotaoGoogle.svelte';
 	import { mensagemDoGoogle } from '../erro-do-google';
 
@@ -119,6 +120,12 @@
 				emailTaken = true;
 				return;
 			}
+			// A conversão do site (só registra com a medição aceita). A origem é a
+			// do link que trouxe a pessoa, como `blog-<artigo>` (docs/blog.md).
+			registrarEvento('sign_up', {
+				method: 'email',
+				origem: page.url.searchParams.get('origem') ?? 'direto'
+			});
 			// A conta já existe e a sessão também: os idiomas vão por uma remote
 			// function da conta, filtrados no servidor. Falhar aqui não desfaz o
 			// cadastro — é um padrão, e ele se escolhe de novo em Conta.

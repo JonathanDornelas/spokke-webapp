@@ -15,7 +15,7 @@
 	};
 </script>
 
-<svelte:head><title>Professores — painel interno</title></svelte:head>
+<svelte:head><title>Professores · Painel interno · Spokke</title></svelte:head>
 
 <h1 class="mb-5 font-display text-title font-semibold tracking-[-0.022em]">Professores</h1>
 

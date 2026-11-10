@@ -305,7 +305,7 @@
 	);
 </script>
 
-<svelte:head><title>Materiais — Spokke</title></svelte:head>
+<svelte:head><title>Materiais · {data.activity.title} · Spokke</title></svelte:head>
 
 <WizardShell
 	step={2}
