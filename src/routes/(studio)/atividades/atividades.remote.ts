@@ -37,6 +37,7 @@ import {
 } from '$lib/server/atividades/material-form';
 import { getTradutor } from '$lib/server/traducao';
 import { paresDasFrases } from '$lib/server/atividades/pares-de-palavras';
+import { comVariantesDaTraducao } from '$lib/server/atividades/variantes-aceitas';
 import { getProfile, tagForLabel } from '$lib/kernel/language/profiles';
 import { interactionSchema } from '$lib/kernel/item';
 import type { Skill } from '$lib/kernel/interactions/types';
@@ -455,7 +456,7 @@ export const gerarItens = command(z.object({ activityId: z.string() }), async ({
 	// Sem este corte, 20 frases viravam cem exercícios e ele descartava 88 na
 	// mão.
 	const disponiveis = groups.reduce((total, group) => total + group.items.length, 0);
-	const items = selectItems(
+	const selecionados = selectItems(
 		groups,
 		{
 			target: activity.itemTarget,
@@ -464,6 +465,15 @@ export const gerarItens = command(z.object({ activityId: z.string() }), async ({
 			)
 		},
 		closing
+	);
+	// As outras traduções certas de cada "traduza para o português", propostas
+	// pelo tradutor e conferidas por ida e volta — só nos itens que ENTRARAM, que
+	// são poucos. Viram "Também aceitas" no editor de item, onde o professor
+	// remove a que não quiser. Sem tradutor, nada muda.
+	const items = await comVariantesDaTraducao(
+		selecionados,
+		{ alvo: targetProfile, origem: sourceProfile },
+		getTradutor()
 	);
 	await atividades(teacher).replaceDraftItems(activityId, items);
 

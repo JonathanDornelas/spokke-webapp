@@ -108,12 +108,15 @@ próprio. Ver as seis composições em `/dev/components#player`.
   (`[data-content-lang]` no `app.css`).
 - `font-mono` **JetBrains Mono** — slugs, IPA, código.
 
-**A exceção, e a única: `font-pixel` (Silkscreen), decorativa.** Existe só no mapa do módulo do
-aluno (`MapaDoModulo.svelte`, tema de jogo em 8 bits), nos rótulos "MUNDO 1" e "FASE 3" — sempre
-`aria-hidden` e ao lado do texto de verdade em Plus Jakarta Sans. Nunca corpo de texto, nunca
-título, nunca conteúdo do idioma alvo (esse é sempre Noto Sans). O mesmo tema traz pixel art como
-DADO (`$lib/modulos/pixel.ts`, grade de letras virando `path` com `crispEdges` e cor por token), e
-os movimentos dele usam `steps()` em vez de curva — rodando uma vez só, como manda "Movimento".
+**A exceção, e a única: `font-pixel` (Silkscreen), decorativa.** Existe só nas duas telas de tema
+de jogo em 8 bits: o mapa do módulo do aluno (`MapaDoModulo.svelte`, nos rótulos "MUNDO 1" e
+"FASE 3") e o editor de avatar (`AvatarEditor.svelte`, no contador "03/16" do seletor) — sempre
+`aria-hidden` e ao lado do texto de verdade em Plus Jakarta Sans (no editor, um `sr-only` diz
+"3 de 16"). Nunca corpo de texto, nunca título, nunca conteúdo do idioma alvo (esse é sempre Noto
+Sans). O mesmo tema traz pixel art como DADO (`$lib/modulos/pixel.ts`, grade de letras virando
+`path` com `crispEdges` e cor por token — os ícones do editor de avatar são o mesmo molde, em
+`$lib/avatar/icones.ts`, e são a única exceção ao traço de 2px de "Ícones"), e os movimentos dele
+usam `steps()` em vez de curva — rodando uma vez só, como manda "Movimento".
 
 Escala: display 56 / title 32 / content 22 (mínimo 20 no Player) / body 16 / label 12 caixa alta.
 
@@ -226,6 +229,7 @@ do catálogo Motion Reference (takayustudio.jp), filtrado pelo que este produto 
 | Barra que cresce    | `animate-crescer-x` / `animate-crescer-y` (`grafico`) | entrada                            |
 | Progresso           | `animate-progresso` (1 s), `ProgressBar`              | entrada (por `scaleX`, sem reflow) |
 | Seletor em pílula   | `Alternador`: a pílula desliza em `media`             | `ease-in-out-soft`                 |
+| Peça do avatar      | `animate-salto` (`media`), por `{#key}`               | `steps(3, end)` (tema 8 bits)      |
 | Gravação, skeleton  | infinito                                              | ease-in-out / linear               |
 
 **Troca de questão**: a questão SAI antes de a próxima entrar — sem esse intervalo a troca era um

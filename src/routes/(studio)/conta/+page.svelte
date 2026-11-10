@@ -532,6 +532,21 @@
 				{@render icone('M5 19h3l10-10-3-3L5 16z')}
 				Montar avatar
 			</button>
+			<!-- Grava direto, sem abrir o editor (paginas.md "Conta"). -->
+			<button
+				type="button"
+				onclick={sortearEUsar}
+				disabled={salvandoAvatar}
+				class="btn h-[42px] motion-tap gap-2 btn-plain text-[13.5px] font-semibold"
+			>
+				{#if salvandoAvatar}
+					<Loading variant="fila" size={10} tone="current" label="Salvando" />
+					Salvando…
+				{:else}
+					{@render icone('M4 4h16v16H4zM9 9h.01M15 15h.01M15 9h.01M9 15h.01')}
+					Sortear outro
+				{/if}
+			</button>
 		{/snippet}
 	</HeaderCard>
 	{#if erroAvatar}
@@ -1130,4 +1145,9 @@
 	{/if}
 </div>
 
-<AvatarEditor bind:codigo={codigoDoAvatar} bind:aberto={editorDeAvatarAberto} onusar={usarAvatar} />
+<AvatarEditor
+	bind:codigo={codigoDoAvatar}
+	bind:aberto={editorDeAvatarAberto}
+	nome={data.teacher.name}
+	onusar={usarAvatar}
+/>

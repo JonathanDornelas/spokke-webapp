@@ -11,6 +11,7 @@ import { MAX_ITENS } from '$lib/kernel/generators/select';
 import { iconeDoItem, resumoDoItem, ROTULO_DO_MATERIAL } from '$lib/server/atividades/resumo';
 import { ROTULO_DA_INTERACAO } from '$lib/atividades/editor-item';
 import { skillLabels } from '$lib/kernel/interactions/skill-schema';
+import { readableAnswerKey } from '$lib/server/studio/answer-key';
 
 /**
  * Etapa 3 — o professor revisa um RESUMO LEGÍVEL de cada item gerado.
@@ -79,6 +80,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			items: []
 		};
 
+		// Quantas respostas a questão aceita ALÉM da principal — inclusive as que o
+		// tradutor propôs ao gerar (`variantes-aceitas.ts`). Dito aqui para o
+		// professor saber que há o que conferir no editor da questão.
+		const outras = readableAnswerKey(interaction.type, interaction.payload).variants.length;
+		const aceitaMais =
+			outras === 0 ? '' : ` · aceita mais ${outras} ${outras === 1 ? 'resposta' : 'respostas'}`;
+
 		group.items.push({
 			id: item.id,
 			icon: iconeDoItem(interaction.type),
@@ -86,7 +94,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			// Habilidade DERIVADA, nunca declarada pelo professor.
 			meta: `${ROTULO_DA_INTERACAO[interaction.type]} · ${itemSkills(item)
 				.map((skill) => skillLabels[skill].toLocaleLowerCase('pt-BR'))
-				.join(' + ')}`,
+				.join(' + ')}${aceitaMais}`,
 			// O item descartado CONTINUA no rascunho — a tela precisa dele para
 			// oferecer "Restaurar". Ele só não entra na versão publicada.
 			accepted: !item.discarded,

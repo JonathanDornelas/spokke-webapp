@@ -886,7 +886,31 @@ turma, ficha do aluno, tentativas (lista e detalhe), cabeçalho da questão no P
 o mapa do módulo. O avatar do aluno vem da CONTA dele (`StudentAccount.avatar`, da conta logada na
 tentativa ou da ligada à ficha); aluno sem conta ganha o `avatarPadrao` do nome.
 
-`AvatarEditor.svelte` — props `{ codigo: $bindable; aberto?: $bindable; onusar?; oncancelar? }`.
+`AvatarEditor.svelte` — props `{ codigo: $bindable; aberto?: $bindable; nome?; onusar?; oncancelar? }`.
+**É a tela de criar personagem de um jogo**, em três colunas: o PALCO (sempre escuro, `panel`, nos
+dois temas: a luz da marca, o personagem numa moldura de canto em degrau, o pedestal e o chão
+quadriculado em perspectiva, a plaquinha com o `nome`, os três tamanhos reais, "Sortear" e
+"Desfazer"), a TRILHA de categorias (um `tablist`, com o cursor de menu ▶ na aberta e um ponto nas
+que mudaram desde que o editor abriu) e a OFICINA (o título, o seletor "◀ opção ▶" com a posição,
+a nota, a grade de miniaturas e, embaixo, a paleta da peça). "Prontos" é a primeira aba da trilha,
+separada das onze categorias, e o seletor dela passa de um personagem montado para o outro. Pele e
+fundo, que são só cor, viram miniaturas como as outras — o tom no rosto de agora diz mais que um
+quadradinho solto. No celular a trilha vira uma faixa que rola de lado e o palco encolhe para uma
+linha.
+
+**O tamanho não muda com o que se escolhe.** O diálogo tem altura e largura FIXAS
+(`min(1080px, …)` × `min(680px, …)`; tela cheia abaixo de `lg`) e só a grade rola por dentro. Ele
+era do tamanho do conteúdo, centralizado: cada categoria tinha outra quantidade de peças e as abas
+quebravam em duas linhas, então o modal encolhia e crescia a cada toque. A nota tem altura mínima de
+três linhas pelo mesmo motivo — a grade não sobe e desce entre uma aba e outra. Seis colunas no
+desktop: as dezesseis peças de cabelo e de roupa cabem sem rolar.
+
+Toda mudança passa por `mudar()`, que guarda o código anterior: "Desfazer" e o Ctrl+Z voltam um passo
+de cada vez (até 50). O rodapé diz quantas partes mudaram desde que o editor abriu; a cor de
+uma casa compartilhada conta para a PRIMEIRA categoria que a usa — trocar a cor do cabelo não marca
+"a barba mudou". O personagem dá um pulinho em três quadros a cada troca (`animate-salto`, por
+`{#key codigo}`). O código de dezoito números nunca aparece na tela (paginas.md "Conta").
+
 **É um `<dialog>` de verdade, não uma `div` com fundo escuro**: foco preso, Escape e backdrop vêm
 do elemento, e "sem framework de UI" é razão para usar a plataforma, não para reimplementar o que
 ela já faz à mão (e pela metade). Cancelar — inclusive por Escape ou clique no véu — devolve o
@@ -900,13 +924,14 @@ fecha sozinho por ele. Abre a partir do rosto que a pessoa já vê (o gravado ou
 se aquele cabelo combina com aquela pele. São ~20 avatares por categoria, e é por isso que o
 gerador junta pixels vizinhos numa faixa só em vez de emitir um `<rect>` por pixel.
 
-A prévia mostra os **três tamanhos reais de uso** (56, 40, 32) ao lado do grande: é ali que se
-descobre que as sardas somem em 32px — e é para ser assim.
+O palco mostra os **três tamanhos reais de uso** — cabeçalho (56, redondo), turma (40) e lista (32)
+— embaixo do grande: é ali que se descobre que as sardas somem em 32px, e é para ser assim.
 
 Acessório é a única categoria de escolha MÚLTIPLA (até três ao mesmo tempo, casas 13, 16 e 17).
 No teto, a mais antiga sai para a nova entrar: recusar em silêncio deixaria o toque sem resposta, e
 avisar "já tem três" num editor de enfeite seria cerimônia demais. A regra está em `editar.ts`, com
-teste — é a única lógica de verdade do editor.
+teste, junto de `escolhaAtual` (o nome e a posição que o seletor mostra) e `ciclar` (as setas, que
+dão a volta nas pontas).
 
 ---
 

@@ -138,7 +138,56 @@ export async function idiomasComVoz(timeoutMs = 10_000): Promise<string[]> {
 /** Quantos textos vão em cada pedido de tradução — o serviço aceita até 64. */
 const TEXTOS_POR_PEDIDO = 32;
 
-const respostaDaTraducao = z.object({ translations: z.array(z.string()) });
+const respostaDaTraducao = z.object({
+	translations: z.array(z.string()),
+	// Só vem quando o pedido quis alternativas; um serviço anterior a elas não
+	// manda o campo, e aí cada texto fica só com a principal.
+	alternatives: z.array(z.array(z.string())).optional()
+});
+
+/**
+ * Os lotes, em sequência: cada pedido devolve, por texto, a principal e as
+ * alternativas que ele tiver (nenhuma, quando `alternativas` é 0).
+ */
+async function pedirTraducoes(
+	textos: string[],
+	de: string,
+	para: string,
+	alternativas: number,
+	timeoutMs: number
+): Promise<string[][]> {
+	const saida: string[][] = [];
+	for (let i = 0; i < textos.length; i += TEXTOS_POR_PEDIDO) {
+		const lote = textos.slice(i, i + TEXTOS_POR_PEDIDO);
+		const resposta = await fetch(`${baseUrl()}/v1/translate`, {
+			method: 'POST',
+			headers: { ...authHeaders(), 'content-type': 'application/json' },
+			body: JSON.stringify({
+				texts: lote,
+				source: de,
+				target: para,
+				...(alternativas > 0 ? { alternatives: alternativas } : {})
+			}),
+			signal: comPrazo(timeoutMs)
+		});
+		if (!resposta.ok) throw await erroDaResposta(resposta);
+		const corpo = respostaDaTraducao.safeParse(await resposta.json());
+		// Contagem diferente da pedida não tem conserto do lado de cá: casar as
+		// traduções pela posição daria a frase de uma linha para outra.
+		const extras = corpo.success ? corpo.data.alternatives : undefined;
+		if (
+			!corpo.success ||
+			corpo.data.translations.length !== lote.length ||
+			(extras !== undefined && extras.length > 0 && extras.length !== lote.length)
+		) {
+			throw new AudiotextError('audiotext devolveu uma tradução fora do formato', 502);
+		}
+		corpo.data.translations.forEach((principal, n) => {
+			saida.push([principal, ...(extras?.[n] ?? [])]);
+		});
+	}
+	return saida;
+}
 
 /**
  * Texto → texto, em LOTE e na ordem do pedido. `de` e `para` são as tags
@@ -156,23 +205,22 @@ export async function traduzir(
 	para: string,
 	timeoutMs = 90_000
 ): Promise<string[]> {
-	const saida: string[] = [];
-	for (let i = 0; i < textos.length; i += TEXTOS_POR_PEDIDO) {
-		const lote = textos.slice(i, i + TEXTOS_POR_PEDIDO);
-		const resposta = await fetch(`${baseUrl()}/v1/translate`, {
-			method: 'POST',
-			headers: { ...authHeaders(), 'content-type': 'application/json' },
-			body: JSON.stringify({ texts: lote, source: de, target: para }),
-			signal: comPrazo(timeoutMs)
-		});
-		if (!resposta.ok) throw await erroDaResposta(resposta);
-		const corpo = respostaDaTraducao.safeParse(await resposta.json());
-		// Contagem diferente da pedida não tem conserto do lado de cá: casar as
-		// traduções pela posição daria a frase de uma linha para outra.
-		if (!corpo.success || corpo.data.translations.length !== lote.length) {
-			throw new AudiotextError('audiotext devolveu uma tradução fora do formato', 502);
-		}
-		saida.push(...corpo.data.translations);
-	}
-	return saida;
+	const traducoes = await pedirTraducoes(textos, de, para, 0, timeoutMs);
+	return traducoes.map(([principal]) => principal ?? '');
+}
+
+/**
+ * Como `traduzir`, mas cada texto volta com as traduções ALTERNATIVAS que o
+ * modelo considerou quase tão boas — a principal primeiro. É de onde saem as
+ * variantes que uma questão de tradução também aceita (`server/atividades/
+ * variantes-aceitas.ts`). `alternativas` vai de 1 a 4.
+ */
+export async function traduzirComAlternativas(
+	textos: string[],
+	de: string,
+	para: string,
+	alternativas: number,
+	timeoutMs = 90_000
+): Promise<string[][]> {
+	return pedirTraducoes(textos, de, para, Math.min(4, Math.max(1, alternativas)), timeoutMs);
 }

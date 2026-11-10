@@ -17,12 +17,23 @@
  * `audiotext` é o tradutor do serviço de áudio (`../audiotext-service`, o outro
  * projeto do workspace). `process.env`, como o TTS e o ASR.
  */
-import { AudiotextError, traduzir as traduzirNoAudiotext } from '$lib/server/audiotext/client';
+import {
+	AudiotextError,
+	traduzir as traduzirNoAudiotext,
+	traduzirComAlternativas
+} from '$lib/server/audiotext/client';
 
 export interface Tradutor {
 	readonly nome: string;
 	/** Na ordem e na quantidade do pedido. Texto vazio volta vazio. */
 	traduzir(textos: string[], de: string, para: string): Promise<string[]>;
+	/**
+	 * Várias traduções por texto, na ordem do pedido: a principal primeiro e as
+	 * alternativas que o modelo achou quase tão boas depois. Opcional — o
+	 * provedor que não sabe fazer isso não oferece, e as questões ficam só com a
+	 * resposta do professor.
+	 */
+	alternativas?(textos: string[], de: string, para: string, quantas: number): Promise<string[][]>;
 }
 
 /**
@@ -37,6 +48,14 @@ const audiotext: Tradutor = {
 	async traduzir(textos, de, para) {
 		try {
 			return await traduzirNoAudiotext(textos, de, para);
+		} catch (erro) {
+			const detalhe = erro instanceof AudiotextError ? erro.message : String(erro);
+			throw new TraducaoIndisponivel(detalhe);
+		}
+	},
+	async alternativas(textos, de, para, quantas) {
+		try {
+			return await traduzirComAlternativas(textos, de, para, quantas);
 		} catch (erro) {
 			const detalhe = erro instanceof AudiotextError ? erro.message : String(erro);
 			throw new TraducaoIndisponivel(detalhe);

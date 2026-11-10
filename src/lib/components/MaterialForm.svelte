@@ -1367,59 +1367,73 @@
 								</span>
 							{/if}
 						</div>
-						{#each linhasLote as l, i (i)}
-							<div
-								class="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 last:border-0 {l.ok
-									? ''
-									: 'bg-warning/6'}"
-							>
-								<span class="w-4 shrink-0 font-mono text-[11.5px] text-base-content/65"
-									>{i + 1}</span
+						<!-- As linhas rolam DENTRO da prévia, com o resumo parado em cima: uma
+						     lista de cinquenta frases empurrava "O que o aluno vai ver" e o
+						     resto do formulário para longe. Sem `overscroll-contain` de
+						     propósito — chegando ao fim da lista, a rolagem segue para o
+						     formulário em vez de travar. Focável para quem rola pelo teclado. -->
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<div
+							role="region"
+							aria-label="Prévia das linhas coladas"
+							tabindex="0"
+							class="max-h-[min(18rem,40dvh)] overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+						>
+							{#each linhasLote as l, i (i)}
+								<div
+									class="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 last:border-0 {l.ok
+										? ''
+										: 'bg-warning/6'}"
 								>
-								{#if l.ok}
-									<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
-										<span
-											class="font-content text-[13.5px] font-semibold"
-											dir={direcao}
-											data-content-lang={tagConteudo}>{l.left}</span
-										>
-										{#if l.automatica}
-											<span class="text-[12.5px] text-base-content/65 italic"
-												>tradução automática</span
+									<span class="w-4 shrink-0 font-mono text-[11.5px] text-base-content/65"
+										>{i + 1}</span
+									>
+									{#if l.ok}
+										<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+											<span
+												class="font-content text-[13.5px] font-semibold"
+												dir={direcao}
+												data-content-lang={tagConteudo}>{l.left}</span
 											>
-										{:else}
-											<span class="text-[12.5px] text-base-content/65">{l.right}</span>
-										{/if}
-									</span>
-									<svg
-										class="size-[15px] shrink-0 text-success"
-										viewBox="0 0 24 24"
-										fill="none"
-										aria-hidden="true"
-									>
-										<path
-											d="M5 12.5l4.5 4.5L19 7"
-											stroke="currentColor"
-											stroke-width="2.4"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
-								{:else}
-									<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
-										<span class="font-content text-[13.5px] text-base-content/65 line-through"
-											>{l.left}</span
+											{#if l.automatica}
+												<span class="text-[12.5px] text-base-content/65 italic"
+													>tradução automática</span
+												>
+											{:else}
+												<span class="text-[12.5px] text-base-content/65">{l.right}</span>
+											{/if}
+										</span>
+										<svg
+											class="size-[15px] shrink-0 text-success"
+											viewBox="0 0 24 24"
+											fill="none"
+											aria-hidden="true"
 										>
-										<span class="text-[12px] font-bold text-warning">sem separador</span>
-									</span>
-									<button
-										type="button"
-										onclick={() => corrigirLinha(i + 1)}
-										class="btn btn-sm shrink-0 btn-plain text-[12px] text-primary">Corrigir</button
-									>
-								{/if}
-							</div>
-						{/each}
+											<path
+												d="M5 12.5l4.5 4.5L19 7"
+												stroke="currentColor"
+												stroke-width="2.4"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									{:else}
+										<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+											<span class="font-content text-[13.5px] text-base-content/65 line-through"
+												>{l.left}</span
+											>
+											<span class="text-[12px] font-bold text-warning">sem separador</span>
+										</span>
+										<button
+											type="button"
+											onclick={() => corrigirLinha(i + 1)}
+											class="btn btn-sm shrink-0 btn-plain text-[12px] text-primary"
+											>Corrigir</button
+										>
+									{/if}
+								</div>
+							{/each}
+						</div>
 					</div>
 				{/if}
 			</div>

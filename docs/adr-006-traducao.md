@@ -118,6 +118,15 @@ como detalhe de tela.
   sai igual ao de antes.
 - A tradução automática é um CHUTE bom, não um gabarito: ela entra como a tradução do material, e
   o professor confere — o mesmo papel da tradução da IA.
+- **As outras traduções certas viram respostas aceitas** (novembro de 2026, pedido do dono). Na
+  questão "traduza para o português", o aluno que escrevia outra tradução válida recebia "quase".
+  Ao gerar os itens, o serviço devolve as hipóteses do feixe perto da melhor (`alternatives`, até 4;
+  feixe `alternatives + 2`; margem de 0,2 na pontuação do modelo, medida — acima dela vinham
+  "Nunca desista EM seus sonhos" e "Eu realmente ADORO ler" para "me gusta mucho"). O Spokke fica
+  com as de diferença pequena (kernel) e que fazem a ida e volta, e as põe em "Também aceitas" para
+  o professor conferir. Só na língua do aluno: no idioma alvo a forma é o que se ensina. E nunca
+  na correção: o tradutor conserta o erro do aluno antes de traduzir ("She have been working" volta
+  igual à certa).
 - `traducao.test.ts` confere que todo idioma do produto está na lista do tradutor (a contraparte
   independente de `audiotext-service/app/traducao.py`).
 - **O PyAV ficou fixado abaixo do 19** no serviço de áudio: a reconstrução da imagem trouxe o 19,

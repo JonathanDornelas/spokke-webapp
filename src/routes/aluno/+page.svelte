@@ -795,4 +795,4 @@
 	</main>
 </div>
 
-<AvatarEditor bind:codigo bind:aberto={editorAberto} onusar={usarAvatar} />
+<AvatarEditor bind:codigo bind:aberto={editorAberto} nome={data.account.name} onusar={usarAvatar} />

@@ -424,6 +424,14 @@ de até 32 textos, em sequência, e recusa resposta com contagem diferente da pe
 - **Ele também alimenta o "ligue os pares" do fecho**: `gerarItens` chama `paresDasFrases`, que
   escolhe palavras das frases (kernel puro), traduz num pedido e só guarda o par que faz a IDA E
   VOLTA (kernel.md "closing-match"). Sem tradutor ou com ele fora, volta vazio e a geração segue.
+- **E as variantes aceitas da questão de tradução** (kernel.md "Respostas aceitas"): depois do
+  `selectItems`, `comVariantesDaTraducao` pega os "traduza para o português" que ENTRARAM, pede
+  ao serviço as traduções ALTERNATIVAS da frase (`alternatives` no `/v1/translate`: as hipóteses
+  do feixe perto da melhor na pontuação do modelo), filtra pelo tamanho da diferença no kernel e
+  confere o sentido por ida e volta — a variante traduzida de novo tem de dar a frase original ou o
+  mesmo que a resposta do professor dá. Dois pedidos para o lote inteiro, uns 2 a 3 s a mais no
+  "Gerar". Nunca trava a geração: sem tradutor, fora do ar ou serviço antigo, os itens seguem como
+  vieram.
 
 ## Notificações
 

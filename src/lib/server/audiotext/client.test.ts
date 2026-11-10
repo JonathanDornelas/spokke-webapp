@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AudiotextError, traduzir } from './client';
+import { AudiotextError, traduzir, traduzirComAlternativas } from './client';
 
 /**
  * O cliente da tradução sem rede: `fetch` é um dublê que traduz marcando o
@@ -60,5 +60,60 @@ describe('traduzir', () => {
 			)
 		);
 		await expect(traduzir(['a'], 'en-US', 'pt-BR')).rejects.toMatchObject({ status: 503 });
+	});
+});
+
+describe('traduzirComAlternativas', () => {
+	beforeEach(() => {
+		vi.stubEnv('AUDIOTEXT_URL', 'http://audiotext.test/');
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.unstubAllEnvs();
+	});
+
+	it('pede as alternativas e devolve a principal primeiro, texto a texto', async () => {
+		const corpos: { alternatives?: number }[] = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init: RequestInit) => {
+				const corpo = JSON.parse(String(init.body)) as { texts: string[]; alternatives?: number };
+				corpos.push(corpo);
+				return new Response(
+					JSON.stringify({
+						translations: corpo.texts.map((t) => `<${t}>`),
+						alternatives: corpo.texts.map((t, i) => (i === 0 ? [`<${t}> 2`] : []))
+					}),
+					{ status: 200 }
+				);
+			})
+		);
+		const saida = await traduzirComAlternativas(['a', 'b'], 'en-US', 'pt-BR', 9);
+		// O teto do serviço é 4: pedir mais seria 422.
+		expect(corpos[0]?.alternatives).toBe(4);
+		expect(saida).toEqual([['<a>', '<a> 2'], ['<b>']]);
+	});
+
+	it('serviço anterior às alternativas: cada texto fica só com a principal', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify({ translations: ['x', 'y'] }), { status: 200 }))
+		);
+		expect(await traduzirComAlternativas(['a', 'b'], 'en-US', 'pt-BR', 2)).toEqual([['x'], ['y']]);
+	});
+
+	it('lista de alternativas com outra contagem é recusada', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(JSON.stringify({ translations: ['x', 'y'], alternatives: [['z']] }), {
+						status: 200
+					})
+			)
+		);
+		await expect(traduzirComAlternativas(['a', 'b'], 'en-US', 'pt-BR', 2)).rejects.toBeInstanceOf(
+			AudiotextError
+		);
 	});
 });

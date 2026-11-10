@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { acessoriosLigados, alternarAcessorio, codigoDaOpcao, trocarCasa } from './editar';
-import { CASAS_ACESSORIO, MAX_ACESSORIOS } from './catalogo';
+import {
+	acessoriosLigados,
+	alternarAcessorio,
+	ciclar,
+	codigoDaOpcao,
+	escolhaAtual,
+	trocarCasa
+} from './editar';
+import { CASAS_ACESSORIO, CATEGORIAS, MAX_ACESSORIOS } from './catalogo';
 import { CASAS, CODIGO_PADRAO, decodificar } from './montar';
 
 describe('trocarCasa', () => {
@@ -93,5 +100,44 @@ describe('codigoDaOpcao', () => {
 		let c = CODIGO_PADRAO;
 		for (const peca of [2, 4, 5]) c = alternarAcessorio(c, peca);
 		expect(acessoriosLigados(codigoDaOpcao(c, CASAS_ACESSORIO[0], 9))).toEqual([9]);
+	});
+});
+
+describe('a escolha atual e as setas do editor', () => {
+	const cat = (chave: string) => CATEGORIAS.find((c) => c.chave === chave)!;
+
+	it('diz o nome da peça, a posição e o total', () => {
+		const codigo = trocarCasa(CODIGO_PADRAO, 1, 2);
+		expect(escolhaAtual(cat('cabelo'), codigo)).toMatchObject({
+			indice: 2,
+			total: cat('cabelo').nFormas,
+			nome: 'longo',
+			cicla: true
+		});
+	});
+
+	it('onde só há cor, a escolha é a cor', () => {
+		const codigo = trocarCasa(CODIGO_PADRAO, 0, 3);
+		expect(escolhaAtual(cat('pele'), codigo)).toMatchObject({ indice: 3, nome: 'tom de pele 4' });
+	});
+
+	it('acessório não cicla e lista o que está ligado', () => {
+		let codigo = alternarAcessorio(CODIGO_PADRAO, 8);
+		codigo = alternarAcessorio(codigo, 4);
+		expect(escolhaAtual(cat('acessorio'), codigo)).toMatchObject({
+			indice: 2,
+			nome: 'coroa e fone',
+			cicla: false
+		});
+		expect(ciclar(cat('acessorio'), codigo, 1)).toBe(codigo);
+	});
+
+	it('as setas dão a volta nas duas pontas', () => {
+		const ultimo = trocarCasa(CODIGO_PADRAO, 1, cat('cabelo').nFormas - 1);
+		expect(escolhaAtual(cat('cabelo'), ciclar(cat('cabelo'), ultimo, 1)).indice).toBe(0);
+		const primeiro = trocarCasa(CODIGO_PADRAO, 1, 0);
+		expect(escolhaAtual(cat('cabelo'), ciclar(cat('cabelo'), primeiro, -1)).indice).toBe(
+			cat('cabelo').nFormas - 1
+		);
 	});
 });

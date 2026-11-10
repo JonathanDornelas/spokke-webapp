@@ -292,6 +292,23 @@ app de idioma e faz o professor abandonar o produto.
   com um clique. As variantes saem de transformações do `LanguageProfile`, não de conhecimento
   de língua embutido.
 
+**Na questão de TRADUÇÃO para a língua do aluno, as variantes vêm do tradutor** (pedido do dono do
+repositório: "Nunca desista dos seus sonhos" dava quase contra "Nunca desista de seus sonhos").
+Elas nascem ao GERAR os itens, nunca na correção, e entram em `accepted` depois da resposta do
+professor — o editor de item as mostra em "Também aceitas", cada uma com o X de remover, e a
+revisão diz "aceita mais N respostas". O kernel só decide o TAMANHO da diferença
+(`grading/variantes.ts`, `variantesProximas`: Dice de palavras ≥ 0,7, no máximo duas palavras a
+mais ou a menos, nada que o normalizador já iguale, teto de três); quem pede as candidatas e
+confere o sentido é o servidor (`server/atividades/variantes-aceitas.ts`, server.md "Tradução do
+material").
+
+- **Só com `answerLang: 'source'`.** No idioma alvo o que se ensina é a FORMA: para "Ela trabalha
+  aqui há dois anos" o tradutor propõe "She works here for two years", e numa aula de present
+  perfect continuous essa não pode virar certa.
+- **Nunca o tradutor como corretor.** Medido: traduzir a resposta do aluno de volta e comparar
+  aceitaria "She have been working here" e "Never gives up on you dreams" — o modelo conserta o erro
+  antes de traduzir, e o erro é o que o exercício cobra.
+
 ## LanguageProfile
 
 Toda especificidade de idioma vive aqui, em `kernel/language/profiles/`:
@@ -317,7 +334,8 @@ fim do funil (`normalize()`), então as duas pontas viram o mesmo texto antes de
 Dois usos: **numerais** — o ASR escreve "7" onde o aluno disse "seven" e a frase alvo tem
 "seven"; era um "quase" por um acerto (`numerais()`, em `language/equivalences.ts`, gera os
 grupos de 0 a 99) — e **formas gramaticais intercambiáveis**: "irá trabalhar" e "vai trabalhar",
-"I'm" e "I am". A lista é curta de propósito e cada entrada é uma decisão de que o professor não
+"I'm" e "I am", e o artigo opcional antes do possessivo em português ("dos seus sonhos" e "de seus
+sonhos"; o "a" do feminino singular solto fica de fora, porque pode ser a preposição). A lista é curta de propósito e cada entrada é uma decisão de que o professor não
 quer distinguir aquelas formas; as contrações cuja forma sem apóstrofo é outra palavra ("were",
 "well", "ill", "its") ficam FORA. Sinônimo de vocabulário continua sendo "Respostas aceitas", que
 o professor cadastra.
@@ -533,9 +551,10 @@ Camadas, da mais barata para a mais cara. Use sempre a mais barata que resolve:
    são colapsados em `normalize()` (regra nº 6), então nem chegam a custar uma edição.
 
    Nada disso vira **certo**: quem escreveu outra tradução válida recebe `partial` com a
-   resposta esperada ao lado. Aceitar de verdade depende de o professor cadastrar a variante
-   ("Respostas aceitas", acima) — o kernel não sabe sinônimo e não pode fingir que sabe. A
-   exceção são as `equivalences` do profile ("vai"/"irá", numeral por extenso e dígito): elas
+   resposta esperada ao lado. Aceitar de verdade depende de a variante estar em `accepted` —
+   cadastrada pelo professor ou proposta pelo tradutor ao gerar ("Respostas aceitas", acima). O
+   kernel não sabe sinônimo e não pode fingir que sabe. A exceção são as `equivalences` do
+   profile ("vai"/"irá", numeral por extenso e dígito): elas
    são igualdade no normalizador, não tolerância, e por isso "Você irá trabalhar amanhã" contra
    "Você vai trabalhar amanhã?" é CERTO, não quase.
 

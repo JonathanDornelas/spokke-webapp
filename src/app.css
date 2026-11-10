@@ -139,6 +139,9 @@
 	--animate-veu: en-veu var(--duration-media) var(--ease-out-soft) both;
 	--animate-veu-saida: en-veu-out var(--duration-curta) var(--ease-in-soft) both;
 	--animate-modal-saida: en-modal-out var(--duration-curta) var(--ease-in-soft) both;
+	/* O pulinho do personagem no editor de avatar a cada troca: três quadros
+	   (`steps()`), o passo de jogo antigo do mapa do módulo. */
+	--animate-salto: en-salto var(--duration-media) steps(3, end) both;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1276,6 +1279,17 @@
 	}
 	to {
 		transform: none;
+	}
+}
+/* O editor de avatar (AvatarEditor.svelte): o personagem sobe um degrau e
+   volta quando uma peça muda. Roda uma vez por troca, por um {#key}. */
+@keyframes en-salto {
+	0%,
+	100% {
+		transform: translate3d(0, 0, 0);
+	}
+	40% {
+		transform: translate3d(0, -5%, 0);
 	}
 }
 

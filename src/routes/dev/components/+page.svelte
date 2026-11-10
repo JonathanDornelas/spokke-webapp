@@ -2052,7 +2052,7 @@
 	</main>
 </div>
 
-<AvatarEditor bind:codigo={avatarDemo} bind:aberto={editorDemo} />
+<AvatarEditor bind:codigo={avatarDemo} bind:aberto={editorDemo} nome="Ana Souza" />
 
 <Bandeja
 	aberta={bandejaDemo}
