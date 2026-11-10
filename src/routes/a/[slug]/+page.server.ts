@@ -1,7 +1,10 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { resolve } from '$app/paths';
 import { nivelOuNulo, rotuloDoNivel } from '$lib/atividades/nivel';
 import { playerRepo } from '$lib/server/db/repos/player';
+import { COOKIE_DO_CODIGO, precisaDoCodigo } from '$lib/server/player/access-code';
+import { publicationSettingsSchema } from '$lib/server/player/settings';
 import { itemAudioHashes, itemSkills } from '$lib/server/player/runtime';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
 import { convitePorToken } from '$lib/server/db/repos/deliveries';
@@ -28,18 +31,43 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 	const { activityVersion } = publication;
 	const itemCount = activityVersion.items.length;
 
+	// A tentativa deste aparelho que ficou pela metade. Ela decide as portas que
+	// vêm antes de tudo: a atividade arquivada e o código de acesso.
+	const anonId = cookies.get('spokke_anon');
+	const previous = anonId ? await playerRepo.resumableAttempt(publication.id, anonId) : null;
+
 	// **Arquivada fecha a entrada** (docs/adr-002-billing.md): o professor tirou a
 	// atividade do ar para liberar a vaga do plano. Quem já começou ainda
 	// termina — por isso a retomada é olhada antes de recusar. E isto vem ANTES
 	// do áudio: link fechado não pode enfileirar síntese a cada visita.
-	const anonIdCedo = cookies.get('spokke_anon');
-	if (activityVersion.activity.archivedAt) {
-		const emAndamento = anonIdCedo
-			? await playerRepo.resumableAttempt(publication.id, anonIdCedo)
-			: null;
-		if (!emAndamento) {
-			error(410, { message: 'Esta atividade foi encerrada', reason: 'unpublished' });
-		}
+	if (activityVersion.activity.archivedAt && !previous) {
+		error(410, { message: 'Esta atividade foi encerrada', reason: 'unpublished' });
+	}
+
+	// Já respondeu esta atividade? A entrada mostra o RESULTADO em vez de pedir
+	// tudo de novo. Só quando não há retomada pendente: quem parou no meio
+	// quer terminar, não rever o que fez da outra vez.
+	const concluida = previous
+		? null
+		: await playerRepo.concludedAttempt(publication.id, {
+				anonId,
+				accountId: locals.aluno?.id
+			});
+
+	// **O código vem ANTES da entrada** (`precisaDoCodigo`): o aluno digita o
+	// código, volta para cá e só então diz o nome. Antes era o contrário, e o
+	// código certo devolvia para uma entrada vazia. Vem também antes do áudio:
+	// quem ainda não tem o código não precisa saber se o áudio está pronto.
+	const settings = publicationSettingsSchema.parse(publication.settings);
+	if (
+		precisaDoCodigo({
+			exige: settings.requireCode,
+			codigo: settings.code,
+			doCookie: cookies.get(COOKIE_DO_CODIGO + params.slug),
+			temTentativa: previous !== null || concluida !== null
+		})
+	) {
+		redirect(303, resolve('/a/[slug]/codigo', { slug: params.slug }));
 	}
 
 	// O link só fica ativo quando todo o áudio existe (server.md "TTS").
@@ -68,19 +96,6 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 	// em vez de pedir o nome. Quem chegou pelo link aberto continua digitando.
 	const studentId = cookies.get(`spokke_aluno_${params.slug}`);
 	const student = studentId ? await convitePorToken.studentById(studentId) : null;
-
-	const anonId = cookies.get('spokke_anon');
-	const previous = anonId ? await playerRepo.resumableAttempt(publication.id, anonId) : null;
-
-	// Já respondeu esta atividade? A entrada mostra o RESULTADO em vez de pedir
-	// tudo de novo. Só quando não há retomada pendente: quem parou no meio
-	// quer terminar, não rever o que fez da outra vez.
-	const concluida = previous
-		? null
-		: await playerRepo.concludedAttempt(publication.id, {
-				anonId,
-				accountId: locals.aluno?.id
-			});
 
 	// As habilidades são DERIVADAS dos itens (kernel.md) — o professor não
 	// marcou nenhuma. Aparecem aqui para o aluno saber que vai gravar voz, não

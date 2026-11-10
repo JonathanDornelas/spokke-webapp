@@ -6,9 +6,11 @@ import { z } from 'zod';
  * tela recebe o texto já montado (docs/notificacoes.md).
  *
  * **Só entra o que pede uma ação do professor ou o desfecho de algo que ele
- * começou e não está olhando.** Tentativa terminada, e-mail que saiu, liberação
- * que aconteceu na data: tudo isso ele vê abrindo a tela, e avisar seria ensinar
- * a ignorar o sino.
+ * começou e não está olhando.** E-mail que saiu e liberação que aconteceu na
+ * data ele vê abrindo a tela, e avisar seria ensinar a ignorar o sino. A
+ * tentativa terminada entrou a pedido do dono do repositório (2026-11-10),
+ * AGRUPADA por atividade enquanto não lida — trinta alunos terminando numa
+ * tarde são um aviso só, "Ana e mais 29".
  */
 
 const nomes = z.array(z.string()).max(5);
@@ -39,7 +41,9 @@ export const DADOS = {
 	/** Professor que aceitou o convite da escola — para a coordenação. */
 	escola: z.object({ escola: z.string(), nomes }),
 	/** O teste grátis perto do fim. */
-	'trial-acabando': z.object({ ate: z.string() })
+	'trial-acabando': z.object({ ate: z.string() }),
+	/** Alunos que terminaram uma atividade — agrupado por atividade. */
+	terminou: z.object({ activityId: z.string(), titulo: z.string(), nomes })
 } as const;
 
 export type TipoDeNotificacao = keyof typeof DADOS;
@@ -49,6 +53,57 @@ export const TIPOS = Object.keys(DADOS) as TipoDeNotificacao[];
 
 export function ehTipo(kind: string): kind is TipoDeNotificacao {
 	return kind in DADOS;
+}
+
+/** Os itens da barra lateral do Studio que podem levar um número de aviso. */
+export type SecaoDoStudio = 'atividades' | 'turmas' | 'resultados' | 'escola' | 'assinatura';
+
+/**
+ * Em que item da barra lateral cada aviso NÃO LIDO conta (docs/notificacoes.md).
+ * `null` é o aviso que a barra já mostra por outra conta, a do banco: a correção
+ * pendente é o número âmbar de Resultados e a liberação que não saiu é o
+ * vermelho de Módulos — contar o aviso também seria contar a mesma coisa duas
+ * vezes.
+ */
+export const SECAO_DO_AVISO: Record<TipoDeNotificacao, SecaoDoStudio | null> = {
+	correcao: null,
+	liberacao: null,
+	audio: 'atividades',
+	'aluno-entrou': 'turmas',
+	plano: 'assinatura',
+	escola: 'escola',
+	'trial-acabando': 'assinatura',
+	terminou: 'resultados'
+};
+
+/**
+ * A tela de destino que conta como VER o aviso, ao abrir (docs/notificacoes.md):
+ * os resultados de uma atividade, a atividade, a turma, a escola e a aba da
+ * assinatura. Correção pendente e liberação que não saiu não estão aqui: essas
+ * se resolvem quando a coisa é feita, não quando a tela é aberta.
+ */
+export type AlvoVisto =
+	| { secao: 'resultados'; activityId: string }
+	| { secao: 'atividades'; activityId: string }
+	| { secao: 'turmas'; classroomId: string }
+	| { secao: 'escola' }
+	| { secao: 'assinatura' };
+
+/** O que o número de um item da barra quer dizer, por extenso — o leitor de tela não vê a cor. */
+export function rotuloDoAviso(secao: SecaoDoStudio, n: number): string {
+	const um = n === 1;
+	switch (secao) {
+		case 'resultados':
+			return um ? '1 aluno terminou uma atividade' : `${n} alunos terminaram atividades`;
+		case 'turmas':
+			return um ? '1 aluno entrou com a conta' : `${n} alunos entraram com a conta`;
+		case 'atividades':
+			return um ? '1 atividade sem áudio' : `${n} atividades sem áudio`;
+		case 'escola':
+			return um ? '1 professor entrou na escola' : `${n} professores entraram na escola`;
+		case 'assinatura':
+			return um ? '1 aviso da assinatura' : `${n} avisos da assinatura`;
+	}
 }
 
 /**
@@ -119,7 +174,8 @@ export function textoDaNotificacao(
 		| { kind: 'aluno-entrou'; data: DadosDe<'aluno-entrou'>; count: number }
 		| { kind: 'plano'; data: DadosDe<'plano'>; count: number }
 		| { kind: 'escola'; data: DadosDe<'escola'>; count: number }
-		| { kind: 'trial-acabando'; data: DadosDe<'trial-acabando'>; count: number },
+		| { kind: 'trial-acabando'; data: DadosDe<'trial-acabando'>; count: number }
+		| { kind: 'terminou'; data: DadosDe<'terminou'>; count: number },
 	agora: Date = new Date()
 ): Pick<NotificacaoNaTela, 'titulo' | 'detalhe' | 'destino' | 'tom'> {
 	switch (n.kind) {
@@ -200,6 +256,17 @@ export function textoDaNotificacao(
 				detalhe: 'Depois disso, criar e publicar ficam pausados. Os links continuam no ar.',
 				destino: { rota: 'planos' },
 				tom: 'acao'
+			};
+		}
+		case 'terminou': {
+			const varios = n.count > 1;
+			return {
+				titulo: `${quem(n.data.nomes, n.count)} ${varios ? 'terminaram' : 'terminou'} ${n.data.titulo}`,
+				detalhe: varios
+					? 'As respostas estão nos resultados da atividade.'
+					: 'A resposta está nos resultados da atividade.',
+				destino: { rota: 'resultados', activityId: n.data.activityId },
+				tom: 'info'
 			};
 		}
 	}

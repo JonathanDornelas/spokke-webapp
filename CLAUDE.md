@@ -224,8 +224,10 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
 - **Notificações**: o sino do Studio avisa o que pede ação ou o desfecho de algo que o professor
   começou — resposta para corrigir, liberação de módulo que não aconteceu, áudio que a fila não
   gerou, aluno que entrou na turma com a conta, o que a equipe fez na assinatura, professor que
-  entrou na escola, fim do teste (`docs/notificacoes.md`). Fica de fora o e-mail que voltou: SMTP
-  não devolve aviso de devolução, e nada marca `Invite.bouncedAt` hoje.
+  entrou na escola, fim do teste e aluno que terminou uma atividade (agrupado por atividade)
+  (`docs/notificacoes.md`). Os mesmos avisos numeram os itens da barra lateral, e abrir a tela de
+  destino conta como ver. Fica de fora o e-mail que voltou: SMTP não devolve aviso de devolução, e
+  nada marca `Invite.bouncedAt` hoje.
 - Não existe mais fila de correção: comentar e dar nota de rubrica acontecem na tela da
   tentativa, em cima da resposta (paginas.md "Resultados").
 - `conta` é real: salva o nome, pede plano, cancela no fim do período, sai da escola e mostra o

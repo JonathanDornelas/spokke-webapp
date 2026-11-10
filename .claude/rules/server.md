@@ -119,7 +119,9 @@ Regras:
 - O `attemptId` é um identificador não sequencial e não adivinhável.
 - Rate limit por IP em `iniciarTentativa` e `responderItem`. Sem isso, um script de três linhas
   enche o relatório do professor de lixo.
-- Se a publicação exige código de acesso, ele é validado em `iniciarTentativa` e nada é
+- Se a publicação exige código de acesso, ele é a PRIMEIRA tela: o loader da entrada manda para
+  `/codigo` quem ainda não passou por ele (`precisaDoCodigo`, `server/player/access-code.ts`). E
+  `iniciarTentativa` o confere de novo, porque um POST direto não passa pela entrada — nada é
   devolvido antes disso.
 - O item devolvido **nunca** contém `accepted`, `tokens` originais em ordem, ou qualquer campo
   do payload de autoria. Só o que `toRuntime()` produziu.
@@ -431,7 +433,9 @@ de até 32 textos, em sequência, e recusa resposta com contagem diferente da pe
   confere o sentido por ida e volta — a variante traduzida de novo tem de dar a frase original ou o
   mesmo que a resposta do professor dá. Dois pedidos para o lote inteiro, uns 2 a 3 s a mais no
   "Gerar". Nunca trava a geração: sem tradutor, fora do ar ou serviço antigo, os itens seguem como
-  vieram.
+  vieram. Na mesma ida e volta vão as candidatas de SUJEITO EXPLÍCITO (`candidatasComSujeito`):
+  quando a resposta do professor não traz o pronome, cada pronome omitível do idioma vai na frente
+  dela, e fica a que volta com o sentido da frase — kernel.md "Respostas aceitas".
 
 ## Notificações
 

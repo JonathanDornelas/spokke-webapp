@@ -35,8 +35,20 @@ const AGRUPAR: Record<TipoDeNotificacao, 'somar' | 'definir' | 'renovar'> = {
 	'aluno-entrou': 'somar',
 	plano: 'renovar',
 	escola: 'somar',
-	'trial-acabando': 'renovar'
+	'trial-acabando': 'renovar',
+	terminou: 'somar'
 };
+
+/**
+ * As chaves que agrupam, num lugar só: quem AVISA e quem marca como VISTO
+ * (`repos/notificacoes.ts`, ao abrir a tela de destino) precisam escrever a
+ * mesma chave, senão o "visto" nunca alcança o aviso.
+ */
+export const CHAVE = {
+	terminou: (activityId: string) => `terminou:${activityId}`,
+	audio: (activityId: string) => `audio:${activityId}`,
+	alunoEntrou: (classroomId: string) => `aluno-entrou:${classroomId}`
+} as const;
 
 /** Lidas há mais que isto saem quando chega uma nova: o sino não é arquivo. */
 const GUARDAR_LIDAS_MS = 90 * 24 * 60 * 60 * 1000;
@@ -148,6 +160,24 @@ export async function atualizarCorrecao(
 	} catch (err) {
 		console.warn('[notificacoes] correção', err);
 	}
+}
+
+/**
+ * "Ana terminou Present perfect" — e, enquanto o professor não lê, "Ana e mais
+ * 3 terminaram". Chamado pelo Player quando a tentativa termina pela PRIMEIRA
+ * vez (`finalizarTentativa`): terminar de novo, recarregando a tela final, não
+ * conta outro aluno.
+ */
+export async function avisarTentativaTerminada(
+	teacherId: string,
+	atividade: { id: string; title: string },
+	nome: string
+): Promise<void> {
+	await notificar(teacherId, {
+		kind: 'terminou',
+		key: CHAVE.terminou(atividade.id),
+		data: { activityId: atividade.id, titulo: atividade.title, nomes: [nome] }
+	});
 }
 
 /**

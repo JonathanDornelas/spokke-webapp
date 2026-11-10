@@ -3,7 +3,7 @@ import { command, form, getRequestEvent, query } from '$app/server';
 import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { requireTeacher } from '$lib/server/auth/guard';
-import { resolverNotificacoes } from '$lib/server/notificacoes';
+import { CHAVE, resolverNotificacoes } from '$lib/server/notificacoes';
 import { motivoDoBloqueio } from '$lib/server/billing/entitlements';
 import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { comCota, motivoDeCriar } from '$lib/server/billing/cota';
@@ -547,7 +547,7 @@ export const regerarAudio = command(
 		if (hashes.length === 0) return { ok: true, enfileirados: 0 };
 
 		await playerRepo.esquecerAudios(teacher.id, hashes);
-		await resolverNotificacoes(teacher.id, [`audio:${activityId}`]);
+		await resolverNotificacoes(teacher.id, [CHAVE.audio(activityId)]);
 		const enfileirados = await enfileirarAudioFaltante({
 			teacherId: teacher.id,
 			targetTag: activity.targetLang,

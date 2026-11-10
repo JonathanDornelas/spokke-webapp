@@ -308,6 +308,19 @@ material").
 - **Nunca o tradutor como corretor.** Medido: traduzir a resposta do aluno de volta e comparar
   aceitaria "She have been working here" e "Never gives up on you dreams" — o modelo conserta o erro
   antes de traduzir, e o erro é o que o exercício cobra.
+- **O sujeito que a língua omite** (`LanguageProfile.sujeitoOmitivel`: português, espanhol e
+  italiano, só a primeira pessoa, onde a conjugação não deixa dúvida). "Estou ansioso" e "Eu estou
+  ansioso" são a mesma frase, e o aluno que escreveu a segunda recebia "quase" (o caso do dono do
+  repositório). **Na correção** (`tolerantScore`, `grading/sujeito.ts`): se alguma resposta aceita
+  começa com um desses pronomes, a questão aceita com e sem ele, em qualquer variante — nunca um
+  pronome que nenhuma aceita traz ("nós estou" não vira "estou"), e nunca o de um sujeito composto
+  ("eu e meu irmão", pelas `conjuncoes` do profile). Vale na hora para o que já foi publicado,
+  quando o professor escreveu o pronome. **Na geração** (`candidatasComSujeito`): o feixe do
+  tradutor não garante esse par — para "I'm looking forward to the weekend" ele só variava gênero e
+  preposição —, então, quando a resposta do professor não traz o sujeito, o servidor propõe a forma
+  com cada pronome e a ida e volta escolhe o certo ("Nós estou…" volta como "We look forward…" e
+  cai; "Eu está chovendo" volta como "I'm raining"). Fica no máximo uma, antes das do feixe e fora
+  do teto delas.
 
 ## LanguageProfile
 
@@ -325,6 +338,7 @@ type LanguageProfile = {
 	asr: { model: string; hints: string[] };
 	equivalences: string[][]; // [['7', 'seven'], ['vai', 'irá'], ['i am', 'im']]
 	input: EntradaDoIdioma; // como o aluno DIGITA neste idioma — ver "Entrada" abaixo
+	sujeitoOmitivel?: { pronomes: string[]; conjuncoes: string[] }; // ver "Respostas aceitas"
 };
 ```
 

@@ -5,8 +5,8 @@ import { resolve } from '$app/paths';
 import { playerRepo } from '$lib/server/db/repos/player';
 import { itemAudioHashes } from '$lib/server/player/runtime';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
-import { atualizarCorrecao } from '$lib/server/notificacoes';
-import { codigoConfere } from '$lib/server/player/access-code';
+import { atualizarCorrecao, avisarTentativaTerminada } from '$lib/server/notificacoes';
+import { COOKIE_DO_CODIGO, codigoConfere } from '$lib/server/player/access-code';
 import { convitePorToken } from '$lib/server/db/repos/deliveries';
 import { fichaDaConta } from '$lib/server/db/repos/student-accounts';
 import { getInteraction } from '$lib/kernel/interactions/registry';
@@ -32,7 +32,6 @@ import type { Prisma } from '../../../../generated/prisma/client.ts';
  */
 
 const ANON_COOKIE = 'spokke_anon';
-const CODE_COOKIE_PREFIX = 'spokke_code_';
 
 function anonId(): string {
 	const { cookies } = getRequestEvent();
@@ -95,8 +94,10 @@ export const iniciarTentativa = form(
 		const settings = publicationSettingsSchema.parse(publication.settings);
 		await ensureAudioReady(publication);
 
+		// A entrada já manda para o código antes (`precisaDoCodigo`); isto é a
+		// conferência do SERVIDOR, para um POST que chegue sem passar por ela.
 		const { cookies } = getRequestEvent();
-		if (settings.requireCode && cookies.get(CODE_COOKIE_PREFIX + slug) !== settings.code) {
+		if (settings.requireCode && cookies.get(COOKIE_DO_CODIGO + slug) !== settings.code) {
 			redirect(303, resolve('/a/[slug]/codigo', { slug }));
 		}
 
@@ -211,7 +212,9 @@ export const validarCodigo = form(
 		// servidor (paginas.md "Player").
 		if (!settings.code || !codigoConfere(settings.code, code)) return { invalid: true };
 
-		getRequestEvent().cookies.set(CODE_COOKIE_PREFIX + slug, settings.code, {
+		// Código certo: de volta à ENTRADA, que agora pede o nome (ou cumprimenta
+		// quem está logado). É a segunda tela, nunca a primeira.
+		getRequestEvent().cookies.set(COOKIE_DO_CODIGO + slug, settings.code, {
 			path: '/',
 			httpOnly: true,
 			sameSite: 'lax',
@@ -315,6 +318,14 @@ export const finalizarTentativa = command(
 	async ({ attemptId }) => {
 		const attempt = await attemptOr404(attemptId);
 		await playerRepo.finishAttempt(attemptId);
+
+		// O sino do professor (docs/notificacoes.md), só na PRIMEIRA vez: recarregar a
+		// tela final chama isto de novo, e não pode contar o mesmo aluno duas vezes.
+		// Sem esperar — o aluno não espera o sino de outra pessoa.
+		if (attempt.finishedAt === null) {
+			const atividade = attempt.publication.activityVersion.activity;
+			void avisarTentativaTerminada(atividade.teacherId, atividade, attempt.name);
+		}
 
 		const settings = publicationSettingsSchema.parse(attempt.publication.settings);
 		if (!settings.showResult) return { showFeedback: false as const };

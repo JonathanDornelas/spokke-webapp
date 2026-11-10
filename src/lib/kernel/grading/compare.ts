@@ -3,6 +3,7 @@ import { tokenize } from '../language/tokenize';
 import type { LanguageProfile } from '../language/profile';
 import { levenshtein, similarity } from './levenshtein';
 import type { Score } from './result';
+import { semSujeito, sujeitoNoInicio } from './sujeito';
 
 /**
  * Toda comparação de resposta do kernel passa por aqui — nunca `===` entre
@@ -99,6 +100,24 @@ export function wordSimilarity(a: string, b: string, profile: LanguageProfile): 
 
 export function tolerantScore(answer: string, accepted: string[], profile: LanguageProfile): Score {
 	const value = norm(answer, profile);
+	const alvos = accepted.map((acc) => ({ acc, target: norm(acc, profile) }));
+
+	// **O sujeito que a língua omite** (`LanguageProfile.sujeitoOmitivel`):
+	// se alguma aceita começa com ele, a questão aceita com e sem ele, em
+	// qualquer variante — "Eu estou ansiosa pelo fim de semana" contra "Estou
+	// ansiosa pelo fim de semana". Só o pronome que alguma aceita TRAZ, porque
+	// é ela que diz que ele é o sujeito certo da frase: "nós estou" não vira
+	// "estou". Quem propõe a forma com o pronome, quando o professor não a
+	// escreveu, é a geração (`server/atividades/variantes-aceitas.ts`).
+	const sujeitos = new Set(
+		alvos.map(({ target }) => sujeitoNoInicio(target, profile)).filter((s) => s !== null)
+	);
+	const tirarSujeito = (texto: string): string => {
+		const sujeito = sujeitoNoInicio(texto, profile);
+		return sujeito && sujeitos.has(sujeito) ? semSujeito(texto, sujeito) : texto;
+	};
+	const valueSemSujeito = tirarSujeito(value);
+
 	let best = 0;
 	let closest = accepted[0] ?? '';
 	/** Se ALGUMA das aceitas está a poucos toques de distância. */
@@ -106,24 +125,27 @@ export function tolerantScore(answer: string, accepted: string[], profile: Langu
 	/** Ou se alguma delas diz quase o mesmo, com quase as mesmas palavras. */
 	let parecida = false;
 
-	for (const acc of accepted) {
-		const target = norm(acc, profile);
-		const sim = value === target ? 1 : similarity(value, target);
-		if (sim > best) {
-			best = sim;
-			closest = acc;
-		}
-		// TRÊS réguas, e vale a mais generosa. A razão cobre a resposta longa com
-		// vários deslizes; a distância cobre a curta com um só; a de palavras
-		// cobre o que as duas primeiras não veem — a tradução válida escrita com
-		// outras palavras, que em caracteres parece resposta aleatória.
-		const distancia = levenshtein(value, target);
-		if (distancia <= errosPermitidos(Math.max(value.length, target.length))) perto = true;
-		if (
-			tokenize(target, profile).length >= MIN_PALAVRAS_PARA_A_REGUA &&
-			wordSimilarity(answer, acc, profile) >= LIMIAR_PALAVRAS
-		) {
-			parecida = true;
+	for (const { acc, target } of alvos) {
+		const pares: [string, string][] = [[value, target]];
+		if (sujeitos.size > 0) pares.push([valueSemSujeito, tirarSujeito(target)]);
+		for (const [v, t] of pares) {
+			const sim = v === t ? 1 : similarity(v, t);
+			if (sim > best) {
+				best = sim;
+				closest = acc;
+			}
+			// TRÊS réguas, e vale a mais generosa. A razão cobre a resposta longa com
+			// vários deslizes; a distância cobre a curta com um só; a de palavras
+			// cobre o que as duas primeiras não veem — a tradução válida escrita com
+			// outras palavras, que em caracteres parece resposta aleatória.
+			const distancia = levenshtein(v, t);
+			if (distancia <= errosPermitidos(Math.max(v.length, t.length))) perto = true;
+			if (
+				tokenize(t, profile).length >= MIN_PALAVRAS_PARA_A_REGUA &&
+				wordSimilarity(v, t, profile) >= LIMIAR_PALAVRAS
+			) {
+				parecida = true;
+			}
 		}
 	}
 

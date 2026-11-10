@@ -748,7 +748,9 @@ onde o conteúdo vem depois. Faixa do lado errado cai atrás de texto, que é o 
 As quatro etapas do wizard não montam a faixa cada uma: ela vive uma vez em `WizardShell.svelte`,
 ancorada embaixo (150px no celular, 190px no desktop). Ela vem ANTES do conteúdo no DOM e o
 conteúdo é `relative` — entre irmãos posicionados sem `z-index`, quem vem depois pinta por cima —,
-então as telas filhas não precisam de `z-1` em cada bloco.
+então as telas filhas não precisam de `z-1` em cada bloco. A exceção é a etapa 2
+(`WizardShell rolagem="colunas"`): ali a casca tem a altura da tela e cada coluna rola por dentro,
+então a faixa vai no FIM da coluna da lista, e o texto que rola nunca passa por cima dela.
 
 `tone="success"` troca `primary` por `success` nas formas coloridas — só a tela de resultado do
 Player usa isso, quando o desfecho é positivo. As classes de cor são strings **inteiras e

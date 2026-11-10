@@ -56,7 +56,10 @@ export const ptBR: LanguageProfile = {
 		// "pra" é o que o ASR escreve quando se fala "para".
 		['para', 'pra'],
 		...artigoAntesDoPossessivo()
-	]
+	],
+	// "Estou ansioso" e "Eu estou ansioso" são a mesma frase (o caso que o dono do
+	// repositório relatou). Ver `LanguageProfile.sujeitoOmitivel`.
+	sujeitoOmitivel: { pronomes: ['eu', 'nós'], conjuncoes: ['e', 'ou', 'nem'] }
 };
 
 /**

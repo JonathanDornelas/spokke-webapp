@@ -36,3 +36,29 @@ export function codigoConfere(esperado: string | null, digitado: string): boolea
 	if (!esperado) return false;
 	return normalizarCodigoAcesso(digitado) === esperado;
 }
+
+/**
+ * O cookie que diz que este aparelho já passou pelo código de uma publicação
+ * (24 h, `httpOnly`), seguido do slug. Lido pela entrada, pela tela do código e
+ * por `iniciarTentativa`, que confere de novo: toda remote function é endpoint
+ * público, e a tela de entrada ter mandado para o código não protege nada.
+ */
+export const COOKIE_DO_CODIGO = 'spokke_code_';
+
+/**
+ * A entrada manda para o código? **O código é a PRIMEIRA tela** de uma atividade
+ * que pede um: a ordem antiga (nome, depois código, e de volta a uma entrada
+ * vazia) fazia o aluno digitar o nome duas vezes. Quem tem tentativa neste
+ * aparelho, pela metade ou terminada, já passou pelo código ao começar e não é
+ * barrado de novo para continuar ou rever o que fez; começar outra passa por
+ * ele outra vez.
+ */
+export function precisaDoCodigo(opcoes: {
+	exige: boolean;
+	codigo: string | null;
+	doCookie: string | undefined;
+	temTentativa: boolean;
+}): boolean {
+	if (!opcoes.exige || opcoes.temTentativa) return false;
+	return !opcoes.codigo || opcoes.doCookie !== opcoes.codigo;
+}

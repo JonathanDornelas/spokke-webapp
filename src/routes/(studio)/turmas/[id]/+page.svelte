@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { marcarVisto } from '$lib/client/avisos';
+	import { page } from '$app/state';
 	import Alternador from '$lib/components/Alternador.svelte';
 	// A turma. Três blocos numa rolagem: o cabeçalho com os quatro números que
 	// importam, a chamada com o estado no último envio, e o histórico de envios.
@@ -388,6 +390,12 @@
 			apagandoTurma = false;
 		}
 	}
+
+	// Abrir a turma conta como ver quem entrou nela com a conta (docs/notificacoes.md).
+	$effect(() => {
+		const classroomId = page.params.id;
+		if (classroomId) marcarVisto({ secao: 'turmas', classroomId });
+	});
 </script>
 
 <svelte:head><title>{data.classroom.name} · Turmas · Spokke</title></svelte:head>

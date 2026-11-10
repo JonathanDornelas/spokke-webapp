@@ -19,6 +19,7 @@
 	// PENDÊNCIA: o que acontece com os links já publicados ao encerrar a conta
 	// não está definido — precisa de decisão antes de ir para produção. O aviso
 	// dentro do cartão vermelho existe para isso não passar batido.
+	import { marcarVisto } from '$lib/client/avisos';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -472,6 +473,12 @@
 			acaoPendente = null;
 		}
 	}
+
+	// A aba da assinatura conta como ver os avisos dela — o plano que a equipe
+	// mudou e o fim do teste (docs/notificacoes.md).
+	$effect(() => {
+		if (data.aba === 'assinatura') marcarVisto({ secao: 'assinatura' });
+	});
 </script>
 
 <svelte:head

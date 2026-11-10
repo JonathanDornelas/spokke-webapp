@@ -15,6 +15,9 @@
 	import PlanoCard from '$lib/components/PlanoCard.svelte';
 	import { authClient } from '$lib/client/auth';
 	import { painelLateral, veu } from '$lib/client/transicoes';
+	import { rotuloDoAviso, type SecaoDoStudio } from '$lib/notificacoes';
+	import { AVISOS_LIDOS } from '$lib/client/avisos';
+	import { notificacoesDoSino } from './studio.remote';
 	import type { LayoutProps } from './$types';
 
 	// `data` vem de +layout.server.ts — por essa altura a sessão já foi
@@ -30,32 +33,84 @@
 		await goto(resolve('/'));
 	}
 
-	const nav = $derived([
+	/** `secao`: o item mostra o número de avisos não lidos daquela parte do Studio. */
+	type ItemDoMenu = {
+		href: ReturnType<typeof resolve>;
+		label: string;
+		icon: string;
+		secao?: SecaoDoStudio;
+	};
+
+	const nav = $derived<ItemDoMenu[]>([
 		// O início: para onde o professor vai ao entrar (paginas.md "Início").
 		{ href: resolve('/(studio)/inicio'), label: 'Início', icon: 'inicio' },
-		{ href: resolve('/(studio)/atividades'), label: 'Atividades', icon: 'list' },
+		{
+			href: resolve('/(studio)/atividades'),
+			label: 'Atividades',
+			icon: 'list',
+			secao: 'atividades'
+		},
 		// Módulos: coleções de atividades. No celular ficam na gaveta (a barra de abas tem 4).
 		{ href: resolve('/(studio)/modulos'), label: 'Módulos', icon: 'modulo' },
-		{ href: resolve('/(studio)/turmas'), label: 'Turmas', icon: 'turma' },
-		{ href: resolve('/(studio)/resultados'), label: 'Resultados', icon: 'chart' },
+		{ href: resolve('/(studio)/turmas'), label: 'Turmas', icon: 'turma', secao: 'turmas' },
+		{
+			href: resolve('/(studio)/resultados'),
+			label: 'Resultados',
+			icon: 'chart',
+			secao: 'resultados'
+		},
 		{ href: resolve('/(studio)/materiais'), label: 'Materiais', icon: 'book' },
 		// A área da coordenação só aparece para quem coordena uma escola — a
 		// barreira de verdade é `requireCoordenacao` no servidor.
 		...(data.coordena
-			? [{ href: resolve('/(studio)/escola'), label: 'Escola', icon: 'escola' }]
+			? [
+					{
+						href: resolve('/(studio)/escola'),
+						label: 'Escola',
+						icon: 'escola',
+						secao: 'escola' as const
+					}
+				]
 			: []),
-		{ href: resolve('/(studio)/assinatura'), label: 'Assinatura', icon: 'gear' }
+		{
+			href: resolve('/(studio)/assinatura'),
+			label: 'Assinatura',
+			icon: 'gear',
+			secao: 'assinatura'
+		}
 	]);
 	// No celular a barra tem quatro alvos: mais que isso vira alvo pequeno
 	// demais. O início é o primeiro, porque é onde o professor chega; a conta não
 	// precisa de aba — o avatar do cabeçalho já leva a ela, e a assinatura mora
 	// dentro dela. Materiais e módulos ficam na gaveta: são trabalho de mesa.
-	const abas = [
+	const abas: ItemDoMenu[] = [
 		{ href: resolve('/(studio)/inicio'), label: 'Início', icon: 'inicio' },
-		{ href: resolve('/(studio)/atividades'), label: 'Atividades', icon: 'list' },
-		{ href: resolve('/(studio)/turmas'), label: 'Turmas', icon: 'turma' },
-		{ href: resolve('/(studio)/resultados'), label: 'Resultados', icon: 'chart' }
+		{
+			href: resolve('/(studio)/atividades'),
+			label: 'Atividades',
+			icon: 'list',
+			secao: 'atividades'
+		},
+		{ href: resolve('/(studio)/turmas'), label: 'Turmas', icon: 'turma', secao: 'turmas' },
+		{
+			href: resolve('/(studio)/resultados'),
+			label: 'Resultados',
+			icon: 'chart',
+			secao: 'resultados'
+		}
 	];
+
+	// Os números de aviso da barra saem da MESMA consulta do sino
+	// (docs/notificacoes.md): ela atualiza a cada minuto e quando uma tela marca
+	// algo como visto, e o loader deste layout não roda de novo numa navegação.
+	const sino = notificacoesDoSino();
+	const avisos = $derived(sino.current?.porSecao);
+	$effect(() => {
+		const recarregar = () => void sino.refresh();
+		window.addEventListener(AVISOS_LIDOS, recarregar);
+		return () => window.removeEventListener(AVISOS_LIDOS, recarregar);
+	});
+	const avisosDe = (item: ItemDoMenu): number => (item.secao ? (avisos?.[item.secao] ?? 0) : 0);
 
 	const paths: Record<string, string> = {
 		inicio: 'M4 11l8-6.5 8 6.5V20h-5.5v-5h-5v5H4z',
@@ -141,10 +196,32 @@
 			{@render icone(item.icon)}
 			<span class="flex-1">{item.label}</span>
 			{#if item.label === 'Resultados' && data.aCorrigir > 0}
+				{@const rotulo =
+					data.aCorrigir === 1
+						? '1 resposta para corrigir'
+						: `${data.aCorrigir} respostas para corrigir`}
 				<span
 					class="grid min-w-5 place-items-center rounded-full bg-warning/20 px-1.5 py-0.5 text-[11px] font-bold text-warning"
+					title={rotulo}
 				>
-					{data.aCorrigir}
+					<span aria-hidden="true">{data.aCorrigir}</span><span class="sr-only">{rotulo}</span>
+				</span>
+			{/if}
+			{#if item.secao && avisosDe(item) > 0}
+				{@const erro = item.secao === 'atividades'}
+				{@const rotulo = rotuloDoAviso(item.secao, avisosDe(item))}
+				<!-- Avisos não lidos desta parte do Studio (docs/notificacoes.md): azul, a
+				     cor do sino — "tem novidade" não é erro. Vermelho só em Atividades, onde
+				     o aviso é o áudio que falhou e deixou um link fora do ar. -->
+				<span
+					class="grid min-w-5 place-items-center rounded-full px-1.5 py-0.5 text-[11px] font-bold"
+					class:bg-error={erro}
+					class:text-error-content={erro}
+					class:bg-primary={!erro}
+					class:text-primary-content={!erro}
+					title={rotulo}
+				>
+					<span aria-hidden="true">{avisosDe(item)}</span><span class="sr-only">{rotulo}</span>
 				</span>
 			{/if}
 			{#if item.label === 'Módulos' && data.modulosComFalha > 0}
@@ -310,6 +387,7 @@
 			<ThemeToggle />
 			<a
 				href={resolve('/(site)/ajuda')}
+				target="_blank"
 				class="text-[13px] font-semibold text-base-content no-underline">Ajuda</a
 			>
 		</header>
@@ -319,10 +397,16 @@
 		<footer
 			class="hidden flex-wrap items-center gap-x-[18px] gap-y-2 px-[30px] py-[15px] text-[12.5px] text-base-content/60 lg:flex"
 		>
-			<span>Copyright © 2026 Spokke. Todos os direitos reservados.</span>
-			<a href={resolve('/(site)/privacidade')} class="text-inherit no-underline">Privacidade</a>
-			<a href={resolve('/(site)/termos')} class="text-inherit no-underline">Termos</a>
-			<a href={resolve('/(site)/ajuda')} class="text-inherit no-underline">Central de ajuda</a>
+			<span>© 2026 Spokke. Todos os direitos reservados.</span>
+			<a href={resolve('/(site)/privacidade')} target="_blank" class="text-inherit no-underline"
+				>Privacidade</a
+			>
+			<a href={resolve('/(site)/termos')} target="_blank" class="text-inherit no-underline"
+				>Termos</a
+			>
+			<a href={resolve('/(site)/ajuda')} target="_blank" class="text-inherit no-underline"
+				>Central de ajuda</a
+			>
 		</footer>
 	</div>
 </div>
@@ -341,11 +425,30 @@
 		>
 			{@render icone(aba.icon, 20)}
 			{aba.label}
+			<!-- Um número só por aba, que o canto do ícone não cabe dois: a correção
+			     pendente vence, porque pede ação. -->
 			{#if aba.label === 'Resultados' && data.aCorrigir > 0}
 				<span
 					class="absolute top-1 right-1/2 grid size-[18px] translate-x-[18px] place-items-center rounded-full bg-warning text-[10px] font-bold text-warning-content"
 				>
-					{data.aCorrigir}
+					<span aria-hidden="true">{data.aCorrigir}</span><span class="sr-only"
+						>{data.aCorrigir === 1
+							? '1 resposta para corrigir'
+							: `${data.aCorrigir} respostas para corrigir`}</span
+					>
+				</span>
+			{:else if aba.secao && avisosDe(aba) > 0}
+				{@const erro = aba.secao === 'atividades'}
+				<span
+					class="absolute top-1 right-1/2 grid size-[18px] translate-x-[18px] place-items-center rounded-full text-[10px] font-bold"
+					class:bg-error={erro}
+					class:text-error-content={erro}
+					class:bg-primary={!erro}
+					class:text-primary-content={!erro}
+				>
+					<span aria-hidden="true">{avisosDe(aba)}</span><span class="sr-only"
+						>{rotuloDoAviso(aba.secao, avisosDe(aba))}</span
+					>
 				</span>
 			{/if}
 		</a>

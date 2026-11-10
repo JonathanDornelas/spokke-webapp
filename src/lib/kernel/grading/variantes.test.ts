@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { variantesProximas } from './variantes';
+import { candidatasComSujeito, variantesProximas } from './variantes';
+import { enUS } from '../language/profiles/en-US';
 import { ptBR } from '../language/profiles/pt-BR';
 import { jaJP } from '../language/profiles/ja-JP';
 
@@ -76,5 +77,24 @@ describe('variantesProximas', () => {
 
 	it('principal vazia não tem variante', () => {
 		expect(variantesProximas('  ', ['qualquer coisa'], ptBR)).toEqual([]);
+	});
+});
+
+describe('candidatasComSujeito', () => {
+	it('propõe a resposta com cada pronome omitível na frente, mantendo o resto como está', () => {
+		expect(candidatasComSujeito('Estou ansioso para o fim de semana.', ptBR)).toEqual([
+			'Eu estou ansioso para o fim de semana.',
+			'Nós estou ansioso para o fim de semana.'
+		]);
+	});
+
+	it('nada a propor quando alguma aceita já começa com o pronome: a correção cuida', () => {
+		expect(candidatasComSujeito('Eu não gosto de café', ptBR)).toEqual([]);
+		expect(candidatasComSujeito('Não gosto de café', ptBR, ['Eu não gosto de café'])).toEqual([]);
+	});
+
+	it('língua que não omite o sujeito não ganha candidata', () => {
+		expect(candidatasComSujeito('Looking forward to it', enUS)).toEqual([]);
+		expect(candidatasComSujeito('  ', ptBR)).toEqual([]);
 	});
 });

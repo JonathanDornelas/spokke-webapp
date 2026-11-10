@@ -7,6 +7,7 @@
 	//
 	// O professor não vê versão: as tentativas antigas guardam a versão que o
 	// aluno viu, e a barrinha de cada uma usa os itens DELA (db.md).
+	import { marcarVisto } from '$lib/client/avisos';
 	import { resolve } from '$app/paths';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { page } from '$app/state';
@@ -140,6 +141,14 @@
 			)
 		);
 	}
+
+	// Abrir os resultados conta como ver quem terminou a atividade
+	// (docs/notificacoes.md). Na página e não no loader: o loader roda também no
+	// pré-carregamento ao passar o ponteiro sobre o link.
+	$effect(() => {
+		const activityId = page.params.activityId;
+		if (activityId) marcarVisto({ secao: 'resultados', activityId });
+	});
 </script>
 
 <svelte:head><title>{data.activity.title} · Resultados · Spokke</title></svelte:head>

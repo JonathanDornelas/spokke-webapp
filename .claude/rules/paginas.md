@@ -104,7 +104,11 @@ raiz (`src/routes/+layout.svelte`, que só monta `app.css` e o favicon), pulando
 
 **A etapa 2 e a biblioteca usam UM formulário** — `MaterialForm.svelte` (components.md). Aqui
 ele é coluna fixa à esquerda da lista; na biblioteca, painel sobre ela. Enquanto cada tela tinha a
-sua cópia, as duas divergiam no primeiro ajuste de layout. A lista também é uma
+sua cópia, as duas divergiam no primeiro ajuste de layout. **A etapa ocupa a altura da tela e cada
+coluna rola por dentro** (`WizardShell` com `rolagem="colunas"`): o corpo do formulário rola com o
+cabeçalho e o botão de adicionar parados, como na bandeja. Numa coluna sem altura o corpo crescia
+até o fim do conteúdo, o botão ia para baixo da dobra e a rodinha sobre a coluna não rolava nada —
+o `overscroll-contain` do corpo segurava o gesto. A lista também é uma
 (`MaterialList.svelte`): muda só a quarta coluna ("Origem" aqui, "Em uso" lá) e o que remover
 significa. No celular só um dos dois cabe: o formulário cobre a lista, e "Ver os N materiais" /
 "Adicionar" alternam entre eles.
@@ -448,6 +452,13 @@ letras sorteadas com `crypto` (`server/player/access-code.ts`), sem `I` nem `O` 
 aula eles viram 1 e 0. O professor pode digitar o dele; em branco, o servidor sorteia. A tela de
 publicar mostra o código junto do link e do QR, que é como ele chega na turma.
 
+**Com código, ele é a PRIMEIRA tela; o nome vem depois.** A entrada manda para `/codigo` quem ainda
+não passou por ele neste aparelho (cookie de 24 h), e o código certo devolve para a entrada, que aí
+pede o nome ou cumprimenta a conta. Era o contrário: o aluno digitava o nome, `iniciarTentativa`
+mandava para o código, e o código certo devolvia para uma entrada vazia — o nome duas vezes. Quem
+tem tentativa neste aparelho, pela metade ou terminada, não é barrado de novo para continuar ou
+rever o que fez; começar outra passa pelo código. `/codigo` sem código a pedir volta para a entrada.
+
 **Link indisponível tem quatro causas e quatro mensagens** (`a/[slug]/+error.svelte`, via
 `page.error.reason`, tipado em `src/app.d.ts`): `notFound`, `unpublished`, `audioPending`,
 `attemptLost`. Uma mensagem genérica deixa o aluno sem saber se erra o link, se espera, ou se
@@ -699,6 +710,12 @@ mostra as últimas vinte, as não lidas primeiro, cada uma com o que aconteceu, 
 e "há 2 h". Abrir uma a marca como lida e leva à tela onde a coisa se resolve — o sino aponta, não
 resolve. Atualiza ao abrir e a cada minuto com a aba à vista. O que entra e o que fica de fora:
 `docs/notificacoes.md`.
+
+**Os mesmos avisos numeram a barra lateral**: Resultados (quem terminou, em azul, ao lado do âmbar
+de "para corrigir"), Turmas (quem entrou com a conta), Atividades (áudio que falhou, em vermelho),
+Escola e Assinatura. Abrir a tela de destino conta como ver — a página marca quando monta, nunca o
+loader, por causa do pré-carregamento ao passar o ponteiro —, e a lista de Resultados mostra
+"N novas" na atividade onde está a novidade (docs/notificacoes.md "Na barra lateral").
 
 ## Busca do cabeçalho
 

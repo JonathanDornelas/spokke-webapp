@@ -2,7 +2,11 @@ import type { Item } from '$lib/kernel/item';
 import type { LanguageProfile } from '$lib/kernel/language/profile';
 import { normalize } from '$lib/kernel/language/normalize';
 import { typeAuthoringSchema } from '$lib/kernel/interactions/type';
-import { MAX_VARIANTES, variantesProximas } from '$lib/kernel/grading/variantes';
+import {
+	MAX_VARIANTES,
+	candidatasComSujeito,
+	variantesProximas
+} from '$lib/kernel/grading/variantes';
 import type { Tradutor } from '$lib/server/traducao';
 
 /**
@@ -39,6 +43,14 @@ import type { Tradutor } from '$lib/server/traducao';
  *    alvo tem de dar a frase original — ou o mesmo que a resposta do professor
  *    dá. "Eu realmente adoro ler" para "me gusta mucho leer" volta como "me
  *    encanta" e cai.
+ *
+ * **E o sujeito explícito** (`candidatasComSujeito`, kernel): o feixe não
+ * garante o par "Estou…" / "Eu estou…" — para "I'm looking forward to the
+ * weekend" ele só variava gênero e preposição. Quando a resposta do professor
+ * não traz o sujeito, cada pronome omitível do idioma vai na frente dela e
+ * passa pela MESMA ida e volta, que escolhe o certo ("Nós estou…" volta como
+ * "We're…" e cai). Fica no máximo uma, ANTES das do feixe e fora do teto delas:
+ * com ela na lista, a correção aceita o pronome em qualquer variante.
  *
  * As variantes entram DEPOIS da resposta do professor, e o editor de item as
  * mostra em "Também aceitas", cada uma com o X de remover. Nunca trava a
@@ -89,9 +101,13 @@ export async function comVariantesDaTraducao(
 			ALTERNATIVAS_PEDIDAS
 		);
 		if (candidatas.length !== alvos.length) return items;
-		const propostas = alvos.map((a, i) =>
+		const doFeixe = alvos.map((a, i) =>
 			variantesProximas(a.principal, candidatas[i] ?? [], perfis.origem, a.outras, MAX_VARIANTES)
 		);
+		const comSujeito = alvos.map((a, i) =>
+			candidatasComSujeito(a.principal, perfis.origem, [...a.outras, ...(doFeixe[i] ?? [])])
+		);
+		const propostas = alvos.map((_, i) => [...(comSujeito[i] ?? []), ...(doFeixe[i] ?? [])]);
 		if (propostas.every((p) => p.length === 0)) return items;
 
 		// 3: a ida e volta. Um pedido só, com as variantes e as respostas do
@@ -109,8 +125,15 @@ export async function comVariantesDaTraducao(
 			const lista = propostas[i] ?? [];
 			const voltaDaPrincipal = chave(volta[cursor] ?? '');
 			const sentidos = new Set([chave(a.original), voltaDaPrincipal].filter(Boolean));
-			const aprovadas = lista.filter((_, n) => sentidos.has(chave(volta[cursor + 1 + n] ?? '')));
+			const passou = lista.map((_, n) => sentidos.has(chave(volta[cursor + 1 + n] ?? '')));
 			cursor += 1 + lista.length;
+			// Do sujeito, só a primeira que passou: a frase tem um sujeito só.
+			const nSujeito = comSujeito[i]?.length ?? 0;
+			const sujeito = lista.slice(0, nSujeito).find((_, n) => passou[n]);
+			const aprovadas = [
+				...(sujeito ? [sujeito] : []),
+				...lista.slice(nSujeito).filter((_, n) => passou[nSujeito + n])
+			];
 			if (aprovadas.length === 0) return;
 
 			const item = items[a.indice]!;

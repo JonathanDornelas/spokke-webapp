@@ -9,6 +9,8 @@
 	// respondeu. É uma tela de LEITURA: toda ação leva para onde ela já existe
 	// — o wizard para editar, a publicação para reenviar, os resultados para o
 	// relatório. A única escrita é gerar o áudio de novo, quando ele falta.
+	import { marcarVisto } from '$lib/client/avisos';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
 	import { invalidateAll } from '$app/navigation';
@@ -323,6 +325,13 @@
 			copiado = false;
 		}
 	}
+
+	// Abrir a atividade conta como ver o aviso do áudio que falhou
+	// (docs/notificacoes.md): o cartão de estado mostra o problema e o conserto.
+	$effect(() => {
+		const activityId = page.params.id;
+		if (activityId) marcarVisto({ secao: 'atividades', activityId });
+	});
 </script>
 
 <svelte:head><title>{data.activity.title} · Atividades · Spokke</title></svelte:head>

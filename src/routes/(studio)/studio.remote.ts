@@ -175,3 +175,22 @@ export const marcarTodasLidas = command(async () => {
 	const teacher = requireTeacher(getRequestEvent().locals);
 	return { lidas: await notificacoes(teacher).marcarTodas() };
 });
+
+/**
+ * Abrir a tela de destino conta como ver o aviso (docs/notificacoes.md). Chamado
+ * pela PÁGINA quando ela monta, e não pelo loader: o Studio pré-carrega dados ao
+ * passar o ponteiro sobre um link, e o loader marcaria como visto o que ninguém
+ * abriu.
+ */
+const alvoVistoSchema = z.discriminatedUnion('secao', [
+	z.object({ secao: z.literal('resultados'), activityId: z.string().min(1).max(64) }),
+	z.object({ secao: z.literal('atividades'), activityId: z.string().min(1).max(64) }),
+	z.object({ secao: z.literal('turmas'), classroomId: z.string().min(1).max(64) }),
+	z.object({ secao: z.literal('escola') }),
+	z.object({ secao: z.literal('assinatura') })
+]);
+
+export const marcarAvisosVistos = command(alvoVistoSchema, async (alvo) => {
+	const teacher = requireTeacher(getRequestEvent().locals);
+	return { vistos: await notificacoes(teacher).marcarVistas(alvo) };
+});

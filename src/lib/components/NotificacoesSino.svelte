@@ -13,6 +13,7 @@
 		marcarTodasLidas
 	} from '../../routes/(studio)/studio.remote';
 	import Loading from './Loading.svelte';
+	import { AVISOS_LIDOS, avisarQueLeu } from '$lib/client/avisos';
 	import type { Destino, NotificacaoNaTela } from '$lib/notificacoes';
 
 	let { class: className = '' }: { class?: string } = $props();
@@ -39,7 +40,13 @@
 		const id = setInterval(() => {
 			if (document.visibilityState === 'visible') void sino.refresh();
 		}, 60_000);
-		return () => clearInterval(id);
+		// Uma tela de destino marcou algo como visto (`$lib/client/avisos.ts`).
+		const recarregar = () => void sino.refresh();
+		window.addEventListener(AVISOS_LIDOS, recarregar);
+		return () => {
+			clearInterval(id);
+			window.removeEventListener(AVISOS_LIDOS, recarregar);
+		};
 	});
 
 	async function alternar() {
@@ -77,15 +84,21 @@
 		aberto = false;
 		if (n.lida) return;
 		lidasAqui = [...lidasAqui, n.id];
-		// Não espera: a navegação segue, e o número já caiu na tela.
-		marcarNotificacaoLida({ id: n.id }).catch(() => {});
+		// Não espera: a navegação segue, e o número já caiu na tela. Gravado, os
+		// números da barra lateral (a mesma consulta, no layout) caem também.
+		marcarNotificacaoLida({ id: n.id })
+			.then(avisarQueLeu)
+			.catch(() => {});
 	}
 
 	async function lerTodas() {
 		marcandoTodas = true;
 		try {
 			await marcarTodasLidas();
+			// O sino espera a lista nova antes de soltar o botão; o evento é para o
+			// layout, cujos números da barra lateral saem da mesma consulta.
 			await sino.refresh();
+			avisarQueLeu();
 		} finally {
 			marcandoTodas = false;
 		}

@@ -12,6 +12,7 @@
 	// caminho para mandar o link.
 	import { resolve } from '$app/paths';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
+	import { notificacoesDoSino } from '../studio.remote';
 	import { withMock } from '$lib/dev/with-mock';
 	import { idiomaDe } from '$lib/idiomas';
 	import { baixarCsv, montarCsv } from '$lib/csv';
@@ -47,7 +48,7 @@
 				correct: 71,
 				partial: 18,
 				incorrect: 11,
-				publishedAgo: '2 semanas',
+				publishedAgo: 'há 2 semanas',
 				lastAttempt: new Date('2026-10-08T14:20:00')
 			},
 			{
@@ -58,7 +59,7 @@
 				correct: 40,
 				partial: 20,
 				incorrect: 40,
-				publishedAgo: '3 dias',
+				publishedAgo: 'há 3 dias',
 				lastAttempt: new Date('2026-10-07T09:10:00')
 			},
 			{
@@ -69,7 +70,7 @@
 				correct: 0,
 				partial: 0,
 				incorrect: 0,
-				publishedAgo: '2 dias',
+				publishedAgo: 'há 2 dias',
 				lastAttempt: null
 			}
 		]
@@ -166,6 +167,12 @@
 			)
 		);
 	}
+
+	// Quem terminou cada atividade desde a última vez que o professor abriu os
+	// resultados dela — a mesma consulta do sino e da barra lateral, que abrir os
+	// resultados da atividade zera (docs/notificacoes.md).
+	const sino = notificacoesDoSino();
+	const terminadas = $derived(sino.current?.terminadasPorAtividade ?? {});
 </script>
 
 <svelte:head><title>Resultados · Spokke</title></svelte:head>
@@ -309,17 +316,28 @@
 						{/if}
 						{#each g.linhas as l (l.id)}
 							{@const pouca = l.attempts > 0 && l.attempts < POUCO}
+							{@const novas = terminadas[l.id] ?? 0}
 							<a
 								href={l.attempts === 0
 									? resolve('/(studio)/atividades/[id]', { id: l.id })
 									: resolve('/(studio)/resultados/[activityId]', { activityId: l.id })}
 								aria-label={l.attempts === 0
 									? `${l.title}, sem tentativa ainda — abrir para mandar o link`
-									: `${l.title}, ${l.attempts} ${l.attempts === 1 ? 'tentativa' : 'tentativas'}, ${l.correct}% certo, ${l.partial}% parcial, ${l.incorrect}% errado`}
+									: `${l.title}, ${l.attempts} ${l.attempts === 1 ? 'tentativa' : 'tentativas'}${novas > 0 ? ` (${novas} ${novas === 1 ? 'nova' : 'novas'})` : ''}, ${l.correct}% certo, ${l.partial}% parcial, ${l.incorrect}% errado`}
 								class="-mt-px grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 border-t border-line p-3.5 text-base-content no-underline transition-colors hover:bg-base-200 lg:grid-cols-[minmax(0,1fr)_120px_260px_104px_20px] lg:gap-4.5 lg:px-4 lg:py-[13px]"
 							>
 								<span class="col-span-2 min-w-0 lg:col-span-1">
-									<span class="block truncate text-[14.5px] font-semibold">{l.title}</span>
+									<span class="flex min-w-0 items-center gap-2">
+										<span class="truncate text-[14.5px] font-semibold">{l.title}</span>
+										<!-- Quem terminou desde a última vez que ele abriu estes resultados: é aqui
+										     que o número de "Resultados" na barra lateral aponta. -->
+										{#if novas > 0}
+											<span
+												class="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-primary-content"
+												aria-hidden="true">{novas} {novas === 1 ? 'nova' : 'novas'}</span
+											>
+										{/if}
+									</span>
 									<span
 										class="mt-0.5 flex flex-wrap items-center gap-2 text-[12.5px] text-base-content/65"
 									>
@@ -327,7 +345,8 @@
 										<span class={agrupar ? '' : 'lg:hidden'}
 											>{l.lastAttempt
 												? `última tentativa ${dataCurta(l.lastAttempt)}`
-												: `publicada há ${l.publishedAgo}`}</span
+												: // `publishedAgo` já vem "há 2h", "ontem" ou uma data (`quando`).
+													`publicada ${/^\d/.test(l.publishedAgo) ? `em ${l.publishedAgo}` : l.publishedAgo}`}</span
 										>
 									</span>
 								</span>

@@ -2,6 +2,7 @@ import type { LanguageProfile } from '../language/profile';
 import { normalize } from '../language/normalize';
 import { tokenize } from '../language/tokenize';
 import { wordSimilarity } from './compare';
+import { sujeitoNoInicio } from './sujeito';
 
 /**
  * Quais traduções alternativas viram RESPOSTA ACEITA de uma questão de
@@ -73,4 +74,33 @@ export function variantesProximas(
 		saida.push(texto);
 	}
 	return saida;
+}
+
+/**
+ * As candidatas de SUJEITO EXPLÍCITO: a resposta do professor com cada pronome
+ * que a língua deixa omitir na frente (`LanguageProfile.sujeitoOmitivel`) —
+ * "Estou ansioso para o fim de semana" vira "Eu estou…" e "Nós estou…".
+ *
+ * Existe porque o feixe do tradutor não garante esse par: para "I'm looking
+ * forward to the weekend" o MADLAD só variava gênero e preposição, e o aluno
+ * que escreveu "Eu estou ansioso para o fim de semana" recebia "quase" (o caso
+ * do dono do repositório). Qual pronome é o certo, o kernel não sabe — quem
+ * decide é a ida e volta do servidor: "Nós estou…" volta como "We're…" e cai.
+ *
+ * Nada a propor quando alguma resposta aceita já começa com um desses
+ * pronomes: aí a correção já aceita com e sem ele (`tolerantScore`).
+ */
+export function candidatasComSujeito(
+	principal: string,
+	profile: LanguageProfile,
+	aceitas: string[] = []
+): string[] {
+	const lista = profile.sujeitoOmitivel?.pronomes ?? [];
+	const texto = principal.trim();
+	const chave = (t: string) => normalize(t, profile).trim();
+	if (lista.length === 0 || tokenize(chave(texto), profile).length === 0) return [];
+	if ([texto, ...aceitas].some((a) => sujeitoNoInicio(chave(a), profile) !== null)) return [];
+
+	const resto = texto.charAt(0).toLocaleLowerCase(profile.tag) + texto.slice(1);
+	return lista.map((p) => `${p.charAt(0).toLocaleUpperCase(profile.tag)}${p.slice(1)} ${resto}`);
 }

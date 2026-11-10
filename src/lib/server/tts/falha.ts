@@ -1,6 +1,6 @@
 import { prisma } from '$lib/server/db/client';
 import { itemAudioHashes } from '$lib/server/player/runtime';
-import { notificar } from '$lib/server/notificacoes';
+import { CHAVE, notificar } from '$lib/server/notificacoes';
 
 /**
  * A fila DESISTIU de um áudio (o job foi para `failed`): avisa o professor em
@@ -36,7 +36,7 @@ export async function avisarAudioQueFalhou(teacherId: string, hash: string): Pro
 		for (const [activityId, titulo] of atividades) {
 			await notificar(teacherId, {
 				kind: 'audio',
-				key: `audio:${activityId}`,
+				key: CHAVE.audio(activityId),
 				data: { activityId, titulo }
 			});
 		}

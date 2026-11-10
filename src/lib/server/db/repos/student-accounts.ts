@@ -1,5 +1,5 @@
 import { prisma } from '$lib/server/db/client';
-import { notificar } from '$lib/server/notificacoes';
+import { CHAVE, notificar } from '$lib/server/notificacoes';
 
 /** Só o id importa para escopar — mesma nota de `activities.ts`. */
 type ContaAluno = { id: string };
@@ -136,7 +136,7 @@ async function avisarAlunoEntrou(studentId: string): Promise<void> {
 	if (!ficha) return;
 	await notificar(ficha.teacherId, {
 		kind: 'aluno-entrou',
-		key: `aluno-entrou:${ficha.classroom.id}`,
+		key: CHAVE.alunoEntrou(ficha.classroom.id),
 		data: { classroomId: ficha.classroom.id, turma: ficha.classroom.name, nomes: [ficha.name] }
 	});
 }

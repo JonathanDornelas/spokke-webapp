@@ -5,6 +5,7 @@ import { ptBR } from '$lib/kernel/language/profiles/pt-BR';
 import type { Item } from '$lib/kernel/item';
 import type { Tradutor } from '$lib/server/traducao';
 import { type } from '$lib/kernel/interactions/type';
+import { tolerantScore } from '$lib/kernel/grading/compare';
 
 const perfis = { alvo: enUS, origem: ptBR };
 
@@ -36,6 +37,13 @@ function tradutorMedido() {
 			'Eu realmente gosto de ler livros à noite.',
 			'Eu gosto muito de ler livros à noite.',
 			'Eu realmente adoro ler livros à noite.'
+		],
+		// O feixe só varia gênero e preposição: o "Eu estou…" nunca vem dele.
+		"I'm looking forward to the weekend.": [
+			'Estou ansioso para o fim de semana.',
+			'Estou ansiosa para o fim de semana.',
+			'Estou ansiosa pelo fim de semana.',
+			'Estou ansioso pelo fim de semana.'
 		]
 	};
 	const volta: Record<string, string> = {
@@ -45,7 +53,12 @@ function tradutorMedido() {
 		'Onde fica a estação ferroviária?': 'Where is the railway station?',
 		'Eu gosto muito de ler livros à noite.': 'Me gusta mucho leer libros por la noche.',
 		'Eu realmente gosto de ler livros à noite.': 'Me gusta mucho leer libros por la noche.',
-		'Eu realmente adoro ler livros à noite.': 'Me encanta leer libros por la noche.'
+		'Eu realmente adoro ler livros à noite.': 'Me encanta leer libros por la noche.',
+		'Estou ansioso para o fim de semana': "I'm looking forward to the weekend",
+		'Eu estou ansioso para o fim de semana': "I'm looking forward to the weekend",
+		'Nós estou ansioso para o fim de semana': 'We look forward to the weekend',
+		'Estou ansiosa para o fim de semana.': "I'm looking forward to the weekend.",
+		'Estou ansioso pelo fim de semana.': "I'm looking forward to the weekend."
 	};
 	const chamadas: string[] = [];
 	const tradutor: Tradutor = {
@@ -105,6 +118,35 @@ describe('comVariantesDaTraducao', () => {
 			'Eu realmente gosto de ler livros à noite.',
 			'Eu gosto muito de ler livros à noite.'
 		]);
+	});
+
+	it('propõe o sujeito que o feixe não trouxe, e a ida e volta escolhe o pronome', async () => {
+		const { tradutor, chamadas } = tradutorMedido();
+		const [item] = await comVariantesDaTraducao(
+			[
+				traduzaParaOPortugues(
+					'd',
+					"I'm looking forward to the weekend.",
+					'Estou ansioso para o fim de semana'
+				)
+			],
+			perfis,
+			tradutor
+		);
+		expect(aceitas(item)).toEqual([
+			'Estou ansioso para o fim de semana',
+			// "Nós estou…" voltou como "We look forward…" e caiu.
+			'Eu estou ansioso para o fim de semana',
+			'Estou ansiosa para o fim de semana.',
+			// "ansiosa pelo" troca duas palavras: fica fora pelo tamanho da diferença.
+			'Estou ansioso pelo fim de semana.'
+		]);
+		// Com o "eu" numa aceita, a correção o aceita em qualquer variante.
+		expect(tolerantScore('Eu estou ansiosa para o fim de semana', aceitas(item), ptBR).value).toBe(
+			1
+		);
+		// Os mesmos dois pedidos: as candidatas de sujeito vão na ida e volta de sempre.
+		expect(chamadas).toEqual(['alternativas en-US→pt-BR', 'traduzir pt-BR→en-US']);
 	});
 
 	// No idioma alvo o que se ensina é a forma: uma alternativa do tradutor

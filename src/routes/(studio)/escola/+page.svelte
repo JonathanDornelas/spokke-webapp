@@ -10,6 +10,7 @@
 	// Convidar abre uma BANDEJA (components.md "Bandeja"), como todo formulário
 	// de criar do Studio; a coluna da direita fica com os assentos e os
 	// convites em aberto, que é o que se confere antes e depois de convidar.
+	import { marcarVisto } from '$lib/client/avisos';
 	import { invalidateAll } from '$app/navigation';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import Bandeja from '$lib/components/Bandeja.svelte';
@@ -89,6 +90,11 @@
 	}
 
 	const assentosLivres = $derived(data.resumo.assentos - data.resumo.ocupados);
+
+	// Abrir a escola conta como ver quem entrou nela (docs/notificacoes.md).
+	$effect(() => {
+		marcarVisto({ secao: 'escola' });
+	});
 </script>
 
 <svelte:head><title>Escola · Spokke</title></svelte:head>

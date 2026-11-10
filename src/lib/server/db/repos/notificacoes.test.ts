@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '$lib/server/db/client';
-import { notificar, resolverNotificacoes } from '$lib/server/notificacoes';
+import {
+	avisarTentativaTerminada,
+	notificar,
+	resolverNotificacoes
+} from '$lib/server/notificacoes';
 import { notificacoes } from './notificacoes';
 import { turmas } from './classrooms';
 import { vincularFichaAConta } from './student-accounts';
@@ -142,5 +146,51 @@ describe('notificações', () => {
 		expect(avisos[0]!.count).toBe(1);
 		// E o professor B não fica sabendo de nada.
 		expect(await prisma.notification.count({ where: { teacherId: teacherB.id } })).toBe(0);
+	});
+
+	it('quem termina a atividade avisa agrupado por atividade, e conta em Resultados', async () => {
+		await notificacoes(teacherA).marcarTodas();
+		const atividade = { id: 'atividade-do-aviso', title: 'Present perfect' };
+		await avisarTentativaTerminada(teacherA.id, atividade, 'Ana');
+		await avisarTentativaTerminada(teacherA.id, atividade, 'Bruno');
+
+		const sino = await notificacoes(teacherA).doSino();
+		expect(sino.itens[0]?.titulo).toBe('Bruno e Ana terminaram Present perfect');
+		expect(sino.porSecao.resultados).toBe(2);
+		expect(sino.terminadasPorAtividade).toEqual({ 'atividade-do-aviso': 2 });
+
+		// O professor B não vê o número da A.
+		const doB = await notificacoes(teacherB).doSino();
+		expect(doB.porSecao.resultados).toBe(0);
+		expect(JSON.stringify(doB)).not.toContain('Present perfect');
+	});
+
+	it('abrir a tela de destino marca como visto — e só o do professor da sessão', async () => {
+		const alvo = { secao: 'resultados', activityId: 'atividade-do-aviso' } as const;
+		expect(await notificacoes(teacherB).marcarVistas(alvo)).toBe(0);
+		expect((await notificacoes(teacherA).doSino()).porSecao.resultados).toBe(2);
+
+		expect(await notificacoes(teacherA).marcarVistas(alvo)).toBe(1);
+		const depois = await notificacoes(teacherA).doSino();
+		expect(depois.porSecao.resultados).toBe(0);
+		expect(depois.terminadasPorAtividade).toEqual({});
+	});
+
+	it('a correção pendente não entra na conta da barra: ela já é o número âmbar', async () => {
+		await notificacoes(teacherA).marcarTodas();
+		await notificar(teacherA.id, {
+			kind: 'correcao',
+			key: 'correcao:qualquer',
+			data: { activityId: 'qualquer', titulo: 'Redação' },
+			count: 3
+		});
+		await notificar(teacherA.id, {
+			kind: 'audio',
+			key: 'audio:outra',
+			data: { activityId: 'outra', titulo: 'Listening' }
+		});
+		const { porSecao, naoLidas } = await notificacoes(teacherA).doSino();
+		expect(naoLidas).toBe(2);
+		expect(porSecao).toEqual({ atividades: 1, turmas: 0, resultados: 0, escola: 0, assinatura: 0 });
 	});
 });

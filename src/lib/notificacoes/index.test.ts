@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diasAte, juntarNomes, textoDaNotificacao } from './index';
+import { SECAO_DO_AVISO, diasAte, juntarNomes, rotuloDoAviso, textoDaNotificacao } from './index';
 
 describe('o texto de cada notificação', () => {
 	it('correção conta as respostas, no singular e no plural', () => {
@@ -104,5 +104,40 @@ describe('juntarNomes', () => {
 		expect(juntarNomes(['Ana', 'Bia'], ['Caio'])).toEqual(['Caio', 'Ana', 'Bia']);
 		expect(juntarNomes(['Ana', 'Bia'], ['Bia'])).toEqual(['Bia', 'Ana']);
 		expect(juntarNomes(['a', 'b', 'c', 'd', 'e'], ['f'])).toEqual(['f', 'a', 'b', 'c', 'd']);
+	});
+});
+
+describe('aluno que terminou', () => {
+	it('um nome, e "mais N" quando várias tentativas se juntaram, levando aos resultados', () => {
+		const um = textoDaNotificacao({
+			kind: 'terminou',
+			data: { activityId: 'a1', titulo: 'Present perfect', nomes: ['Ana'] },
+			count: 1
+		});
+		expect(um.titulo).toBe('Ana terminou Present perfect');
+		expect(um.destino).toEqual({ rota: 'resultados', activityId: 'a1' });
+		expect(um.tom).toBe('info');
+		const varios = textoDaNotificacao({
+			kind: 'terminou',
+			data: { activityId: 'a1', titulo: 'Present perfect', nomes: ['Bruno', 'Ana'] },
+			count: 4
+		});
+		expect(varios.titulo).toBe('Bruno e mais 3 terminaram Present perfect');
+	});
+});
+
+describe('a barra lateral', () => {
+	it('correção e liberação não contam como aviso: a barra já as mostra pela conta do banco', () => {
+		expect(SECAO_DO_AVISO.correcao).toBeNull();
+		expect(SECAO_DO_AVISO.liberacao).toBeNull();
+		expect(SECAO_DO_AVISO.terminou).toBe('resultados');
+		expect(SECAO_DO_AVISO['aluno-entrou']).toBe('turmas');
+		expect(SECAO_DO_AVISO.audio).toBe('atividades');
+	});
+
+	it('o número se lê por extenso, no singular e no plural', () => {
+		expect(rotuloDoAviso('resultados', 1)).toBe('1 aluno terminou uma atividade');
+		expect(rotuloDoAviso('resultados', 3)).toBe('3 alunos terminaram atividades');
+		expect(rotuloDoAviso('atividades', 2)).toBe('2 atividades sem áudio');
 	});
 });
