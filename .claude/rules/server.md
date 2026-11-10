@@ -178,7 +178,7 @@ que é a primitiva que dá exclusão mútua entre workers concorrentes.
 Job { id, type, payload JSON, status, attempts, lockedUntil, runAfter, lastError }
 ```
 
-Tipos: `tts`, `convite`, `convite-escola`, `convite-conta`, `aviso-equipe`, `envio-programado`, `redefinir-senha`, `mercadopago` (a notificação do gateway, conferida pelo webhook — billing.md). (`convite-modulo` saiu com o e-mail do módulo.) O `convite-conta` não carrega o endereço: o worker lê a ficha na hora e não manda para quem já tem conta, para link que foi trocado nem pedido que já saiu (`conviteAindaVale`). Cada um tem o schema e o
+Tipos: `tts`, `convite`, `convite-escola`, `convite-conta`, `aviso-equipe`, `envio-programado`, `redefinir-senha`, `mercadopago` (a notificação do gateway, conferida pelo webhook — billing.md), `intranet` (a ação pedida pelo painel interno, `../spokke-intranet` — o ÚNICO tipo que outro processo insere, e só ele: RLS em `"Job"` para o papel `spokke_intranet_leitor`; o schema `intranetJobSchema` tem um espelho lá). (`convite-modulo` saiu com o e-mail do módulo.) O `convite-conta` não carrega o endereço: o worker lê a ficha na hora e não manda para quem já tem conta, para link que foi trocado nem pedido que já saiu (`conviteAindaVale`). Cada um tem o schema e o
 `enqueue…` em `server/queue/index.ts` e o caso em `worker/index.ts`. **Suba o worker antes (ou junto)
 do web** quando criar um tipo: tipo desconhecido lança erro e vai para `failed`. Os jobs falhados
 aparecem no painel interno (`/admin`), com "Tentar de novo".

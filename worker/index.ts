@@ -6,6 +6,7 @@ import {
 	conviteEscolaJobSchema,
 	conviteJobSchema,
 	envioProgramadoJobSchema,
+	intranetJobSchema,
 	mercadoPagoJobSchema,
 	redefinirSenhaJobSchema,
 	ttsJobSchema
@@ -25,6 +26,10 @@ import { getTtsProvider, ttsObjectKey } from '../src/lib/server/tts/index.ts';
 import { putObject } from '../src/lib/server/storage/index.ts';
 import { avisarAudioQueFalhou } from '../src/lib/server/tts/falha.ts';
 import { processarNotificacao } from '../src/lib/server/billing/mercadopago/sincronizar.ts';
+import {
+	concederSemVencimento,
+	encerrarSemVencimento
+} from '../src/lib/server/billing/assinaturas.ts';
 import { origemDoWorker, processarEnviosDevidos } from '../src/lib/server/modulos/programacao.ts';
 
 // Fila em tabela Postgres, sem Redis — ver .claude/rules/server.md "Fila". O
@@ -216,6 +221,29 @@ async function processMercadoPago(payload: unknown): Promise<void> {
 	console.info(`[mercadopago] ${job.topico} ${job.id}: ${desfecho}`);
 }
 
+/**
+ * Uma ação pedida pela intranet. O worker aplica pelo `assinaturas.ts` (o único
+ * escritor da cobrança), com o e-mail de quem pediu no histórico. Encerrar só
+ * vale para plano sem vencimento: se a conta não está assim, o job FALHA com o
+ * motivo, e a intranet mostra.
+ */
+async function processIntranet(payload: unknown): Promise<void> {
+	const job = intranetJobSchema.parse(payload);
+	const ator = `admin:intranet:${job.admin}` as const;
+	if (job.acao === 'plano-sem-vencimento') {
+		const mudou = await concederSemVencimento(job.teacherId, job.plano, ator, {
+			motivo: job.motivo
+		});
+		console.info(
+			`[intranet] plano ${job.plano} sem vencimento para ${job.teacherId}: ${mudou ? 'concedido' : 'já tinha'}`
+		);
+		return;
+	}
+	const encerrou = await encerrarSemVencimento(job.teacherId, ator, { motivo: job.motivo });
+	if (!encerrou) throw new Error('A conta não tem plano sem vencimento para encerrar.');
+	console.info(`[intranet] plano sem vencimento encerrado para ${job.teacherId}`);
+}
+
 async function processJob(job: ClaimedJob): Promise<void> {
 	// Todo handler precisa ser idempotente: o mesmo job pode rodar mais de uma
 	// vez se o worker cair entre concluir o trabalho e marcar `done`.
@@ -236,6 +264,8 @@ async function processJob(job: ClaimedJob): Promise<void> {
 			return processEnvioProgramado(job.payload);
 		case 'mercadopago':
 			return processMercadoPago(job.payload);
+		case 'intranet':
+			return processIntranet(job.payload);
 		default:
 			throw new Error(`Nenhum handler registrado para o tipo de job "${job.type}"`);
 	}

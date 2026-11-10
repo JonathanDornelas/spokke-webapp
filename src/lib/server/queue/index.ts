@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { prisma, type Db } from '$lib/server/db/client';
+import { PLANOS_PAGOS } from '$lib/billing/catalogo';
 
 /**
  * Fila em tabela Postgres, sem Redis — ver server.md "Fila". O worker faz o
@@ -182,6 +183,31 @@ export async function enqueueMercadoPago(job: MercadoPagoJob): Promise<void> {
 		data: { type: 'mercadopago', payload: mercadoPagoJobSchema.parse(job) }
 	});
 }
+
+/**
+ * Uma ação da INTRANET (`spokke-intranet`, o painel interno separado). A
+ * intranet não escreve na cobrança: ela só insere este job — o papel dela no
+ * banco tem INSERT em `Job` restrito ao tipo `intranet` por RLS
+ * (`spokke-intranet/infra/papel-no-spokke.sql`) —, e quem aplica é o worker,
+ * pelo `assinaturas.ts`, o único escritor da cobrança. `admin` é o e-mail de
+ * quem pediu, e vira o ator do histórico (`admin:intranet:<e-mail>`).
+ */
+export const intranetJobSchema = z.discriminatedUnion('acao', [
+	z.object({
+		acao: z.literal('plano-sem-vencimento'),
+		teacherId: z.string().min(1),
+		plano: z.enum(PLANOS_PAGOS),
+		admin: z.string().email(),
+		motivo: z.string().trim().min(3).max(300)
+	}),
+	z.object({
+		acao: z.literal('encerrar-sem-vencimento'),
+		teacherId: z.string().min(1),
+		admin: z.string().email(),
+		motivo: z.string().trim().min(3).max(300)
+	})
+]);
+export type IntranetJob = z.infer<typeof intranetJobSchema>;
 
 /** Jobs que falharam depois de esgotar as tentativas — nunca somem em silêncio. */
 export function failedJobs(limit = 50) {

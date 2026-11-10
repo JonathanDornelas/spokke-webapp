@@ -232,4 +232,11 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   histórico da assinatura. Trocar senha é real (`changePassword`, com a senha atual) e "esqueci a
   senha" manda o link por e-mail, pela fila, para professor E aluno (auth.md "Senha"). Continua em
   mock só **encerrar a conta** (que ainda não decidiu o destino dos links publicados). `assinatura` é uma aba (`conta?aba=assinatura`).
+- **Intranet** (`../spokke-intranet`, outro projeto do workspace): o painel interno da equipe —
+  números, clientes, pagamentos, termômetro do bucket e **plano sem vencimento** (o `active` sem
+  data de fim de `concederSemVencimento`, billing.md). Não escreve no banco do Spokke: põe um job
+  `intranet` na fila e o worker aplica pelo `assinaturas.ts`. Entra com um papel de leitura coluna
+  por coluna (`infra/papel-no-spokke.sql` de lá), que precisa ser rodado de novo quando uma
+  migration mexer no que ela lê. O `/admin` daqui continua sendo onde se atende pedido de plano;
+  falta decidir se ele migra inteiro para a intranet.
 - Operação, variáveis e a rotina da equipe sem gateway: `docs/operacao.md`.

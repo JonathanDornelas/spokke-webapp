@@ -17,8 +17,22 @@ Quatro composes de propósito: reconstruir a aplicação nunca encosta em dado d
 áudio publicado. Eles conversam pelas portas do host (`host.docker.internal`).
 
 **O worker vem primeiro.** Tipo de job que ele não conhece lança erro e vai para `failed`. Os tipos de
-hoje: `tts`, `convite`, `convite-escola`, `aviso-equipe`, `envio-programado` e
-`redefinir-senha` (o link de "esqueci a senha" — sem o worker novo, ele falha e ninguém recupera a senha).
+hoje: `tts`, `convite`, `convite-escola`, `convite-conta`, `aviso-equipe`, `envio-programado`,
+`redefinir-senha` (o link de "esqueci a senha" — sem o worker novo, ele falha e ninguém recupera a
+senha), `mercadopago` e `intranet` (a ação pedida pelo painel interno).
+
+## A intranet
+
+O painel interno da equipe é o projeto `../spokke-intranet` (README de lá): números, clientes,
+pagamentos, o termômetro do bucket e conceder/encerrar plano sem vencimento. Processo, porta e banco
+de login próprios, com senha + autenticador obrigatórios e lista de IPs.
+
+Ela entra no banco do Spokke com o papel `spokke_intranet_leitor`, criado por
+`../spokke-intranet/infra/papel-no-spokke.sql`: lê só as colunas listadas (nada de senha, sessão,
+nome ou e-mail de aluno, resposta, conteúdo de material) e insere só o job `intranet`, por RLS.
+**Rode o script de novo depois de uma migration que a intranet precise ler.** O RLS em `"Job"` vale
+para esse papel; o app do Spokke continua conectando como dono das tabelas, que o RLS ignora — se
+um dia não for o dono, o papel do app precisa de `BYPASSRLS`.
 
 ## Desenvolvimento
 

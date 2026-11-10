@@ -262,8 +262,10 @@
 					line: a.cancelAtPeriodEnd
 						? `Até ${fim ?? 'o fim do período'} nada muda. Depois, criar e publicar param — e os links já publicados continuam abrindo.`
 						: fim
-							? `Período atual até ${fim}. A renovação é combinada com a equipe.`
-							: 'Sem data de fim.',
+							? data.cobranca.provedor === 'mercadopago'
+								? `Período atual até ${fim}. A assinatura renova sozinha pelo Mercado Pago.`
+								: `Período atual até ${fim}. A renovação é combinada com a equipe.`
+							: 'Sem data de fim: plano concedido pela equipe.',
 					cta: 'Trocar de plano',
 					ctaPrimario: false
 				};

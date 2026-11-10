@@ -60,6 +60,13 @@ reaproveita o igual, aceita o lote até onde cabe e devolve `foraDoLimite`.
 cia. Cada operação grava um `AuditEvent` na mesma transação, com o ator. Painel e (futuro) webhook
 chamam as mesmas funções.
 
+**Plano sem vencimento** (`concederSemVencimento` / `encerrarSemVencimento`): `active` com
+`currentPeriodEnd` NULO, a cortesia para teste e parceria. Não precisa de regra nova — sem data de fim
+a situação já sai "ativa" — e encerrar só alcança essa forma (assinatura paga não é tocada). Quem
+pede é a **intranet** (`../spokke-intranet`), por um job `intranet` na fila: ela não escreve no banco
+do Spokke, o worker aplica por aqui, com o ator `admin:intranet:<email>` no histórico e o aviso no
+sino. Teste: `billing/sem-vencimento.test.ts`.
+
 No Better Auth esses campos são **`input: false`**. Campo de cobrança novo nasce assim — sem isso o
 corpo do cadastro escolhe o plano. Teste: `auth/campos.test.ts`. Os ids do gateway NÃO ficam no
 `Teacher`: moram em `ProviderSubscription`, fora da sessão.

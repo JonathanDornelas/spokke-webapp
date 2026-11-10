@@ -233,6 +233,93 @@ export async function cancelar(
 	return feito;
 }
 
+/**
+ * Plano SEM VENCIMENTO: a cortesia que a equipe concede pela intranet
+ * (`spokke-intranet`), para teste ou parceria. `active` sem `currentPeriodEnd`
+ * é situação "ativa" até alguém encerrar (`entitlements.ts`) — nenhuma data
+ * corre, nenhuma renovação acontece. Encerrar é `encerrarSemVencimento`.
+ *
+ * Idempotente: conceder o mesmo plano a quem já o tem sem vencimento não grava
+ * nada nem avisa de novo. Devolve se mudou algo.
+ */
+export async function concederSemVencimento(
+	teacherId: string,
+	plano: PlanoPago,
+	ator: Ator,
+	opcoes: { motivo?: string; db?: Db; agora?: Date } = {}
+): Promise<boolean> {
+	const agora = opcoes.agora ?? new Date();
+	const mudou = await emTransacao(opcoes.db, async (tx) => {
+		const antes = await tx.teacher.findUniqueOrThrow({
+			where: { id: teacherId },
+			select: {
+				plan: true,
+				subscriptionStatus: true,
+				currentPeriodEnd: true,
+				cancelAtPeriodEnd: true,
+				cycleAnchor: true
+			}
+		});
+		const jaTem =
+			antes.plan === plano &&
+			antes.subscriptionStatus === 'active' &&
+			antes.currentPeriodEnd === null &&
+			!antes.cancelAtPeriodEnd;
+		if (jaTem) return false;
+		const trocou = antes.plan !== plano || antes.subscriptionStatus !== 'active';
+		await tx.teacher.update({
+			where: { id: teacherId },
+			data: {
+				plan: plano,
+				planCycle: 'mensal',
+				subscriptionStatus: 'active',
+				currentPeriodEnd: null,
+				gracePeriodEnd: null,
+				cancelAtPeriodEnd: false,
+				cycleAnchor: trocou || !antes.cycleAnchor ? agora : antes.cycleAnchor
+			}
+		});
+		await registrar(tx, {
+			teacherId,
+			actor: ator,
+			type: 'plano_sem_vencimento',
+			data: { de: antes.plan, para: plano, motivo: opcoes.motivo?.slice(0, 300) ?? '' }
+		});
+		return true;
+	});
+	if (mudou && !opcoes.db && avisaProfessor(ator)) {
+		await avisarPlano(teacherId, { evento: 'ativado', plano: NOME_DO_PLANO[plano] });
+	}
+	return mudou;
+}
+
+/**
+ * Encerra um plano SEM VENCIMENTO, agora. Só mexe em quem está nessa situação:
+ * uma assinatura paga (com data, ou no gateway) não se encerra por aqui —
+ * cancelar essa passa pelo provedor (billing.md). Devolve se encerrou.
+ */
+export async function encerrarSemVencimento(
+	teacherId: string,
+	ator: Ator,
+	opcoes: { motivo?: string; agora?: Date } = {}
+): Promise<boolean> {
+	const agora = opcoes.agora ?? new Date();
+	return prisma.$transaction(async (tx) => {
+		const { count } = await tx.teacher.updateMany({
+			where: { id: teacherId, subscriptionStatus: 'active', currentPeriodEnd: null },
+			data: { subscriptionStatus: 'canceled', currentPeriodEnd: agora, cancelAtPeriodEnd: false }
+		});
+		if (count === 0) return false;
+		await registrar(tx, {
+			teacherId,
+			actor: ator,
+			type: 'sem_vencimento_encerrado',
+			data: { motivo: opcoes.motivo?.slice(0, 300) ?? '' }
+		});
+		return true;
+	});
+}
+
 /** Desfaz um cancelamento agendado. Plano já encerrado volta por `ativarPlano`. */
 export async function reativar(teacherId: string, ator: Ator, extra: { db?: Db } = {}) {
 	return emTransacao(extra.db, async (tx) => {
