@@ -45,6 +45,13 @@ Não espalhe `subscriptionStatus === 'active'` pelo código.
   `EstadoDeAcesso`. `resumoDoAcesso` é o DTO da tela, com as decisões já tomadas por `can()`.
 - O `motivoDoBloqueio` usa a lista fechada de `src/lib/billing/motivos.ts`, a mesma que
   `/planos?motivo=` aceita.
+- **A conta da equipe tem o produto inteiro** (pedido do dono, 2026-11-11): quem está em
+  `PLATFORM_ADMIN_IDS` sai de `acessoComCiclo` com `estadoDaEquipe` — o maior plano (`EQUIPE` no
+  catálogo), ativo e sem vencimento, com IA, vencendo trial, cobrança gravada e escola. É LEITURA:
+  nada é gravado na conta, e tirar o id da lista devolve a conta ao que a linha dela diz. O uso e
+  os créditos continuam os de verdade (a IA da equipe gasta e entra em `AiUsage`), e a tela diz
+  "Equipe Spokke", sem botão de assinatura. **Não abre nada entre professores**: o escopo por
+  `teacherId` não passa por aqui.
 
 ## Cota: contar e criar na mesma trava
 

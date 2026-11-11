@@ -4,7 +4,14 @@ import { creditos } from '$lib/server/db/repos/creditos';
 import { escolaEmVigor } from '$lib/server/db/repos/escola-vigente';
 import { rotuloDoPlano, type ResumoDoAcesso } from '$lib/billing/resumo';
 import { inicioDoCiclo, proximoCiclo } from '$lib/billing/ciclo';
-import { can, montarEstado, motivoDoBloqueio, type EstadoDeAcesso } from './entitlements';
+import { ehAdminDaPlataforma } from '$lib/server/auth/guard';
+import {
+	can,
+	estadoDaEquipe,
+	montarEstado,
+	motivoDoBloqueio,
+	type EstadoDeAcesso
+} from './entitlements';
 
 type TeacherScope = { id: string };
 
@@ -88,11 +95,13 @@ export async function acessoComCiclo(
 	const cicloInicio = inicioDoCiclo(ancora, agora);
 	const lancado = await creditos(teacher, db).somaDoCiclo(cicloInicio);
 
-	const esboco = montarEstado(
+	const montado = montarEstado(
 		linha,
 		{ uso: ocupado, creditos: { saldo: 0, renovamEm: null }, escola },
 		agora
 	);
+	// Quem opera a plataforma tem o produto inteiro liberado (`estadoDaEquipe`).
+	const esboco = ehAdminDaPlataforma(teacher.id) ? estadoDaEquipe(montado) : montado;
 	const estado: EstadoDeAcesso = {
 		...esboco,
 		creditos: esboco.limites.ia

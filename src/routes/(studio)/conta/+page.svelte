@@ -283,14 +283,17 @@
 					tag: a.cancelAtPeriodEnd ? 'Encerra no fim do período' : 'Ativa',
 					title: a.rotulo,
 					sub: 'tudo liberado dentro dos limites do plano',
-					line: a.cancelAtPeriodEnd
-						? `Até ${fim ?? 'o fim do período'} nada muda. Depois, criar e publicar param — e os links já publicados continuam abrindo.`
-						: fim
-							? data.cobranca.provedor === 'mercadopago'
-								? `Período atual até ${fim}. A assinatura renova sozinha pelo Mercado Pago.`
-								: `Período atual até ${fim}. A renovação é combinada com a equipe.`
-							: 'Sem data de fim: plano concedido pela equipe.',
-					cta: 'Trocar de plano',
+					line:
+						a.origem === 'equipe'
+							? 'Conta da equipe: tudo liberado, com os limites do Super e sem data de fim, enquanto ela estiver entre os administradores da plataforma.'
+							: a.cancelAtPeriodEnd
+								? `Até ${fim ?? 'o fim do período'} nada muda. Depois, criar e publicar param — e os links já publicados continuam abrindo.`
+								: fim
+									? data.cobranca.provedor === 'mercadopago'
+										? `Período atual até ${fim}. A assinatura renova sozinha pelo Mercado Pago.`
+										: `Período atual até ${fim}. A renovação é combinada com a equipe.`
+									: 'Sem data de fim: plano concedido pela equipe.',
+					cta: a.origem === 'equipe' ? null : 'Trocar de plano',
 					ctaPrimario: false
 				};
 			case 'escola':

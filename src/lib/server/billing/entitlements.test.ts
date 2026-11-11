@@ -3,6 +3,7 @@ import { LIMITES } from '$lib/billing/catalogo';
 import {
 	cabe,
 	can,
+	estadoDaEquipe,
 	montarEstado,
 	motivoDoBloqueio,
 	situacaoDaCobranca,
@@ -165,5 +166,41 @@ describe('can e motivoDoBloqueio', () => {
 			renovamEm: null
 		});
 		expect(can(comSaldo, 'usar_ia')).toBe(true);
+	});
+});
+
+describe('estadoDaEquipe — quem opera a plataforma testa o produto inteiro', () => {
+	const comCredito = { saldo: 1000, renovamEm: dias(30) };
+
+	it('o trial com os limites do Básico vira o maior plano, com IA', () => {
+		const trial = estado({ subscriptionStatus: 'trialing', trialEndsAt: dias(10) });
+		expect(can(trial, 'usar_ia')).toBe(false);
+		const equipe = { ...estadoDaEquipe(trial), creditos: comCredito };
+		expect(equipe).toMatchObject({ origem: 'equipe', situacao: 'ativa', plano: 'super' });
+		expect(equipe.limites).toEqual(LIMITES.super);
+		expect(can(equipe, 'usar_ia')).toBe(true);
+		expect(can(equipe, 'publicar_atividade')).toBe(true);
+	});
+
+	it('vale mesmo com o teste vencido ou a assinatura expirada', () => {
+		for (const linha of [
+			{ subscriptionStatus: 'trialing', trialEndsAt: dias(-1) },
+			{ subscriptionStatus: 'past_due', plan: 'pro', currentPeriodEnd: dias(-30) }
+		] satisfies LinhaDeCobranca[]) {
+			const parado = estado(linha);
+			expect(can(parado, 'criar_atividade')).toBe(false);
+			expect(can(estadoDaEquipe(parado), 'criar_atividade')).toBe(true);
+		}
+	});
+
+	it('não inventa uso nem crédito: o estoque e o saldo continuam os de verdade', () => {
+		const cheio = estado(
+			{ subscriptionStatus: 'trialing', trialEndsAt: dias(10) },
+			{ atividades: 80, materiais: 3 }
+		);
+		const equipe = estadoDaEquipe(cheio);
+		expect(equipe.uso).toEqual({ atividades: 80, materiais: 3 });
+		expect(motivoDoBloqueio(equipe, 'criar_atividade')).toBe('criar');
+		expect(motivoDoBloqueio(equipe, 'usar_ia')).toBe('creditos');
 	});
 });

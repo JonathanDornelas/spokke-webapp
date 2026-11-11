@@ -1,5 +1,6 @@
 import {
 	CARENCIA_DIAS,
+	EQUIPE,
 	LIMITES,
 	TRIAL,
 	ehPlanoPago,
@@ -30,7 +31,8 @@ import type { MotivoDoBloqueio } from '$lib/billing/motivos';
  */
 
 export type Situacao = 'trial' | 'ativa' | 'atrasada' | 'cancelada' | 'expirada';
-export type Origem = 'trial' | 'assinatura' | 'escola' | 'nenhum';
+/** `equipe`: a conta de quem opera a plataforma (`estadoDaEquipe`). */
+export type Origem = 'trial' | 'assinatura' | 'escola' | 'equipe' | 'nenhum';
 
 export type Capacidade =
 	'publicar_atividade' | 'criar_atividade' | 'criar_material' | 'usar_ia' | 'usar_asr';
@@ -191,6 +193,29 @@ export function montarEstado(
 		origem: liberada(situacao) ? 'assinatura' : 'nenhum',
 		situacao,
 		limites: LIMITES[plano],
+		escola: null
+	};
+}
+
+/**
+ * O estado da conta de quem OPERA a plataforma: o maior plano, ativo, sem vencimento (`EQUIPE`
+ * em `catalogo.ts`) — tudo liberado, a IA inclusive. Vence a cobrança gravada, o trial e a
+ * escola: a equipe testa o produto inteiro sem depender do que está na linha dela. O uso
+ * continua o de verdade, e os créditos saem da franquia do plano mais os lançamentos do ciclo,
+ * como em qualquer conta (`acesso.ts`) — a IA da equipe também gasta e aparece em `AiUsage`.
+ *
+ * Não abre nada ENTRE professores: o escopo por `teacherId` não passa por aqui.
+ */
+export function estadoDaEquipe(estado: EstadoDeAcesso): EstadoDeAcesso {
+	return {
+		...estado,
+		plano: EQUIPE.plano,
+		origem: 'equipe',
+		situacao: 'ativa',
+		limites: LIMITES[EQUIPE.plano],
+		trialEndsAt: null,
+		currentPeriodEnd: null,
+		cancelAtPeriodEnd: false,
 		escola: null
 	};
 }
