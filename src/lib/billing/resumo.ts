@@ -15,7 +15,7 @@ export interface ResumoDoAcesso {
 	plano: PlanoId | null;
 	/** "Básico", "Pro", "Período de teste", "Plano da escola" — já em português. */
 	rotulo: string;
-	origem: 'trial' | 'assinatura' | 'escola' | 'nenhum';
+	origem: 'trial' | 'assinatura' | 'escola' | 'equipe' | 'nenhum';
 	situacao: 'trial' | 'ativa' | 'atrasada' | 'cancelada' | 'expirada';
 	limites: Limites;
 	uso: { atividades: number; materiais: number };
@@ -48,6 +48,7 @@ export function rotuloDoPlano(
 ): string {
 	if (origem === 'trial') return 'Período de teste';
 	if (origem === 'escola') return 'Plano da escola';
+	if (origem === 'equipe') return 'Equipe Spokke';
 	if (situacao === 'expirada' && plano === null) return 'Teste encerrado';
 	if (!plano) return 'Sem plano';
 	return NOME_DO_PLANO[plano];

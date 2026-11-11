@@ -58,6 +58,14 @@ export const TRIAL = { dias: 14, plano: 'basico' } as const satisfies {
 };
 
 /**
+ * A conta de quem OPERA a plataforma (`PLATFORM_ADMIN_IDS`): o maior plano, sempre ativo, sem
+ * vencimento — para a equipe testar tudo, inclusive a IA, sem uma assinatura de mentira no
+ * banco nem um "plano concedido" que um dia alguém encerra. Quem aplica é `estadoDaEquipe`
+ * (`$lib/server/billing/entitlements.ts`), na leitura; nada é gravado na conta.
+ */
+export const EQUIPE = { plano: 'super' } as const satisfies { plano: PlanoPago };
+
+/**
  * Dias depois do fim do período em que a assinatura ainda conta como em dia
  * ("atrasada", mas liberada). Passou disso, vira "expirada".
  */
