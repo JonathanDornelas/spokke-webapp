@@ -915,10 +915,12 @@ fechadas demora uns segundos para desistir).
 **No servidor**, a mesma coisa vista de dentro:
 
 ```bash
-sudo ss -tlnp | grep -v '127.0.0.1'
+sudo ss -tlnp | grep -vE '127\.0\.0\.|\[::1\]'
 ```
 
-**Deve aparecer:** só as portas 22, 80 e 443.
+**Deve aparecer:** só as portas 22, 80 e 443 (cada uma duas vezes: `0.0.0.0` é o IPv4, `[::]` o
+IPv6). O filtro tira tudo o que só o próprio servidor alcança — como o DNS local do Ubuntu
+(`systemd-resolve`, porta 53, em `127.0.0.53` e `127.0.0.54`).
 
 **Se alguma outra porta aparecer aberta:** o arquivo de ambiente daquele compose não está com o
 `127.0.0.1:` na frente da porta. Corrija e recrie aquele compose.
