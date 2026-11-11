@@ -427,9 +427,12 @@ QUESTÃO, com velocidade alternável, e segue o volume do aparelho. Este rege s�
   por rampa de 4 ms.
 - **Contexto suspenso nunca derruba a tela.** O browser recusa áudio sem gesto do usuário na
   aba, e abrir `/resultado` direto pelo endereço é exatamente esse caso — o exercício segue
-  calado. Buffer que ainda não chegou também: o som daquela questão é perdido de propósito,
-  porque "correto" tocando três segundos depois de a tela já ter dito confunde mais do que
-  ajuda.
+  calado. **Buffer que ainda não chegou ESPERA um instante** (`ESPERA_PELO_SOM_MS`, 800 ms) e
+  toca se chegar nesse prazo; depois disso é perdido de propósito, porque "correto" tocando
+  segundos depois de a tela já ter dito confunde mais do que ajuda. Era descarte imediato, e a
+  primeira resposta certa de toda atividade saía calada: nada em cache, e a correção ganhava do
+  download por frações de segundo (`sons.test.ts`). `preparar`, que roda dentro do clique,
+  também destrava o contexto suspenso — no iPhone, retomar fora de um gesto não funciona.
 - Botão de ícone que abre o deslizante, não um `range` solto: o alvo do Player é de 48px e um
   controle aberto não cabe no cabeçalho do celular. Três níveis de ícone (mudo/baixo/alto),
   porque "tem som" e "está no talo" não são a mesma informação.
