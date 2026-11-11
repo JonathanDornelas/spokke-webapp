@@ -25,6 +25,8 @@ declare global {
 	interface Window {
 		dataLayer?: unknown[];
 		gtag?: Gtag;
+		/** O interruptor oficial do Google para um ID de medição — ver `ligarEnvio`. */
+		[interruptor: `ga-disable-${string}`]: boolean | undefined;
 	}
 }
 
@@ -63,8 +65,28 @@ export function gravarEscolha(escolha: Escolha | null): void {
 }
 
 let carregado = false;
+/** O ID com que o gtag.js foi carregado, para a revogação desligar o envio dele. */
+let idCarregado: string | null = null;
 /** Medindo agora: depois do aceite e até uma revogação. */
 let ativo = false;
+
+/**
+ * Liga ou desliga o ENVIO conforme a página em que a pessoa está.
+ *
+ * O gtag.js, depois de carregado, fica na página até ela recarregar — e a troca de tela do
+ * SvelteKit não recarrega. Quem aceitava o aviso na home e entrava no Studio pelo link levava
+ * junto a medição AUTOMÁTICA do Google (tempo na página, rolagem, cliques, formulários, a
+ * visualização por troca de histórico), que não passa por `rotaMedida` nem por `ativo`.
+ *
+ * `ga-disable-<ID>` é o interruptor oficial do Google, e foi medido com o gtag.js de produção
+ * (2026-11-11): ele é lido a cada evento, vale na hora, desliga também o automático, e o que
+ * já estava na fila ainda sai — é o que deixa o `sign_up` do cadastro chegar mesmo com a
+ * navegação seguindo direto para o Studio.
+ */
+export function ligarEnvio(id: string, ligado: boolean): void {
+	if (!idValido(id)) return;
+	window[`ga-disable-${id.trim()}`] = !ligado;
+}
 
 /** Carrega o gtag.js uma vez. Só é chamado depois do "Aceitar". */
 export function carregarGa(id: string): void {
@@ -76,6 +98,7 @@ export function carregarGa(id: string): void {
 		return;
 	}
 	carregado = true;
+	idCarregado = id.trim();
 	window.dataLayer = window.dataLayer ?? [];
 	// O gtag.js lê objetos `arguments` da fila, não arrays: é o snippet oficial.
 	window.gtag = function gtag() {
@@ -117,6 +140,9 @@ export function registrarEvento(nome: string, parametros: Record<string, string>
 export function revogar(): void {
 	ativo = false;
 	if (carregado) window.gtag?.('consent', 'update', { analytics_storage: 'denied' });
+	// Com o script já na página, só negar o consentimento ainda deixaria o Google mandar avisos
+	// sem cookie (é o modo avançado do consentimento). Revogar é parar de enviar.
+	if (idCarregado) ligarEnvio(idCarregado, false);
 	const dominios = ['', location.hostname, `.${location.hostname.replace(/^www\./, '')}`];
 	for (const par of document.cookie.split(';')) {
 		const nome = par.split('=')[0]?.trim();

@@ -385,12 +385,18 @@ O backup diário do banco precisa sair do servidor: um backup que mora na mesma 
 à perda da máquina. Quem o tira de lá é o backup automático da Hostinger, que copia o servidor
 inteiro uma vez por semana, com os dumps do banco dentro (passo 2.17).
 
-1. No painel da Hostinger, abra a página do VPS › **Backups** (no menu do VPS; o nome da seção pode
-   variar entre "Backups" e "Snapshots e backups").
-2. Confira que o **backup automático semanal** está ativo. Ele vem no plano.
-3. Anote na ficha o dia da semana em que ele roda.
+1. No painel da Hostinger: **VPS** › **Manage** (Gerenciar), ao lado do servidor › no menu lateral,
+   **Backups & Monitoring** › **Snapshots & Backups** (no painel em português, "Backups e
+   monitoramento" › "Snapshots e backups").
+2. Em **Manage Schedule**, confira que está em **Weekly** (semanal), o padrão. Nunca em "Turn off
+   auto-backups".
+3. Anote na ficha o dia da semana em que ele roda. O horário é fixo: a Hostinger não deixa mudar.
 4. Se perder até uma semana de dados não for aceitável, o **backup diário** é um adicional pago, na
-   mesma tela.
+   mesma tela (**Upgrade** em "Daily Backups").
+
+O que a Hostinger guarda: os **2 últimos backups semanais** (e, com o diário, também os 2 últimos
+diários) — o mais antigo tem umas duas semanas. Eles ficam fora do servidor, mas voltar é sempre o
+servidor inteiro, nunca um arquivo só.
 
 ### 1.14 Monitor e opcionais
 
@@ -915,10 +921,12 @@ fechadas demora uns segundos para desistir).
 **No servidor**, a mesma coisa vista de dentro:
 
 ```bash
-sudo ss -tlnp | grep -v '127.0.0.1'
+sudo ss -tlnp | grep -vE '127\.0\.0\.|\[::1\]'
 ```
 
-**Deve aparecer:** só as portas 22, 80 e 443.
+**Deve aparecer:** só as portas 22, 80 e 443 (cada uma duas vezes: `0.0.0.0` é o IPv4, `[::]` o
+IPv6). O filtro tira tudo o que só o próprio servidor alcança — como o DNS local do Ubuntu
+(`systemd-resolve`, porta 53, em `127.0.0.53` e `127.0.0.54`).
 
 **Se alguma outra porta aparecer aberta:** o arquivo de ambiente daquele compose não está com o
 `127.0.0.1:` na frente da porta. Corrija e recrie aquele compose.
@@ -990,33 +998,92 @@ ls -lh /srv/spokke/backups/
 **Deve aparecer:** `ok <tamanho> /srv/spokke/backups/spokke-<data>.dump`, e o mesmo arquivo na
 listagem.
 
-Por fim, o agendamento diário:
+Por fim, o agendamento diário (06:15 UTC são 03:15 em Brasília), sem abrir editor:
 
 ```bash
-crontab -e
+(crontab -l 2>/dev/null; echo '15 6 * * * bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1') | crontab -
+crontab -l
 ```
 
-Na primeira vez ele pergunta o editor: digite `1` (nano). Vá até o fim do arquivo e cole esta linha
-(06:15 UTC são 03:15 em Brasília):
-
-```
-15 6 * * * bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1
-```
-
-Salve (Ctrl+O, Enter) e saia (Ctrl+X). Confira com `crontab -l`. Amanhã de manhã, a última linha de
+**Deve aparecer:** a linha do backup, uma vez. Rode o primeiro comando **uma vez só** — de novo, ele
+duplica a linha, e o backup passa a rodar duas vezes por noite. Amanhã de manhã, a última linha de
 `/srv/spokke/backups/backup.log` tem de ser um `ok` do dia.
+
+**Se preferir o `crontab -e`:** cole só a linha que começa com `15 6`. As três crases (```) que
+delimitam o bloco no roteiro não entram — com elas, o cron recusa com `bad minute`.
 
 Os dumps ficam 14 dias em `/srv/spokke/backups`, e o backup semanal da Hostinger (passo 1.13) os leva
 para fora da máquina junto com o resto do disco.
 
 ### 2.18 Monitor e snapshot
 
-- **Monitor:** no UptimeRobot, Add New Monitor › tipo **Keyword** › URL `https://spokke.com.br` ›
-  palavra-chave `Spokke` › intervalo de 5 minutos › alerta por e-mail para a caixa da equipe. Se o
-  site cair, o e-mail chega em até 5 minutos.
-- **Snapshot:** no painel da Hostinger, na página do VPS, crie um **snapshot** agora, com tudo
-  funcionando. É a fotografia do servidor inteiro para voltar se algo der muito errado. Antes de cada
-  operação arriscada (uma migration grande, uma atualização do sistema), outro.
+- **Monitor:** o UptimeRobot abre a página inicial a cada 5 minutos e avisa por e-mail se ela não
+  mostrar o site. Detalhes logo abaixo.
+- **Snapshot:** a fotografia do servidor inteiro — disco, banco, MinIO, certificados, configuração —
+  para voltar atrás se uma operação der muito errado. Detalhes logo abaixo.
+
+#### O monitor
+
+É do tipo **Keyword**, e não o HTTP simples, porque "no ar" não basta: uma página de estacionamento
+da Hostinger ou de erro também responde `200`. Ele procura a palavra `Spokke` na página, e o
+incidente abre quando ela **some**.
+
+1. No UptimeRobot: **New monitor** (Add New Monitor).
+2. **Monitor type:** **Keyword**.
+3. **URL:** `https://spokke.com.br` (com `https://`, para conferir o certificado junto).
+4. **Keyword:** `Spokke`, com "case sensitive" **desmarcado**.
+5. **Quando abrir o incidente:** quando a palavra **não existir** ("Doesn't exist" / "Keyword not
+   exists"). É a opção que mais confunde: em "existe", ele abre incidente com o site funcionando —
+   o aviso chega como `Keyword has been found`.
+6. **Interval:** 5 minutos (o menor do plano grátis).
+7. **Alertas:** e-mail para `equipe@spokke.com.br`. Na primeira vez, o UptimeRobot manda um e-mail de
+   confirmação para esse endereço — ele chega pelo ImprovMX, e sem clicar no link os alertas não saem.
+8. **Create monitor.**
+
+**Deve aparecer:** o monitor verde ("Up") em até 5 minutos. Se ele abriu um incidente com
+`Keyword has been found`, é o passo 5 invertido: edite o monitor, troque para "não existir" e salve —
+o incidente fecha na checagem seguinte. A região que aparece no aviso ("North America", "Europe") é só
+de onde o UptimeRobot checou.
+
+#### O snapshot
+
+Três coisas a saber antes, todas regras da Hostinger:
+
+- **Ele dura 1 dia.** A Hostinger apaga o snapshot sozinha no dia seguinte. Não é backup: é a rede de
+  proteção de uma operação arriscada. O backup de longo prazo é o automático (passo 1.13).
+- **Só existe um.** Criar outro apaga o anterior.
+- **Ele fica no mesmo servidor físico do VPS**, ao contrário do backup automático. Se aquela máquina
+  da Hostinger se perder, ele vai junto. Reinstalar o sistema ou restaurar um backup também o apaga.
+
+**Criar:**
+
+1. **No servidor**, primeiro um dump fresco do banco. A fotografia do disco pode pegar o Postgres no
+   meio de uma escrita; o dump não, e ele vai junto na fotografia:
+
+   ```bash
+   bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh
+   ```
+
+   **Deve aparecer:** uma linha terminando em `ok <tamanho> /srv/spokke/backups/spokke-<data>.dump`.
+
+2. No painel da Hostinger: **VPS** › **Manage** (Gerenciar), ao lado do servidor › no menu lateral,
+   **Backups & Monitoring** › **Snapshots & Backups** (no painel em português, "Backups e
+   monitoramento" › "Snapshots e backups") › **Create Snapshot**.
+3. Espere o snapshot aparecer acima da lista de backups, com a data e a hora de agora. Até lá, não
+   mexa no servidor pelo painel.
+
+**Quando fazer outro:** no mesmo dia de cada operação arriscada, logo antes dela — a atualização
+mensal do sistema (Parte 3, "Atualizar o sistema"), uma versão com migration grande, uma mudança no
+Caddy ou no firewall. Deu certo? Ele se apaga sozinho no dia seguinte.
+
+**Voltar para ele** (só se a operação quebrou o servidor e não tem conserto rápido): na mesma tela,
+a opção de restaurar no próprio snapshot. Antes de clicar:
+
+- **Sobrescreve o servidor inteiro.** Tudo o que entrou depois do snapshot some: cadastros, respostas
+  de alunos, áudios. Para desfazer só um erro no banco, o caminho são os dumps (Parte 3, "Backup e
+  restauração"), não o snapshot.
+- **Não dá para cancelar** depois de começar.
+- O site fica fora do ar até terminar. Depois, refaça o teste de fumaça (passo 2.16).
 
 ### 2.19 Busca, medição e selos
 
@@ -1025,9 +1092,26 @@ para fora da máquina junto com o resto do disco.
 2. **Search Console › Configurações › Associações:** associe a propriedade do Google Analytics.
 3. **Bing Webmaster Tools** (bing.com/webmasters): entre com a conta Google e use **Importar do
    Google Search Console** — ele traz a propriedade e o sitemap.
-4. **GA4 › Administrador › Eventos:** os eventos aparecem depois que acontecem pela primeira vez
-   (`sign_up` depois de um cadastro com o aviso aceito, `generate_lead` depois de um contato). Quando
-   aparecerem, marque os dois como **evento principal**.
+4. **GA4 › Administrador › Eventos › novo evento:** o nome exato `sign_up`, marcado como **evento
+   principal**, **Default key event value** em branco (ou `0`, se for obrigatório: nenhum dos dois
+   tem valor em dinheiro) e **Counting method** "Once per event" — cada cadastro é uma conta nova.
+   Repita com `generate_lead`, mas em "Once per session": duas mensagens na mesma visita são um
+   contato só. Não precisa esperar os eventos chegarem; o site já os manda com esses nomes.
+
+   **Se a tela pedir condições de correspondência** ("Matching conditions", do tipo "event_name
+   igual a…"), é a criação de evento DERIVADO: cancele, porque com o mesmo nome cada cadastro
+   contaria duas vezes. Nesse caso, espere o evento aparecer na lista de Eventos depois do primeiro
+   cadastro real (até 24 h) e marque-o como principal ali, com as mesmas opções.
+
+   **Confira que a medição chega.** Até alguém clicar em **Aceitar** no aviso do site, o GA4 mostra
+   "No data received from your website yet" — é o esperado: nada do Google carrega antes do aceite,
+   e só nas páginas públicas. Abra `https://spokke.com.br` numa janela anônima, **sem bloqueador de
+   anúncios** (uBlock, o escudo do Brave e afins bloqueiam o Google Analytics), clique em
+   **Aceitar** e navegue por duas ou três páginas. **Deve aparecer:** em **Relatórios › Tempo real**,
+   um usuário em até um minuto. A mensagem da página inicial do GA4 pode levar até um dia para sumir;
+   o Tempo real é o termômetro. O `sign_up` aparece ali depois de um cadastro feito com o aviso
+   aceito, e o `generate_lead` depois de uma mensagem pelo formulário de contato.
+
 5. **GA4 › Administrador › Definições personalizadas › Criar dimensão personalizada:** três, todas
    com escopo **Evento** — "Origem" com o parâmetro `origem`, "Artigo" com `artigo` e "Rótulo" com
    `rotulo`. É o que diz qual artigo do blog trouxe cada cadastro.
@@ -1116,7 +1200,7 @@ ls /var/run/reboot-required 2>/dev/null && sudo reboot
 ```
 
 Os containers voltam sozinhos depois do reboot (todos têm `restart: unless-stopped`). Faça um
-snapshot antes.
+snapshot antes, no mesmo dia (passo 2.18, "O snapshot"): ele dura só um dia.
 
 ### Backup e restauração
 
@@ -1134,8 +1218,9 @@ docker exec -i spokke-postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGR
 spk start worker web
 ```
 
-**Se a máquina se perdeu:** restaure o backup mais recente da Hostinger pelo painel (página do VPS ›
-Backups). Ele sobrescreve o servidor inteiro, então é só para esse caso — para desfazer um erro no
+**Se a máquina se perdeu:** restaure o backup mais recente da Hostinger pelo painel (**Backups &
+Monitoring** › **Snapshots & Backups** › **Restore** ao lado da data). Ele sobrescreve o servidor
+inteiro e não dá para cancelar depois de começar, então é só para esse caso — para desfazer um erro no
 banco, use os dumps acima. O banco volta junto com o disco; se o Postgres não subir limpo (a cópia do
 disco pode ter pego uma escrita no meio), restaure o `.dump` mais recente que veio na cópia, com os
 comandos acima. O que foi escrito entre esse backup e a perda não volta.

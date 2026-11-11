@@ -116,7 +116,9 @@ produto:
 **Meio caminho andado** (novembro de 2026): o código está pronto e desligado. Sem `PUBLIC_GA_ID`, nenhum
 script de terceiro carrega e nenhum aviso aparece. Com ele, as páginas públicas (home, `(site)` com o
 blog, cadastro e exemplo) mostram um aviso de medição, e o Google Analytics 4 só carrega depois do
-"Aceitar" (consentimento básico). O painel do professor e as atividades dos alunos nunca são medidos.
+"Aceitar" (consentimento básico). O painel do professor e as atividades dos alunos nunca são medidos —
+nem quando se chega a eles pelo link de uma página pública, sem recarregar: a cada troca de tela o
+envio é desligado fora das páginas medidas (`ligarEnvio`, o `ga-disable-<ID>` do Google).
 O código é `$lib/client/medicao.ts` e `MedicaoDoSite.svelte` (no layout raiz).
 
 O que já é medido, quando a pessoa aceita:

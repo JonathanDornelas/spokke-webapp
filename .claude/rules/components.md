@@ -1173,6 +1173,14 @@ Um ouvinte de clique registra os elementos marcados com `data-evento` (mais `dat
 `data-artigo`): a tela marca o HTML e não importa nada. O rodapé tem "Preferências de cookies"
 (só com a medição ligada), que revoga e faz o aviso voltar.
 
+**A cada troca de tela o envio é ligado ou desligado** (`ligarEnvio`, o interruptor oficial
+`ga-disable-<ID>` do Google). O gtag.js fica na página depois de uma navegação do SvelteKit, e a
+medição AUTOMÁTICA dele — tempo na página, rolagem, cliques, formulários — não passa por
+`rotaMedida`: quem aceitava na home e entrava no Studio pelo link levava o Google junto. Revogar
+também desliga o envio, porque só negar o consentimento com o script carregado ainda manda avisos
+sem cookie. O que já estava na fila sai (o `sign_up` do cadastro chega mesmo com a navegação
+seguindo para o Studio) — medido com o gtag.js de produção, e garantido em `medicao.test.ts`.
+
 `SiteHeader` recebe `nav` (array `{ href, label }`) com default apontando pras âncoras da home
 (`/#habilidades` etc.) — páginas fora da home passam a própria lista. **Resolva rota real com
 `resolve()` na hora de montar o array**, não dentro do componente: o `<a href={item.href}>` do
