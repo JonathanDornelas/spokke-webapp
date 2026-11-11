@@ -1092,9 +1092,18 @@ a opção de restaurar no próprio snapshot. Antes de clicar:
 2. **Search Console › Configurações › Associações:** associe a propriedade do Google Analytics.
 3. **Bing Webmaster Tools** (bing.com/webmasters): entre com a conta Google e use **Importar do
    Google Search Console** — ele traz a propriedade e o sitemap.
-4. **GA4 › Administrador › Eventos:** os eventos aparecem depois que acontecem pela primeira vez
-   (`sign_up` depois de um cadastro com o aviso aceito, `generate_lead` depois de um contato). Quando
-   aparecerem, marque os dois como **evento principal**.
+4. **GA4 › Administrador › Eventos principais (Key events) › Novo evento principal:** digite
+   `sign_up` e salve; repita com `generate_lead`. Não precisa esperar os eventos chegarem.
+
+   **Confira que a medição chega.** Até alguém clicar em **Aceitar** no aviso do site, o GA4 mostra
+   "No data received from your website yet" — é o esperado: nada do Google carrega antes do aceite,
+   e só nas páginas públicas. Abra `https://spokke.com.br` numa janela anônima, **sem bloqueador de
+   anúncios** (uBlock, o escudo do Brave e afins bloqueiam o Google Analytics), clique em
+   **Aceitar** e navegue por duas ou três páginas. **Deve aparecer:** em **Relatórios › Tempo real**,
+   um usuário em até um minuto. A mensagem da página inicial do GA4 pode levar até um dia para sumir;
+   o Tempo real é o termômetro. O `sign_up` aparece ali depois de um cadastro feito com o aviso
+   aceito, e o `generate_lead` depois de uma mensagem pelo formulário de contato.
+
 5. **GA4 › Administrador › Definições personalizadas › Criar dimensão personalizada:** três, todas
    com escopo **Evento** — "Origem" com o parâmetro `origem`, "Artigo" com `artigo` e "Rótulo" com
    `rotulo`. É o que diz qual artigo do blog trouxe cada cadastro.
