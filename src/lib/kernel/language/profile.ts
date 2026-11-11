@@ -69,4 +69,27 @@ export interface LanguageProfile {
 	 * professor cadastra.
 	 */
 	equivalences: string[][];
+	/**
+	 * Os pronomes de sujeito que a língua deixa OMITIR, porque o verbo já diz
+	 * quem é: em português "estou ansioso" e "eu estou ansioso" são a mesma
+	 * frase. Formas já normalizadas, uma palavra cada. Ausente: a língua não
+	 * omite o sujeito (inglês, francês) e nada muda.
+	 *
+	 * `conjuncoes`: seguido de uma delas, o pronome é parte de um sujeito
+	 * COMPOSTO ("eu e meu irmão moramos aqui") e não sai — sem o "eu" a frase
+	 * vira outra.
+	 *
+	 * Só a PRIMEIRA pessoa, de propósito: é onde a conjugação não deixa dúvida
+	 * ("estou" só pode ser "eu"). "Você", "ele" e "ela" usam o mesmo verbo, e o
+	 * "tú" espanhol sem acento vira "tu", o possessivo.
+	 *
+	 * Dois usos (kernel.md "Respostas aceitas"):
+	 * - **Correção**: se alguma resposta aceita começa com um deles, a questão
+	 *   aceita com e sem ele, em qualquer variante (`tolerantScore`). Nunca um
+	 *   pronome que nenhuma aceita traz: "nós estou" não vira "estou".
+	 * - **Geração**: quando a resposta do professor não traz o sujeito, o
+	 *   servidor propõe a forma com cada um, e a ida e volta do tradutor escolhe a
+	 *   que mantém o sentido (`server/atividades/variantes-aceitas.ts`).
+	 */
+	sujeitoOmitivel?: { pronomes: string[]; conjuncoes: string[] };
 }

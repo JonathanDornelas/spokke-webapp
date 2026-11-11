@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getProfile, labelForTag, languageLabels, languageProfiles, tagForLabel } from './profiles';
 import type { LanguageProfile } from './profile';
+import { normalize } from './normalize';
+import { tokenize } from './tokenize';
 
 /**
  * A integridade dos `LanguageProfile`. Nada aqui testa comportamento de
@@ -297,5 +299,26 @@ describe('LanguageProfile como contrato', () => {
 			asrModel: true,
 			equivalences: true
 		});
+	});
+});
+
+/**
+ * O sujeito omitível é comparado com as PRIMEIRAS PALAVRAS do texto já
+ * normalizado (`kernel/grading/sujeito.ts`): pronome ou conjunção com
+ * maiúscula, com acento perdido ou com duas palavras nunca casaria.
+ */
+describe('sujeito omitível', () => {
+	const comSujeito = entradas.filter(([, p]) => p.sujeitoOmitivel !== undefined);
+
+	it('existe nas línguas que omitem o sujeito, e só nelas', () => {
+		expect(comSujeito.map(([tag]) => tag).sort()).toEqual(['es-ES', 'it-IT', 'pt-BR']);
+	});
+
+	it.each(comSujeito)('%s: pronomes e conjunções são uma palavra, já normalizada', (_tag, p) => {
+		const regra = p.sujeitoOmitivel;
+		for (const forma of [...(regra?.pronomes ?? []), ...(regra?.conjuncoes ?? [])]) {
+			expect(normalize(forma, p).trim()).toBe(forma);
+			expect(tokenize(forma, p)).toEqual([forma]);
+		}
 	});
 });

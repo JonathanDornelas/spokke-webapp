@@ -5,24 +5,20 @@
 	// sai esta semana (os 7 dias de TODOS os módulos) e como cada módulo anda em
 	// cada turma (ritmo, enviadas, próximo envio, quantos terminaram a última).
 	//
-	// Criar é um formulário curto AQUI (nome e cor); atividades e turmas entram
-	// no módulo aberto. Renomear, duplicar e apagar ficam no "⋯" do cartão, e
-	// apagar sempre diz a consequência antes de perguntar.
+	// Criar e editar abrem a MESMA bandeja (`ModuloBandeja`): nome, descrição,
+	// etiqueta e — ao criar — as atividades, se o professor já quiser. Turmas e
+	// programação entram no módulo aberto. Editar, duplicar e apagar ficam no
+	// "⋯" do cartão, e apagar sempre diz a consequência antes de perguntar.
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { onMount, tick } from 'svelte';
+	import { onMount } from 'svelte';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import SemanaDeEnvios from '$lib/components/SemanaDeEnvios.svelte';
-	import {
-		CLASSE_DA_ETIQUETA,
-		CORES_DE_ETIQUETA,
-		etiquetaDaTurma,
-		NOME_DA_COR,
-		type CorDeEtiqueta
-	} from '$lib/etiquetas';
-	import { apagarModulo, criarModulo, duplicarModulo, editarModulo } from './modulos.remote';
+	import { CLASSE_DA_ETIQUETA } from '$lib/etiquetas';
+	import { apagarModulo, duplicarModulo } from './modulos.remote';
+	import ModuloBandeja from './ModuloBandeja.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -38,17 +34,17 @@
 		traco: 'M6 12h12'
 	};
 
-	// Vermelho só no envio que não saiu; "tudo enviado" é neutro, não verde.
+	// Vermelho só na liberação que não aconteceu; "tudo liberado" é neutro, não verde.
 	const PILULA: Record<Estado, { texto: string; icone: string; classe: string }> = {
-		ativo: { texto: 'Envio programado', icone: ICONE.play, classe: 'bg-base-300 text-primary' },
-		erro: { texto: 'Envio que não saiu', icone: ICONE.erro, classe: 'bg-error text-error-content' },
+		ativo: { texto: 'Liberação programada', icone: ICONE.play, classe: 'bg-base-300 text-primary' },
+		erro: { texto: 'Não liberada', icone: ICONE.erro, classe: 'bg-error text-error-content' },
 		pausa: {
 			texto: 'Pausado',
 			icone: ICONE.pausa,
 			classe: 'border border-line bg-base-200 text-base-content/70'
 		},
 		fim: {
-			texto: 'Tudo enviado',
+			texto: 'Tudo liberado',
 			icone: ICONE.ok,
 			classe: 'border border-line bg-base-200 text-base-content/70'
 		},
@@ -76,7 +72,7 @@
 	const VAZIO_DA_SEMANA: Record<Estado, (m: Modulo) => string> = {
 		pausa: (m) =>
 			`Pausado${m.pausadaDesde ? ` desde ${m.pausadaDesde}` : ''}. Nada sai até você retomar.`,
-		fim: () => 'Tudo já foi enviado.',
+		fim: () => 'Tudo já foi liberado.',
 		sem: () => 'Sem turma, nada programado.',
 		parado: () => 'Nenhuma turma com programação ainda.',
 		ativo: () => 'Nada sai nesta semana.',
@@ -114,45 +110,31 @@
 		);
 	});
 
-	// ── criar ──
-	let criando = $state(false);
-	let nome = $state('');
-	let cor = $state<CorDeEtiqueta>('violeta');
-	let salvando = $state(false);
-	let erroCriar = $state<string | null>(null);
-	let campoNome = $state<HTMLInputElement | null>(null);
-	const sigla = $derived(nome.trim() ? etiquetaDaTurma(nome) : 'NM');
-
-	async function abrirCriacao() {
-		criando = true;
-		await tick();
-		campoNome?.focus();
+	// ── criar e editar: a bandeja ──
+	let bandejaAberta = $state(false);
+	/** O módulo em edição (null = criar). Fica depois de fechar, para a saída mostrar o conteúdo. */
+	let emEdicao = $state<Modulo | null>(null);
+	function abrirCriacao() {
+		emEdicao = null;
+		bandejaAberta = true;
 	}
-	// O "Novo módulo" do início chega com `?novo=1`: o formulário já abre.
+	function abrirEdicao(m: Modulo) {
+		menu = null;
+		apagando = null;
+		// O item do menu some com o menu: o foco volta ao "⋯" quando a bandeja fechar.
+		document.getElementById(`menu-botao-${m.id}`)?.focus();
+		emEdicao = m;
+		bandejaAberta = true;
+	}
+	// O "Novo módulo" do início chega com `?novo=1`: a bandeja já abre.
 	onMount(() => {
-		if (page.url.searchParams.get('novo') === '1') void abrirCriacao();
+		if (page.url.searchParams.get('novo') === '1') abrirCriacao();
 	});
-	async function criar(e: SubmitEvent) {
-		e.preventDefault();
-		if (!nome.trim()) return;
-		salvando = true;
-		erroCriar = null;
-		try {
-			const r = await criarModulo({ name: nome, color: cor, activityIds: [] });
-			await goto(resolve('/(studio)/modulos/[id]', { id: r.id }));
-		} catch {
-			erroCriar = 'Não deu para criar agora. Tente de novo em instantes.';
-		} finally {
-			salvando = false;
-		}
-	}
 
 	// ── o "⋯" de cada cartão ──
 	let menu = $state<string | null>(null);
 	let pendente = $state<string | null>(null);
 	let erroCartao = $state<{ id: string; texto: string } | null>(null);
-	let renomeando = $state<string | null>(null);
-	let novoNome = $state('');
 	let apagando = $state<string | null>(null);
 
 	function aoClicarFora(e: MouseEvent) {
@@ -191,25 +173,6 @@
 			pendente = null;
 		}
 	}
-	async function iniciarRenomear(m: Modulo) {
-		menu = null;
-		apagando = null;
-		renomeando = m.id;
-		novoNome = m.name;
-		await tick();
-		document.getElementById(`renomear-${m.id}`)?.focus();
-	}
-	const renomear = (m: Modulo) =>
-		rodar(m.id, 'renomear', async () => {
-			await editarModulo({
-				moduleId: m.id,
-				name: novoNome,
-				description: m.description ?? '',
-				color: m.color
-			});
-			renomeando = null;
-			await invalidateAll();
-		});
 	const duplicar = (m: Modulo) =>
 		rodar(m.id, 'duplicar', async () => {
 			menu = null;
@@ -238,13 +201,13 @@
 		},
 		{
 			n: '3',
-			t: 'Programe os envios',
+			t: 'Programe as liberações',
 			d: 'Toda quinta, a cada duas semanas ou em datas fixas. A prévia mostra cada data antes de salvar.'
 		}
 	];
 </script>
 
-<svelte:head><title>Módulos — entendo</title></svelte:head>
+<svelte:head><title>Módulos · Spokke</title></svelte:head>
 <svelte:window onclick={aoClicarFora} onkeydown={aoTeclar} />
 
 {#snippet icone(d: string, classe = 'size-3')}
@@ -296,88 +259,16 @@
 						)} · {plural(data.resumo.turmasRecebendo, 'turma recebendo', 'turmas recebendo')}
 					</p>
 				</div>
-				{#if !criando}
-					<button
-						type="button"
-						onclick={abrirCriacao}
-						class="btn min-h-11 flex-[1_1_100%] motion-tap gap-2 btn-primary text-[14px] font-bold lg:flex-none"
-					>
-						{@render icone('M12 5v14M5 12h14', 'size-4')}
-						Novo módulo
-					</button>
-				{/if}
+				<button
+					type="button"
+					onclick={abrirCriacao}
+					aria-haspopup="dialog"
+					class="btn min-h-11 flex-[1_1_100%] motion-tap gap-2 btn-primary text-[14px] font-bold lg:flex-none"
+				>
+					{@render icone('M12 5v14M5 12h14', 'size-4')}
+					Novo módulo
+				</button>
 			</div>
-		{/if}
-
-		{#if criando}
-			<form
-				onsubmit={criar}
-				class="mb-5.5 animate-[en-fade-up_300ms_var(--ease-out-soft)_both] rounded-[15px] border border-primary/34 px-4 py-4 lg:px-5 lg:py-4.5"
-			>
-				<p class="mb-1 text-[14.5px] font-bold">Novo módulo</p>
-				<p class="mb-3.5 text-[12.5px] text-base-content/65">
-					As atividades e as turmas entram depois, no módulo aberto.
-				</p>
-				<div class="flex flex-wrap items-end gap-x-4.5 gap-y-3.5">
-					<label class="grid min-w-[220px] flex-1 gap-1.75">
-						<span class="text-[12.5px] font-bold">Nome</span>
-						<input
-							bind:this={campoNome}
-							bind:value={nome}
-							required
-							maxlength="80"
-							placeholder="Ex.: Unidade 4"
-							class="input min-h-11.5 w-full text-[14.5px]"
-						/>
-					</label>
-					<fieldset class="grid gap-1.75 border-0 p-0">
-						<legend class="mb-1.75 text-[12.5px] font-bold">Cor da etiqueta</legend>
-						<div class="flex gap-1.75">
-							{#each CORES_DE_ETIQUETA as opcao (opcao)}
-								<button
-									type="button"
-									onclick={() => (cor = opcao)}
-									aria-pressed={cor === opcao}
-									aria-label={NOME_DA_COR[opcao]}
-									title={NOME_DA_COR[opcao]}
-									class="grid size-11.5 place-items-center rounded-[11px] border-2 p-0 transition-colors {cor ===
-									opcao
-										? 'border-primary bg-base-200'
-										: 'border-line bg-base-100'}"
-								>
-									<span
-										class="grid size-8 place-items-center rounded-[8px] text-[11px] font-bold {CLASSE_DA_ETIQUETA[
-											opcao
-										]}">{sigla}</span
-									>
-								</button>
-							{/each}
-						</div>
-					</fieldset>
-					<div class="flex gap-2">
-						<button
-							type="button"
-							onclick={() => {
-								criando = false;
-								erroCriar = null;
-							}}
-							class="btn min-h-11.5 border border-line bg-transparent text-[13.5px] font-semibold text-base-content/70 hover:text-base-content"
-							>Cancelar</button
-						>
-						<button
-							type="submit"
-							disabled={salvando || !nome.trim()}
-							class="btn min-h-11.5 motion-tap gap-2 btn-primary text-[13.5px] font-bold"
-						>
-							{#if salvando}<Loading variant="fila" size={10} tone="current" label="Criando" />{/if}
-							Criar módulo
-						</button>
-					</div>
-				</div>
-				{#if erroCriar}
-					<p class="mt-2.5 text-[13px] font-semibold text-error" role="alert">{erroCriar}</p>
-				{/if}
-			</form>
 		{/if}
 
 		{#if data.modulos.length === 0}
@@ -399,16 +290,15 @@
 						Um módulo organiza a sua lista e programa os envios: toda quinta, uma por semana ou em
 						datas fixas. Não é obrigatório. As atividades continuam funcionando sozinhas.
 					</p>
-					{#if !criando}
-						<button
-							type="button"
-							onclick={abrirCriacao}
-							class="btn min-h-11.5 w-full motion-tap gap-2 btn-primary text-[14px] font-bold lg:w-auto"
-						>
-							{@render icone('M12 5v14M5 12h14', 'size-4')}
-							Criar o primeiro módulo
-						</button>
-					{/if}
+					<button
+						type="button"
+						onclick={abrirCriacao}
+						aria-haspopup="dialog"
+						class="btn min-h-11.5 w-full motion-tap gap-2 btn-primary text-[14px] font-bold lg:w-auto"
+					>
+						{@render icone('M12 5v14M5 12h14', 'size-4')}
+						Criar o primeiro módulo
+					</button>
 				</div>
 			</div>
 			<ol class="grid list-none gap-2.5 p-0 lg:grid-cols-3 lg:gap-3">
@@ -432,7 +322,7 @@
 					href={a.atividadeId
 						? resolve('/(studio)/atividades/[id]', { id: a.atividadeId })
 						: resolve('/(studio)/modulos/[id]', { id: a.moduloId }) + '?turma=' + a.alocacaoId}
-					class="mb-6.5 flex motion-tap flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-[13px] border border-error/32 bg-[color-mix(in_oklab,var(--color-error)_7%,var(--color-base-100))] px-4 py-3.25 text-base-content no-underline transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-error"
+					class="mb-6.5 flex motion-tap flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-[13px] border border-error/32 bg-[color-mix(in_oklab,var(--color-error)_7%,var(--color-base-100))] px-4 py-3.25 text-base-content no-underline transition-[transform,border-color,translate,scale] duration-200 hover:-translate-y-0.5 hover:border-error"
 				>
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 					<svg
@@ -524,15 +414,16 @@
 				</div>
 			</div>
 
-			<!-- a listagem -->
-			<div class="grid gap-3.5">
+			<!-- a listagem: dois por linha a partir do xl (pedido do dono do repositório);
+			     cada cartão é um container, e o miolo dele responde à largura DELE. -->
+			<div class="grid items-start gap-3.5 xl:grid-cols-2">
 				{#each visiveis as m (m.id)}
 					{@const P = PILULA[m.estado]}
 					<article
-						class="overflow-hidden rounded-[16px] border border-line transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-[0_20px_40px_-32px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
+						class="@container overflow-hidden rounded-[16px] border border-line transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-[0_20px_40px_-32px_color-mix(in_oklab,var(--color-primary)_60%,transparent)]"
 					>
 						<div
-							class="flex flex-wrap items-start gap-3 p-4 lg:flex-nowrap lg:gap-3.5 lg:px-5 lg:py-4.5"
+							class="flex flex-wrap items-start gap-3 p-4 @2xl:flex-nowrap @2xl:gap-3.5 @2xl:px-5 @2xl:py-4.5"
 						>
 							<span
 								class="grid size-11 flex-none place-items-center rounded-[12px] text-[14px] font-bold {CLASSE_DA_ETIQUETA[
@@ -540,65 +431,26 @@
 								]}">{m.sigla}</span
 							>
 							<div class="min-w-[200px] flex-1">
-								{#if renomeando === m.id}
-									<form
-										onsubmit={(e) => {
-											e.preventDefault();
-											if (novoNome.trim()) void renomear(m);
-										}}
-										class="flex flex-wrap items-center gap-2"
+								<div class="mb-0.75 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+									<a
+										href={resolve('/(studio)/modulos/[id]', { id: m.id })}
+										class="text-[16.5px] font-bold text-base-content no-underline hover:text-primary"
+										>{m.name}</a
 									>
-										<label class="sr-only" for="renomear-{m.id}">Novo nome de {m.name}</label>
-										<input
-											id="renomear-{m.id}"
-											bind:value={novoNome}
-											maxlength="80"
-											required
-											class="input min-h-10 min-w-0 flex-1 text-[15px] font-semibold"
-											onkeydown={(e) => e.key === 'Escape' && (renomeando = null)}
-										/>
-										<button
-											type="submit"
-											disabled={pendente !== null || !novoNome.trim()}
-											class="btn min-h-10 motion-tap gap-2 btn-primary text-[13px] font-bold"
-										>
-											{#if pendente === `renomear:${m.id}`}<Loading
-													variant="fila"
-													size={9}
-													tone="current"
-													label="Salvando"
-												/>{/if}
-											Salvar
-										</button>
-										<button
-											type="button"
-											onclick={() => (renomeando = null)}
-											class="btn min-h-10 border border-line bg-transparent text-[13px] font-semibold text-base-content/70"
-											>Cancelar</button
-										>
-									</form>
-								{:else}
-									<div class="mb-0.75 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-										<a
-											href={resolve('/(studio)/modulos/[id]', { id: m.id })}
-											class="text-[16.5px] font-bold text-base-content no-underline hover:text-primary"
-											>{m.name}</a
-										>
-										<span
-											class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap {P.classe}"
-										>
-											{@render icone(P.icone)}
-											{P.texto}
-										</span>
-									</div>
-								{/if}
+									<span
+										class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap {P.classe}"
+									>
+										{@render icone(P.icone)}
+										{P.texto}
+									</span>
+								</div>
 								{#if m.description}
 									<p class="mt-0.75 text-[13px] leading-normal text-pretty text-base-content/65">
 										{m.description}
 									</p>
 								{/if}
 							</div>
-							<div class="flex flex-[1_1_100%] gap-1.5 lg:flex-none" data-menu>
+							<div class="flex flex-[1_1_100%] gap-1.5 @2xl:flex-none" data-menu>
 								<a
 									href={resolve('/(studio)/modulos/[id]', { id: m.id })}
 									class="btn min-h-[42px] flex-1 motion-tap btn-outline text-[13px] font-bold whitespace-nowrap no-underline"
@@ -613,7 +465,7 @@
 										aria-expanded={menu === m.id}
 										aria-controls="menu-{m.id}"
 										aria-label="Mais ações de {m.name}"
-										title="Renomear, duplicar, apagar"
+										title="Editar, duplicar, apagar"
 										class="grid size-[42px] place-items-center rounded-field border border-line text-base-content/65 transition-colors hover:bg-base-200 hover:text-base-content"
 									>
 										{#if pendente === `duplicar:${m.id}`}
@@ -637,16 +489,17 @@
 											aria-label="Ações de {m.name}"
 											use:focarPrimeiro
 											onkeydown={navegarNoMenu}
-											class="absolute end-0 top-full z-30 mt-1.5 grid min-w-[200px] animate-[en-fade-up_180ms_var(--ease-out-soft)_both] gap-0.5 rounded-[12px] border border-line bg-base-100 p-1.5 shadow-[0_18px_40px_-20px_rgba(20,18,31,0.45)]"
+											class="absolute end-0 top-full z-30 mt-1.5 grid min-w-[200px] animate-entrada-curta gap-0.5 rounded-[12px] border border-line bg-base-100 p-1.5 shadow-[0_18px_40px_-20px_rgba(15,20,32,0.45)]"
 										>
 											<button
 												type="button"
 												role="menuitem"
-												onclick={() => iniciarRenomear(m)}
+												onclick={() => abrirEdicao(m)}
+												aria-haspopup="dialog"
 												class="flex min-h-10 items-center gap-2.5 rounded-[8px] px-2.5 text-start text-[13.5px] font-semibold hover:bg-base-200 focus-visible:bg-base-200"
 											>
 												{@render icone('M5 19h3l10-10-3-3L5 16z', 'size-4')}
-												Renomear
+												Editar
 											</button>
 											<button
 												type="button"
@@ -662,7 +515,6 @@
 												role="menuitem"
 												onclick={() => {
 													menu = null;
-													renomeando = null;
 													apagando = m.id;
 												}}
 												class="flex min-h-10 items-center gap-2.5 rounded-[8px] px-2.5 text-start text-[13.5px] font-semibold text-error hover:bg-error/10 focus-visible:bg-error/10"
@@ -677,18 +529,18 @@
 						</div>
 
 						{#if erroCartao?.id === m.id}
-							<p class="px-4 pb-3 text-[13px] font-semibold text-error lg:px-5" role="alert">
+							<p class="px-4 pb-3 text-[13px] font-semibold text-error @2xl:px-5" role="alert">
 								{erroCartao.texto}
 							</p>
 						{/if}
 
 						{#if apagando === m.id}
-							<div class="border-t border-line bg-base-200 px-4 py-3.5 lg:px-5">
+							<div class="border-t border-line bg-base-200 px-4 py-3.5 @2xl:px-5">
 								<p class="mb-1.5 text-[13.5px] font-bold">Apagar {m.name}?</p>
 								<p class="mb-3 max-w-[72ch] text-[13px] leading-relaxed text-base-content/65">
 									As {plural(m.sequencia.length, 'atividade continua', 'atividades continuam')} na sua
 									conta: só o agrupamento some.{m.turmas.length > 0
-										? ` Os envios que ainda não saíram são cancelados nas ${plural(m.turmas.length, 'turma', 'turmas')}.`
+										? ` As liberações que ainda não aconteceram são canceladas nas ${plural(m.turmas.length, 'turma', 'turmas')}.`
 										: ''} O que já saiu continua valendo, porque o link é da atividade.
 								</p>
 								<div class="flex flex-wrap gap-2">
@@ -717,7 +569,7 @@
 
 						<!-- a sequência -->
 						<div
-							class="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line px-4 py-3 lg:px-5"
+							class="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line px-4 py-3 @2xl:px-5"
 						>
 							<span class="flex-none text-[12.5px] text-base-content/65"
 								><strong class="font-bold text-base-content">{m.sequencia.length}</strong>
@@ -764,7 +616,7 @@
 						</div>
 
 						<!-- os próximos 7 dias deste módulo -->
-						<div class="border-t border-line px-4 py-3 lg:px-5">
+						<div class="border-t border-line px-4 py-3 @2xl:px-5">
 							<p
 								class="mb-2.5 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
 							>
@@ -784,18 +636,17 @@
 						{#if m.turmas.length > 0}
 							<div class="border-t border-line bg-base-200">
 								<div
-									class="hidden grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] gap-4 px-5 pt-2.25 text-[10.5px] font-bold tracking-[0.09em] text-base-content/65 uppercase lg:grid"
+									class="hidden grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] gap-4 px-5 pt-2.25 text-[10.5px] font-bold tracking-[0.09em] text-base-content/65 uppercase @2xl:grid"
 								>
-									<span>Turma · ritmo</span><span>Enviadas</span><span>Próximo envio</span><span
-										>Terminaram</span
-									>
+									<span>Turma · ritmo</span><span>Liberadas</span><span>Próxima liberação</span
+									><span>Terminaram</span>
 								</div>
 								{#each m.turmas as t (t.id)}
 									{@const X = PROXIMO[t.tipo]}
 									<div
-										class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 lg:mt-2.25 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] lg:gap-4 lg:border-t lg:px-5 lg:py-2.75 lg:first:border-t"
+										class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 @2xl:mt-2.25 @2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_150px_120px] @2xl:gap-4 @2xl:border-t @2xl:px-5 @2xl:py-2.75 @2xl:first:border-t"
 									>
-										<span class="col-span-2 flex min-w-0 items-center gap-2.5 lg:col-span-1">
+										<span class="col-span-2 flex min-w-0 items-center gap-2.5 @2xl:col-span-1">
 											<span
 												class="flex-none rounded-[7px] px-2 py-1 text-[11.5px] font-bold {CLASSE_DA_ETIQUETA[
 													t.cor
@@ -806,14 +657,14 @@
 												<span class="block text-[12px] text-base-content/65">{t.ritmo}</span>
 											</span>
 										</span>
-										<span class="col-start-1 grid min-w-0 gap-1.25 lg:col-start-auto">
+										<span class="col-start-1 grid min-w-0 gap-1.25 @2xl:col-start-auto">
 											<span
 												class="flex h-1.5 overflow-hidden rounded-full bg-base-300"
 												aria-hidden="true"
 											>
 												<span
-													class="origin-left animate-[en-grow-x_800ms_var(--ease-out-soft)_both] rounded-full {t.tipo ===
-														'pausa' || t.tipo === 'fim'
+													class="origin-left animate-crescer-x rounded-full {t.tipo === 'pausa' ||
+													t.tipo === 'fim'
 														? 'bg-base-content/45'
 														: 'bg-primary'}"
 													style="width: {t.total > 0
@@ -822,24 +673,24 @@
 												></span>
 											</span>
 											<span class="font-mono text-[12px] text-base-content/65"
-												>{t.enviadas} de {t.total}<span class="sr-only"> enviadas</span></span
+												>{t.enviadas} de {t.total}<span class="sr-only"> liberadas</span></span
 											>
 										</span>
 										<span
-											class="col-span-2 flex min-w-0 items-center gap-1.5 text-[12.5px] lg:col-span-1 {X.classe}"
+											class="col-span-2 flex min-w-0 items-center gap-1.5 text-[12.5px] @2xl:col-span-1 {X.classe}"
 										>
 											{@render icone(X.icone, 'size-[13px]')}
 											<span class="min-w-0">{t.prox}</span>
 										</span>
 										<span
-											class="col-start-2 row-start-2 text-end text-[12.5px] text-base-content/65 lg:col-start-auto lg:row-start-auto lg:text-start"
+											class="col-start-2 row-start-2 text-end text-[12.5px] text-base-content/65 @2xl:col-start-auto @2xl:row-start-auto @2xl:text-start"
 										>
 											{#if t.terminaram}
 												<strong class="font-mono text-[13px] font-medium text-base-content"
 													>{t.terminaram}</strong
 												> na última
 											{:else}
-												<span aria-label="ainda sem envio">—</span>
+												<span aria-label="nada liberado ainda">—</span>
 											{/if}
 										</span>
 									</div>
@@ -847,7 +698,7 @@
 							</div>
 						{:else}
 							<div
-								class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-t border-line bg-base-200 px-4 py-3 lg:px-5"
+								class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-t border-line bg-base-200 px-4 py-3 @2xl:px-5"
 							>
 								<span class="min-w-[200px] flex-1 text-[13px] text-base-content/65"
 									>Nenhuma turma recebe este módulo ainda. As atividades no ar já funcionam soltas.</span
@@ -873,3 +724,11 @@
 		{/if}
 	</div>
 </div>
+
+<ModuloBandeja
+	aberta={bandejaAberta}
+	onfechar={() => (bandejaAberta = false)}
+	modulo={emEdicao}
+	atividades={data.atividades}
+	onsalvo={() => invalidateAll()}
+/>

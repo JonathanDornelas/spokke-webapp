@@ -9,6 +9,7 @@ import { rotuloDoItem } from '$lib/server/player/rotulo';
 import { gradingSchema, interactionSchema, promptSchema } from '$lib/kernel/item';
 import { duracao, haQuantoTempo, ordinal } from '$lib/tempo';
 import { mapasDoAluno } from '$lib/server/db/repos/mapa-aluno';
+import { googleLigado } from '$lib/server/auth/google';
 
 /**
  * A área do aluno: o histórico dele, como ele vem indo, e as turmas de que faz
@@ -28,8 +29,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.aluno) redirect(303, '/entrar?como=aluno&voltar=/aluno');
 	const conta = contaAluno({ id: locals.aluno.id });
 
-	const anonId = cookies.get('entendo_anon');
-	const [fichas, historico, soltas, mapas] = await Promise.all([
+	const anonId = cookies.get('spokke_anon');
+	const [fichas, historico, soltas, mapas, formasDeEntrar] = await Promise.all([
 		conta.fichas(),
 		conta.historico(),
 		// O convite de adotar só existe quando há algo solto NESTE aparelho —
@@ -37,7 +38,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 		anonId ? tentativasSoltas(anonId) : Promise.resolve(0),
 		// Os módulos das turmas desta conta — o bloco "Seus módulos"
 		// (docs/telas-modulos-aluno.md 1). Só existe para quem tem ficha ligada.
-		mapasDoAluno({ id: locals.aluno.id }).todos()
+		mapasDoAluno({ id: locals.aluno.id }).todos(),
+		conta.formasDeEntrar()
 	]);
 
 	// Qual tentativa é cada uma, POR ATIVIDADE. `historico` vem em ordem
@@ -199,6 +201,8 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			email: locals.aluno.email,
 			avatar: locals.aluno.avatar ?? null
 		},
+		/** Como a conta entra, e se o login com o Google está ligado no servidor. */
+		login: { googleDisponivel: googleLigado(), ...formasDeEntrar },
 		classrooms: fichas.map((ficha) => ({
 			id: ficha.id,
 			classroom: ficha.classroom.name,

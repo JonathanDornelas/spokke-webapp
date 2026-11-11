@@ -1,211 +1,332 @@
 <script lang="ts">
-	// Editor de item — Nível 3 (kernel.md). O gabarito fica numa moldura âmbar
-	// com cadeado porque ele nunca entra no payload do aluno (regra inviolável
-	// 1); a prévia ao lado renderiza o resultado de toRuntime() — se o gabarito
-	// aparecesse nela, estaria vazando de verdade. `+page@.svelte` reseta para o
-	// layout raiz.
+	// Editor de questão — nível 3 (kernel.md). `+page@.svelte` reseta para o
+	// layout raiz: é tarefa única, como o wizard.
 	//
-	// O formulário ainda não é DERIVADO campo a campo do authoringSchema de
-	// toda interação: `item.editavel` diz se este item tem gabarito em forma de
-	// lista de textos (`type` e `cloze`). Nas outras, enunciado, prompt e modo
-	// de correção são editáveis e o gabarito segue como o gerador montou — em
-	// vez de a tela inteira virar decoração.
+	// A tela pergunta na ordem em que a questão é lida pelo aluno: o que ele
+	// FAZ, o enunciado, o que ele VÊ (ou ouve), e só então o que é certo — o
+	// gabarito, numa moldura âmbar com cadeado, porque ele nunca vai para o
+	// browser do aluno (regra inviolável 1). Por último, como é corrigida.
+	//
+	// **O que dá para mudar é decidido em `$lib/atividades/editor-item.ts`**, o
+	// mesmo módulo que o servidor usa para aceitar ou recusar: a tela não
+	// oferece o que o servidor recusaria. Antes havia seis tipos de questão
+	// "clicáveis" que falhavam sempre ao salvar, um seletor de prompt que
+	// deixava escolher "Imagem" sem haver imagem, e seis modos de correção dos
+	// quais só um mudava a nota.
+	//
+	// **A prévia é a de verdade**: `previaDoItem` monta a questão com o que está
+	// no formulário e passa pelo mesmo `buildRuntimeItem` do Player, e quem
+	// desenha são os componentes do Player (`PreviaDaQuestao`).
 	import { untrack } from 'svelte';
+	import { beforeNavigate, goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
-	import { withMock } from '$lib/dev/with-mock';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
+	import Alternador from '$lib/components/Alternador.svelte';
 	import Loading from '$lib/components/Loading.svelte';
-	import { salvarItem } from '../../../atividades.remote';
+	import PreviaDaQuestao from '$lib/components/PreviaDaQuestao.svelte';
+	import {
+		chaveDoEnunciado,
+		comoECorrigida,
+		DETALHE_DO_MODO,
+		modoInicial,
+		modosDeCorrecao,
+		podeAlternar,
+		ROTULO_DA_INTERACAO,
+		textoEditavel
+	} from '$lib/atividades/editor-item';
 	import type { GradingMode, InteractionKind } from '$lib/kernel/interactions/types';
+	import { descartarItem, previaDoItem, salvarItem } from '../../../atividades.remote';
+	import type { PageProps } from './$types';
 
-	type PromptKind = 'text' | 'audio' | 'image' | 'composite';
-	interface PageData {
-		activity: { id: string; dir: 'ltr' | 'rtl' };
-		itemCount: number;
-		suggestion?: string;
-		prevId: string | null;
-		nextId: string | null;
-		normalizacao: { acentos: boolean; caixa: boolean; pontuacao: boolean };
-		item: {
-			index: number;
-			id: string;
-			editavel: boolean;
-			prompt: string;
-			promptKind: PromptKind;
-			instructionKey: string;
-			target: string;
-			masked: string;
-			answer: string;
-			variants: string[];
-			interaction: InteractionKind;
-			gradingMode: GradingMode;
-			grading: string;
-			skill: string;
+	let { data }: PageProps = $props();
+
+	// ── o formulário ── Os campos são reiniciados sempre que o dado do servidor
+	// muda: "Próxima questão" é a MESMA rota (sem isto o formulário da anterior
+	// sobrevivia à navegação), e salvar recarrega o loader com o que foi gravado.
+	const padraoDe = (chave: string | null | undefined) => (chave ? (data.padroes[chave] ?? '') : '');
+	/** O retrato do que está gravado — é contra ele que "há mudanças" é medido. */
+	function gravado() {
+		const item = data.item;
+		return {
+			interaction: item.interaction,
+			gradingMode: modoInicial(item.interaction, item.gradingMode),
+			instruction: item.instruction || padraoDe(item.instructionKey),
+			texto: item.texto,
+			masked: item.masked,
+			answer: item.answer,
+			variants: [...item.variants]
 		};
 	}
-
-	const MOCK: PageData = {
-		activity: { id: page.params.id ?? 'atv_01', dir: 'ltr' as const },
-		itemCount: 24,
-		suggestion: "she's been working",
-		prevId: null,
-		nextId: null,
-		normalizacao: { acentos: false, caixa: true, pontuacao: true },
-		item: {
-			index: 4,
-			id: page.params.itemId ?? 'itm_04',
-			editavel: true,
-			prompt: 'Complete a frase',
-			promptKind: 'text' as PromptKind,
-			instructionKey: 'fill-the-blank',
-			target: 'She has been working here since 2019.',
-			masked: 'She ___ ___ working here since 2019.',
-			answer: 'has been',
-			variants: ['has been', "she's been"],
-			interaction: 'type' as InteractionKind,
-			gradingMode: 'tolerant' as GradingMode,
-			grading: 'tolerante',
-			skill: 'Writing'
-		}
-	};
-
-	let { data: dataProp }: { data?: Partial<PageData> } = $props();
-	const data = $derived(withMock(dataProp, MOCK));
-
-	const interactions: InteractionKind[] = [
-		'type',
-		'choice',
-		'assemble',
-		'cloze',
-		'match',
-		'order',
-		'select',
-		'speak'
-	];
-	const gradings: { mode: GradingMode; label: string }[] = [
-		{ mode: 'exact', label: 'exata' },
-		{ mode: 'tolerant', label: 'tolerante' },
-		{ mode: 'sequence', label: 'sequência' },
-		{ mode: 'set', label: 'conjunto' },
-		{ mode: 'asr', label: 'ASR' },
-		{ mode: 'rubric', label: 'rubrica' }
-	];
-	const promptKinds: { id: PromptKind; label: string }[] = [
-		{ id: 'text', label: 'Texto' },
-		{ id: 'audio', label: 'Áudio' },
-		{ id: 'image', label: 'Imagem' },
-		{ id: 'composite', label: 'Composto' }
-	];
-
-	// Os campos nascem do dado real (não do mock) para o SSR já sair certo, e
-	// são reiniciados quando o item muda: "Próximo item" é a MESMA rota, então
-	// sem isso o formulário do item anterior sobrevive à navegação — o mesmo
-	// bug que o Player já teve com as questões.
-	// `untrack`: a leitura inicial é deliberadamente NÃO reativa — quem
-	// reaproveita o dado quando o item muda é o efeito abaixo, e sem isto o
-	// Svelte avisa que só o primeiro valor seria capturado.
-	const inicial = untrack(() => data.item);
+	// Nascem PREENCHIDOS (senão a primeira prévia saía de um formulário vazio);
+	// o efeito abaixo é quem os acompanha quando o dado muda.
+	const inicial = untrack(gravado);
 	let interaction = $state<InteractionKind>(inicial.interaction);
 	let gradingMode = $state<GradingMode>(inicial.gradingMode);
-	let instruction = $state(inicial.prompt);
-	let promptKind = $state<PromptKind>(inicial.promptKind);
-	let target = $state(inicial.target);
+	let instruction = $state(inicial.instruction);
+	let texto = $state(inicial.texto);
 	let masked = $state(inicial.masked);
 	let answer = $state(inicial.answer);
-	let variants = $state<string[]>([...inicial.variants]);
+	let variants = $state<string[]>(inicial.variants);
 	let novaVariante = $state('');
-	let sugestaoIgnorada = $state(false);
 
-	/**
-	 * As interações cujo gabarito este formulário sabe MONTAR — as mesmas que o
-	 * loader marca como `editavel`.
-	 *
-	 * Os outros seis chips ficavam clicáveis e a troca falhava sempre no
-	 * servidor, com "os campos deste tipo não estão completos": o payload
-	 * enviado continuava sendo `{ accepted }`, que é a forma de `type`, e
-	 * nenhum outro `authoringSchema` aceita isso. Desabilitar é dizer a
-	 * verdade — trocar a interação depende do formulário derivado do
-	 * `authoringSchema`, que continua pendente (kernel.md "Nível 3").
-	 */
-	const MONTAVEIS: InteractionKind[] = ['type', 'cloze'];
-	const podeVirar = (i: InteractionKind) =>
-		data.item.editavel ? MONTAVEIS.includes(i) : i === data.item.interaction;
-
-	/** O que ainda falta para o item poder ser salvo — em texto, não em silêncio. */
-	const impedimento = $derived.by(() => {
-		if (!data.item.editavel) return '';
-		if (answer.trim().length === 0) return 'Preencha a resposta esperada.';
-		if (interaction === 'cloze') {
-			if (masked.trim().length === 0) return 'Escreva a frase com a lacuna.';
-			// `clozeAuthoringSchema` exige a máscara, e um payload que não valida
-			// só rebentaria em `toRuntime()` — ou seja, na tela do aluno.
-			if (!/_{2,}/.test(masked)) return 'Marque a lacuna na frase com ___ (três sublinhados).';
-		}
-		return '';
-	});
-
-	/** Em qual item o último "Item salvo" aconteceu — ver o efeito abaixo. */
-	let salvoEm = $state<string | null>(null);
-
-	let itemCarregado = inicial.id;
-	$effect(() => {
-		const item = data.item;
-		if (item.id === itemCarregado) return;
-		itemCarregado = item.id;
-		salvoEm = null;
-		interaction = item.interaction;
-		gradingMode = item.gradingMode;
-		instruction = item.prompt;
-		promptKind = item.promptKind;
-		target = item.target;
-		masked = item.masked;
-		answer = item.answer;
-		variants = [...item.variants];
-		novaVariante = '';
-		sugestaoIgnorada = false;
-	});
-
-	// O gabarito no formato que o authoringSchema da interação espera. Só as
-	// interações de texto entram aqui; nas outras o campo não é enviado e o
-	// servidor mantém o payload atual.
-	const payload = $derived.by(() => {
-		if (!data.item.editavel) return '';
-		const aceitas = [answer, ...variants].map((v) => v.trim()).filter(Boolean);
-		const unicas = [...new Set(aceitas)];
-		return JSON.stringify(
-			interaction === 'cloze' ? { masked, accepted: unicas } : { accepted: unicas }
-		);
-	});
-
-	const gradingLabel = $derived(
-		gradings.find((g) => g.mode === gradingMode)?.label ?? data.item.grading
+	/** A chave do enunciado padrão do tipo ESCOLHIDO (`chaveDoEnunciado`). */
+	const chaveAtual = $derived(
+		chaveDoEnunciado(
+			{
+				interacao: data.item.interaction,
+				chave: data.item.instructionKey ?? undefined,
+				prompt: data.item.promptKind
+			},
+			interaction
+		)
 	);
-	const podeSalvar = $derived(impedimento === '');
+	const padrao = $derived(padraoDe(chaveAtual));
+	$effect(() => {
+		const g = gravado();
+		interaction = g.interaction;
+		gradingMode = g.gradingMode;
+		instruction = g.instruction;
+		texto = g.texto;
+		masked = g.masked;
+		answer = g.answer;
+		variants = g.variants;
+		novaVariante = '';
+	});
 
-	function trocarInteracao(i: InteractionKind) {
-		if (!podeVirar(i)) return;
-		interaction = i;
-		// `cloze` é `type` com a frase mascarada: vindo de `type` a máscara está
-		// vazia, e sem esta semente o professor via um campo em branco sem saber
-		// o que ele espera.
-		if (i === 'cloze' && masked.trim().length === 0) {
-			masked = target.trim() ? target.replace(answer.trim() || target, '___') : '';
-			if (!/_{2,}/.test(masked)) masked = target ? `${target} ___` : '___';
+	const retrato = (x: ReturnType<typeof gravado>) => JSON.stringify(x);
+	const alterado = $derived(
+		retrato({ interaction, gradingMode, instruction, texto, masked, answer, variants }) !==
+			retrato(gravado())
+	);
+
+	// ── o que dá para mudar ──
+	const alterna = $derived(podeAlternar(data.item.interaction, data.item.lingua));
+	const editaTexto = $derived(textoEditavel(interaction, data.item.promptKind));
+	const modos = $derived(modosDeCorrecao(interaction, data.item.gradingMode));
+	const audio = $derived(data.item.promptKind === 'audio');
+
+	function trocarInteracao(nova: InteractionKind) {
+		const anterior = interaction;
+		// O enunciado que era o PADRÃO acompanha o tipo; o escrito pelo professor fica.
+		const eraPadrao = instruction.trim() === padrao;
+		interaction = nova;
+		if (eraPadrao)
+			instruction = padraoDe(
+				chaveDoEnunciado(
+					{
+						interacao: data.item.interaction,
+						chave: data.item.instructionKey ?? undefined,
+						prompt: data.item.promptKind
+					},
+					nova
+				)
+			);
+		// Lacuna → digitar: o aluno passa a escrever a frase INTEIRA, então a
+		// resposta (e cada variante) é a frase com o buraco preenchido — ficar só
+		// com a palavra da lacuna reprovaria quem escrevesse a frase certa.
+		if (anterior === 'cloze' && nova === 'type' && /_{2,}/.test(masked) && answer.trim()) {
+			const encher = (palavra: string) => masked.replace(/_{2,}/, palavra.trim());
+			variants = variants.map(encher);
+			answer = encher(answer);
 		}
-		// A correção acompanha: gabarito em lista de textos é sempre tolerante ou
-		// exata, e `sequence`/`set`/`asr` não sabem ler esse payload.
-		if (gradingMode !== 'exact' && gradingMode !== 'tolerant' && gradingMode !== 'rubric') {
-			gradingMode = 'tolerant';
+		// Digitar → lacuna: a frase nasce inteira, e o professor seleciona a
+		// palavra que vira o buraco ("Lacuna na seleção").
+		if (nova === 'cloze' && !masked.trim()) masked = answer.trim();
+		if (!modosDeCorrecao(nova, data.item.gradingMode).includes(gradingMode)) {
+			gradingMode = modosDeCorrecao(nova, data.item.gradingMode)[0];
 		}
+	}
+
+	// ── a lacuna pela SELEÇÃO ── Escrever ___ na frase e a palavra no gabarito
+	// são duas edições que precisam bater; selecionar a palavra faz as duas.
+	let campoLacuna = $state<HTMLInputElement | null>(null);
+	let temSelecao = $state(false);
+	function acompanharSelecao() {
+		const el = campoLacuna;
+		temSelecao = !!el && (el.selectionEnd ?? 0) > (el.selectionStart ?? 0);
+	}
+	function lacunaNaSelecao() {
+		const el = campoLacuna;
+		if (!el) return;
+		let frase = masked;
+		let ini = el.selectionStart ?? 0;
+		let fim = el.selectionEnd ?? 0;
+		// Já havia uma lacuna: a palavra dela volta para a frase antes de abrir a
+		// nova (uma lacuna por questão), e a seleção depois dela anda junto.
+		const atual = /_{2,}/.exec(frase);
+		if (atual && answer.trim()) {
+			const depoisDaAtual = atual.index + atual[0].length;
+			if (fim > atual.index && ini < depoisDaAtual) return;
+			if (ini >= depoisDaAtual) {
+				const delta = answer.trim().length - atual[0].length;
+				ini += delta;
+				fim += delta;
+			}
+			frase = frase.slice(0, atual.index) + answer.trim() + frase.slice(depoisDaAtual);
+		}
+		const trecho = frase.slice(ini, fim);
+		const palavra = trecho.trim();
+		if (!palavra) return;
+		const antes = trecho.length - trecho.trimStart().length;
+		const depois = trecho.length - trecho.trimEnd().length;
+		masked = frase.slice(0, ini + antes) + '___' + frase.slice(fim - depois);
+		answer = palavra;
+		variants = [];
+		temSelecao = false;
 	}
 
 	function adicionarVariante() {
 		const v = novaVariante.trim();
-		if (!v || variants.includes(v)) return;
+		if (!v || v === answer.trim() || variants.includes(v)) {
+			novaVariante = '';
+			return;
+		}
 		variants = [...variants, v];
 		novaVariante = '';
 	}
+
+	// O gabarito no formato do `authoringSchema` do tipo, nos tipos que o editor
+	// monta; nos outros o campo não vai e o servidor mantém o que o gerador fez.
+	const payload = $derived.by(() => {
+		if (!data.item.gabaritoEditavel) return undefined;
+		const aceitas = [...new Set([answer, ...variants].map((v) => v.trim()).filter(Boolean))];
+		return JSON.stringify(
+			interaction === 'cloze' ? { masked, accepted: aceitas } : { accepted: aceitas }
+		);
+	});
+
+	/** O que ainda falta para salvar — em texto, não num botão cinza sem motivo. */
+	const impedimento = $derived.by(() => {
+		if (!instruction.trim() && !padrao)
+			return 'Escreva o enunciado: este tipo de questão não tem um padrão.';
+		if (audio && editaTexto && !texto.trim()) return 'Escreva o que o aluno vai ouvir.';
+		if (data.item.texto && editaTexto && !texto.trim()) return 'Escreva o texto que o aluno lê.';
+		if (!data.item.gabaritoEditavel) return '';
+		if (interaction === 'cloze' && !/_{2,}/.test(masked)) {
+			return 'Marque a lacuna na frase com ___ (três sublinhados).';
+		}
+		if (!answer.trim()) return 'Preencha a resposta esperada.';
+		return '';
+	});
+
+	/** No áudio de "digitar", o que o aluno ouve É o que ele tem de escrever. */
+	const desencontro = $derived(
+		audio &&
+			interaction === 'type' &&
+			data.item.lingua === 'target' &&
+			texto.trim() !== '' &&
+			answer.trim() !== '' &&
+			texto.trim().toLocaleLowerCase() !== answer.trim().toLocaleLowerCase()
+	);
+
+	// ── salvar ──
+	let formulario = $state<HTMLFormElement | null>(null);
+	let salvando = $state(false);
+	let salvoAgora = $state(false);
+	let erroAoSalvar = $state<string | null>(null);
+	/** Para onde ir depois de salvar, quando a saída foi barrada por mudanças. */
+	let destino = $state<URL | null>(null);
+	let liberado = false;
+
+	const enviar = salvarItem.enhance(async ({ submit }) => {
+		salvando = true;
+		erroAoSalvar = null;
+		try {
+			await submit();
+			const r = salvarItem.result;
+			if (r?.ok) {
+				salvoAgora = true;
+				if (destino) {
+					const ir = destino;
+					destino = null;
+					liberado = true;
+					// O destino é a URL da navegação que o guarda barrou — já resolvida.
+					// eslint-disable-next-line svelte/no-navigation-without-resolve
+					await goto(ir);
+				}
+			} else {
+				erroAoSalvar = r?.error ?? 'Não deu para salvar agora.';
+			}
+		} catch {
+			erroAoSalvar = 'Não deu para salvar agora. Tente de novo em instantes.';
+		} finally {
+			salvando = false;
+		}
+	});
+
+	// "Salvo" é do salvamento de AGORA: mexer de novo ou trocar de questão apaga.
+	$effect(() => {
+		if (alterado) salvoAgora = false;
+	});
+	// Pelo ID, num derived: salvar recarrega `data` inteiro (mesma questão), e
+	// preso ao objeto este efeito apagava o "Salvo" no instante em que aparecia.
+	const idDaQuestao = $derived(data.item.id);
+	$effect(() => {
+		void idDaQuestao;
+		salvoAgora = false;
+		erroAoSalvar = null;
+		destino = null;
+		liberado = false;
+	});
+
+	// **Sair com mudanças não some com elas em silêncio.** "Próxima questão" é um
+	// link: antes, o que estava digitado se perdia sem aviso.
+	beforeNavigate((nav) => {
+		if (!alterado || liberado) return;
+		nav.cancel();
+		if (nav.type !== 'leave' && nav.to) destino = nav.to.url;
+	});
+	function descartarESair() {
+		const ir = destino;
+		destino = null;
+		liberado = true;
+		// O destino é a URL da navegação que o guarda barrou — já resolvida.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		if (ir) void goto(ir);
+	}
+	function salvarESair() {
+		formulario?.requestSubmit();
+	}
+
+	// ── questão descartada ──
+	let restaurando = $state(false);
+	async function restaurar() {
+		restaurando = true;
+		try {
+			await descartarItem({
+				activityId: data.activity.id,
+				itemId: data.item.id,
+				descartado: false
+			});
+			await invalidateAll();
+		} finally {
+			restaurando = false;
+		}
+	}
+
+	// ── a prévia ── Pedida depois de uma pausa na digitação, e a anterior fica
+	// na tela enquanto a nova não chega — senão o celular piscava a cada letra.
+	const pedido = $derived({
+		activityId: data.activity.id,
+		itemId: data.item.id,
+		interaction,
+		payload,
+		promptText: texto,
+		instruction,
+		gradingMode
+	});
+	let pedidoDaPrevia = $state.raw(untrack(() => pedido));
+	$effect(() => {
+		const p = pedido;
+		const t = setTimeout(() => (pedidoDaPrevia = p), 350);
+		return () => clearTimeout(t);
+	});
+	const consulta = $derived(previaDoItem(pedidoDaPrevia));
+	type Previa = Awaited<ReturnType<typeof previaDoItem>>;
+	let previa = $state.raw<Previa | null>(null);
+	$effect(() => {
+		if (consulta.ready) previa = consulta.current;
+	});
 
 	function href(itemId: string) {
 		return resolve('/(studio)/atividades/[id]/itens/[itemId]', {
@@ -214,437 +335,498 @@
 		});
 	}
 
-	// Salvar vai ao servidor (valida o payload contra o `authoringSchema`), e o
-	// resultado aparece na barra do topo. Sem este estado o botão ficava parado
-	// e o professor clicava duas vezes achando que não tinha pegado.
-	let salvando = $state(false);
-	const salvar = $derived(
-		salvarItem.enhance(async ({ submit }) => {
-			salvando = true;
-			try {
-				await submit();
-				if (salvarItem.result?.ok) salvoEm = data.item.id;
-			} finally {
-				salvando = false;
-			}
-		})
+	const naoAceitaVariacao = $derived(
+		[
+			data.resposta.ignoraCaixa ? 'maiúscula' : '',
+			data.resposta.ignoraPontuacao ? 'pontuação' : '',
+			data.resposta.ignoraAcento ? 'acento' : ''
+		].filter(Boolean)
 	);
-
-	const flags = $derived([
-		{ label: 'Ignorar acentos', on: data.normalizacao.acentos },
-		{ label: 'Ignorar caixa', on: data.normalizacao.caixa },
-		{ label: 'Ignorar pontuação', on: data.normalizacao.pontuacao }
-	]);
+	/** "Inglês (EUA)" no meio da frase: só a primeira letra baixa — a sigla fica. */
+	const noMeio = (rotulo: string) => rotulo.charAt(0).toLocaleLowerCase('pt-BR') + rotulo.slice(1);
+	const juntar = (partes: string[]) =>
+		partes.length <= 1
+			? (partes[0] ?? '')
+			: `${partes.slice(0, -1).join(', ')} nem de ${partes.at(-1)}`;
 </script>
 
-<svelte:head><title>Item {data.item.index} — entendo</title></svelte:head>
+<svelte:head><title>Questão {data.item.index} · {data.activity.title} · Spokke</title></svelte:head>
 
-<div class="min-h-screen bg-base-200 py-8">
+{#snippet icone(d: string, classe = 'size-4')}
+	<svg class="{classe} flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+		><path
+			{d}
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		/></svg
+	>
+{/snippet}
+
+<div class="min-h-screen bg-base-200 py-6 lg:py-8">
 	<div class="mx-auto max-w-[1180px] overflow-hidden rounded-box border border-line bg-base-100">
+		<!-- a barra: de onde veio, onde está, e as setas -->
 		<div
-			class="flex flex-wrap items-center gap-3.5 border-b border-line bg-base-200 px-[26px] py-3.5"
+			class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-line bg-base-200 px-5 py-3.5 lg:px-[26px]"
 		>
 			<a
 				href={resolve('/(studio)/atividades/[id]/revisar', { id: data.activity.id })}
 				class="flex items-center gap-2 py-2 text-[13.5px] font-semibold text-base-content/65 no-underline transition-transform hover:-translate-x-0.5"
 			>
-				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-					<path
-						d="M15 5l-7 7 7 7"
-						stroke="currentColor"
-						stroke-width="2.2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				Revisar itens
+				{@render icone('M15 5l-7 7 7 7')}
+				Revisão
 			</a>
-			<span class="font-display text-[17px] font-semibold"
-				>Item {data.item.index} de {data.itemCount}</span
+			<span class="font-display text-[20px] font-semibold"
+				>Questão {data.item.index} de {data.itemCount}</span
 			>
-			<span
-				class="rounded-full border border-line px-2.5 py-1 text-xs font-bold whitespace-nowrap text-base-content/65"
-			>
-				rascunho
-			</span>
-			<div class="flex-1"></div>
-			{#if salvarItem.result?.ok && salvoEm === data.item.id}
-				<span class="text-[12.5px] font-semibold text-success">Item salvo</span>
-			{:else if salvarItem.result && !salvarItem.result.ok}
-				<span class="text-[12.5px] font-semibold text-error">{salvarItem.result.error}</span>
+			{#if alterado}
+				<span
+					class="flex items-center gap-1.5 text-[12.5px] font-semibold text-base-content/70"
+					role="status"
+				>
+					<span class="size-2 rounded-full bg-primary" aria-hidden="true"></span>
+					mudanças não salvas
+				</span>
+			{:else if salvoAgora}
+				<span
+					class="flex items-center gap-1.5 text-[12.5px] font-semibold text-primary"
+					role="status"
+				>
+					{@render icone('M5 12.5l4.5 4.5L19 7', 'size-3.5')}
+					Salvo
+				</span>
 			{/if}
-			<!-- Ponta da lista mantém o botão visível e desabilitado: escondê-lo
-			     faria a barra mudar de largura de um item para o outro. -->
+			<div class="flex-1"></div>
+			<!-- Na ponta da lista o botão fica visível e desabilitado: escondê-lo
+			     faria a barra mudar de largura de uma questão para a outra. -->
 			{#if data.prevId}
 				<a
 					href={href(data.prevId)}
-					class="btn btn-sm motion-tap btn-neutral font-semibold no-underline">Item anterior</a
+					class="btn btn-sm motion-tap btn-neutral font-semibold no-underline">Anterior</a
 				>
 			{:else}
-				<span class="btn-disabled btn btn-sm btn-neutral font-semibold">Item anterior</span>
+				<span class="btn-disabled btn btn-sm btn-neutral font-semibold">Anterior</span>
 			{/if}
 			{#if data.nextId}
 				<a href={href(data.nextId)} class="btn btn-sm motion-tap btn-primary font-bold no-underline"
-					>Próximo item</a
+					>Próxima</a
 				>
 			{:else}
-				<span class="btn-disabled btn btn-sm btn-primary font-bold">Próximo item</span>
+				<span class="btn-disabled btn btn-sm btn-primary font-bold">Próxima</span>
 			{/if}
 		</div>
 
+		{#if destino}
+			<!-- A saída foi barrada: as mudanças não somem sem o professor dizer. -->
+			<div
+				class="flex flex-wrap items-center gap-x-3 gap-y-2.5 border-b border-line bg-base-100 px-5 py-3 lg:px-[26px]"
+				role="alert"
+			>
+				<p class="min-w-[14rem] flex-1 text-[13.5px] font-semibold">
+					Esta questão tem mudanças que ainda não foram salvas.
+				</p>
+				<button
+					type="button"
+					onclick={() => (destino = null)}
+					class="btn btn-sm motion-tap btn-plain">Continuar editando</button
+				>
+				<button
+					type="button"
+					onclick={descartarESair}
+					class="btn btn-sm motion-tap btn-outline-error font-semibold">Descartar e sair</button
+				>
+				<button
+					type="button"
+					onclick={salvarESair}
+					disabled={!!impedimento || salvando}
+					class="btn btn-sm motion-tap btn-primary font-bold">Salvar e sair</button
+				>
+			</div>
+		{/if}
+
+		{#if data.item.descartado}
+			<div
+				class="flex flex-wrap items-center gap-x-3 gap-y-2.5 border-b border-line bg-base-100 px-5 py-3 lg:px-[26px]"
+			>
+				<p class="min-w-[14rem] flex-1 text-[13.5px]">
+					<strong class="font-semibold">Esta questão está descartada</strong> — ela não vai para o aluno.
+					Dá para editar e restaurar.
+				</p>
+				<button
+					type="button"
+					onclick={restaurar}
+					disabled={restaurando}
+					class="btn btn-sm motion-tap gap-2 btn-outline font-bold"
+				>
+					{#if restaurando}<Loading
+							variant="fila"
+							size={9}
+							tone="current"
+							label="Restaurando"
+						/>{/if}
+					Restaurar
+				</button>
+			</div>
+		{/if}
+
 		<div class="grid lg:grid-cols-[minmax(0,1fr)_420px]">
-			<form {...salvar} class="min-w-0 p-8">
+			<form bind:this={formulario} {...enviar} class="grid min-w-0 content-start gap-8 p-5 lg:p-8">
 				<input type="hidden" name="activityId" value={data.activity.id} />
 				<input type="hidden" name="itemId" value={data.item.id} />
 				<input type="hidden" name="interaction" value={interaction} />
 				<input type="hidden" name="gradingMode" value={gradingMode} />
-				<input type="hidden" name="instructionKey" value={data.item.instructionKey} />
-				{#if data.item.editavel}
-					<input type="hidden" name="payload" value={payload} />
-				{/if}
+				{#if payload !== undefined}<input type="hidden" name="payload" value={payload} />{/if}
 
-				<div class="mb-4">
-					<span class="mb-1.5 block text-[13px] font-semibold">Interação</span>
-					<div class="flex flex-wrap gap-1.5">
-						{#each interactions as i (i)}
-							<button
-								type="button"
-								onclick={() => trocarInteracao(i)}
-								disabled={!podeVirar(i)}
-								title={podeVirar(i)
-									? undefined
-									: 'Trocar para esta interação depende do formulário derivado do schema de autoria dela, que ainda não existe.'}
-								class="rounded-full px-3.5 py-[7px] text-[13px] transition-[border-color,transform] duration-150 enabled:hover:-translate-y-0.5 disabled:opacity-45
-								       {interaction === i
-									? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
-									: 'border border-line bg-base-200 font-semibold text-base-content/65'}"
-							>
-								{i}
-							</button>
-						{/each}
-					</div>
-					<span class="mt-2 block text-[12.5px] text-base-content/65">
-						{#if data.item.editavel}
-							Dá para alternar entre <strong class="font-semibold">type</strong> e
-							<strong class="font-semibold">cloze</strong>: as duas guardam o gabarito como lista de
-							textos, que é o que este formulário sabe montar. As outras precisam do formulário
-							derivado do schema de autoria delas, ainda não construído.
-						{:else}
-							O gabarito de <strong class="font-semibold">{data.item.interaction}</strong> ainda não tem
-							formulário próprio. Enunciado, prompt e correção são editáveis; o gabarito segue como foi
-							gerado.
-						{/if}
-					</span>
-				</div>
-
-				<div class="mb-[22px] grid gap-3.5">
-					<label class="block">
-						<span class="mb-1.5 block text-[13px] font-semibold">Enunciado</span>
-						<input
-							name="instruction"
-							bind:value={instruction}
-							class="input h-auto w-full py-2.5 text-[14.5px]"
+				<!-- 1. o que o aluno faz -->
+				<section class="grid gap-3" aria-labelledby="titulo-faz">
+					<h2 id="titulo-faz" class="text-[15px] font-bold">O que o aluno faz</h2>
+					{#if alterna}
+						<Alternador
+							opcoes={[
+								{ id: 'type' as const, label: ROTULO_DA_INTERACAO.type },
+								{ id: 'cloze' as const, label: ROTULO_DA_INTERACAO.cloze }
+							]}
+							valor={interaction === 'cloze' ? 'cloze' : 'type'}
+							onmudar={trocarInteracao}
+							rotulo="O que o aluno faz"
+							largura="cheia"
 						/>
-					</label>
-					<div class="grid gap-3 sm:grid-cols-[1fr_160px]">
-						<label class="block">
-							<span class="mb-1.5 block text-[13px] font-semibold">Frase alvo</span>
-							<input
-								name="promptText"
-								bind:value={target}
-								dir={data.activity.dir}
-								class="input h-auto w-full py-2.5 font-content text-[15px]"
-							/>
-						</label>
-						<label class="block">
-							<span class="mb-1.5 block text-[13px] font-semibold">Prompt</span>
-							<select
-								name="promptKind"
-								bind:value={promptKind}
-								class="select h-auto w-full py-2.5 text-[14.5px]"
-							>
-								{#each promptKinds as p (p.id)}
-									<option value={p.id}>{p.label}</option>
-								{/each}
-							</select>
-						</label>
-					</div>
-					{#if promptKind === 'audio'}
 						<p class="text-[12.5px] leading-snug text-base-content/65">
-							Em prompt de áudio a frase alvo é o que o TTS sintetiza — ou seja, é gabarito. Ela
-							nunca vai para a tela do aluno; ele só ouve.
+							{interaction === 'cloze'
+								? 'O aluno vê a frase com um buraco e escreve só o que falta.'
+								: 'O aluno escreve a resposta inteira.'}
+							Treina {data.item.habilidades.join(' e ').toLocaleLowerCase('pt-BR')}.
+						</p>
+					{:else}
+						<p class="flex flex-wrap items-center gap-2.5">
+							<span
+								class="rounded-full border-[1.5px] border-primary bg-base-300 px-3.5 py-1.5 text-[13px] font-bold text-primary"
+							>
+								{ROTULO_DA_INTERACAO[interaction]}
+							</span>
+							<span class="text-[12.5px] text-base-content/65">
+								treina {data.item.habilidades.join(' e ').toLocaleLowerCase('pt-BR')}
+							</span>
+						</p>
+						<p class="text-[12.5px] leading-snug text-base-content/65">
+							{#if data.item.gabaritoEditavel}
+								O aluno responde em {noMeio(data.resposta.idioma)}, por isso esta questão não vira
+								lacuna: o buraco ficaria na frase de um idioma e a resposta, no outro.
+							{:else}
+								As peças desta questão foram montadas a partir do material. Para trocá-las, edite o
+								material e gere as questões de novo; aqui dá para mudar o enunciado
+								{data.item.promptKind === 'text' ? 'e o texto que o aluno lê' : ''}.
+							{/if}
 						</p>
 					{/if}
-				</div>
+				</section>
 
-				<!-- Gabarito: moldura âmbar + cadeado. Fica só no servidor — regra inviolável 1. -->
-				<fieldset class="mb-[22px] overflow-hidden rounded-box border-[1.5px] border-warning p-0">
-					<legend class="sr-only">Gabarito</legend>
-					<div
-						class="flex items-center gap-2.5 border-b border-warning/30 bg-warning/12 px-4 py-[11px]"
-					>
-						<svg
-							class="size-[17px] shrink-0 text-warning"
-							viewBox="0 0 24 24"
-							fill="none"
-							aria-hidden="true"
-						>
-							<rect
-								x="4"
-								y="10.5"
-								width="16"
-								height="10"
-								rx="2.5"
-								stroke="currentColor"
-								stroke-width="2"
-							/>
-							<path
-								d="M8 10.5V7.5a4 4 0 118 0v3"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-							/>
-						</svg>
-						<span class="text-[13px] font-bold text-warning">Gabarito — fica só no servidor</span>
-						<div class="flex-1"></div>
-						<span class="text-xs text-base-content/65">Nunca entra no payload do aluno</span>
+				<!-- 2. o enunciado -->
+				<section class="grid gap-1.5">
+					<label for="enunciado" class="text-[15px] font-bold">Enunciado</label>
+					<input
+						id="enunciado"
+						name="instruction"
+						bind:value={instruction}
+						placeholder={padrao || 'Ex.: Escreva a frase em inglês.'}
+						class="input w-full text-[15px]"
+					/>
+					<p class="text-[12.5px] leading-snug text-base-content/65">
+						{#if !padrao}
+							Este tipo de questão não tem um enunciado padrão: escreva o seu.
+						{:else if instruction.trim() === padrao}
+							É o enunciado padrão deste tipo.
+						{:else}
+							Personalizado.
+							<button
+								type="button"
+								onclick={() => (instruction = padrao)}
+								class="font-semibold text-primary">Voltar ao padrão ("{padrao}")</button
+							>
+						{/if}
+					</p>
+				</section>
+
+				<!-- 3. o que o aluno vê ou ouve -->
+				<section class="grid gap-4">
+					<div class="grid gap-1.5">
+						<label for="texto-questao" class="text-[15px] font-bold">
+							{audio ? 'O que o aluno ouve' : 'O que o aluno lê'}
+							<!-- Opcional só na questão criada sem texto: numa "traduza" ou "monte
+							     a frase" o texto é a própria questão. -->
+							{#if !audio && !data.item.texto}<span
+									class="text-[12.5px] font-normal text-base-content/60">· opcional</span
+								>{/if}
+						</label>
+						<input
+							id="texto-questao"
+							name="promptText"
+							bind:value={texto}
+							readonly={!editaTexto}
+							dir="auto"
+							class="input w-full font-content text-[15px] read-only:bg-base-200 read-only:text-base-content/70"
+						/>
+						<p class="text-[12.5px] leading-snug text-base-content/65">
+							{#if audio && !editaTexto}
+								É o texto do áudio, e as peças da questão saíram dele: mudá-lo aqui faria o aluno
+								ouvir uma frase e responder sobre outra.
+							{:else if audio}
+								Nunca aparece escrito: o aluno só ouve. Mudou o texto, o áudio é gerado de novo ao
+								salvar.
+							{:else}
+								Aparece na questão, acima da resposta.
+							{/if}
+						</p>
+						{#if desencontro}
+							<p
+								class="flex items-start gap-2 text-[12.5px] leading-snug font-semibold text-base-content/80"
+							>
+								{@render icone(
+									'M12 7.5v6M12 16.5h.01M12 3l9.5 17H2.5z',
+									'mt-px size-3.5 text-primary'
+								)}
+								O aluno ouve uma frase e a resposta esperada é outra. Confira se as duas batem.
+							</p>
+						{/if}
 					</div>
-					<div class="bg-warning/5 p-[18px]">
-						{#if interaction === 'cloze'}
-							<label class="mb-3.5 block">
-								<span class="mb-1.5 block text-[13px] font-semibold">Frase com a lacuna</span>
+
+					{#if interaction === 'cloze'}
+						<div class="grid gap-1.5">
+							<label for="frase-lacuna" class="text-[15px] font-bold">Frase com a lacuna</label>
+							<input
+								id="frase-lacuna"
+								bind:this={campoLacuna}
+								bind:value={masked}
+								onselect={acompanharSelecao}
+								onkeyup={acompanharSelecao}
+								onmouseup={acompanharSelecao}
+								onblur={() => setTimeout(acompanharSelecao, 150)}
+								dir={data.resposta.dir}
+								placeholder="She ___ been working here since 2019."
+								class="input w-full font-content text-[15px]"
+							/>
+							<p class="text-[12.5px] leading-snug text-base-content/65">
+								Selecione a palavra que vira o buraco e use "Lacuna na seleção" — ou escreva
+								<span class="font-mono">___</span> no lugar dela. O aluno vê o buraco do tamanho da resposta:
+								o comprimento ele vê, as letras nunca.
+							</p>
+							<button
+								type="button"
+								onmousedown={(e) => e.preventDefault()}
+								onclick={lacunaNaSelecao}
+								disabled={!temSelecao}
+								class="btn btn-sm w-fit motion-tap btn-neutral font-semibold"
+								>Lacuna na seleção</button
+							>
+						</div>
+					{/if}
+				</section>
+
+				<!-- 4. o gabarito: só o professor vê -->
+				<fieldset class="overflow-hidden rounded-box border-[1.5px] border-warning p-0">
+					<legend class="sr-only">Resposta certa</legend>
+					<div
+						class="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-warning/30 bg-warning/12 px-4 py-[11px]"
+					>
+						{@render icone(
+							'M6.5 10.5V7.5a5.5 5.5 0 0111 0v3M5 10.5h14v10H5z',
+							'size-[17px] text-warning'
+						)}
+						<span class="text-[13.5px] font-bold text-warning">Resposta certa</span>
+						<span class="text-[12px] text-base-content/65">só você vê — nunca vai para o aluno</span
+						>
+					</div>
+					<div class="grid gap-4 bg-warning/5 p-[18px]">
+						{#if data.item.gabaritoEditavel}
+							<label class="grid gap-1.5">
+								<span class="text-[13px] font-semibold">
+									Resposta esperada
+									{#if data.item.lingua === 'source'}<span class="font-normal text-base-content/60"
+											>· em {noMeio(data.resposta.idioma)}</span
+										>{/if}
+								</span>
 								<input
-									bind:value={masked}
-									dir={data.activity.dir}
-									placeholder="She ___ ___ working here since 2019."
+									bind:value={answer}
+									dir={data.resposta.dir}
 									class="w-full rounded-field border border-warning/40 bg-base-100 px-3.5 py-2.5 font-content text-[15px]"
 								/>
-								<span class="mt-1.5 block text-[12px] text-base-content/65">
-									Marque a lacuna com <span class="font-mono">___</span>. A lacuna aparece para o
-									aluno com a LARGURA da resposta — o comprimento vaza de propósito, as letras
-									nunca.
-								</span>
 							</label>
-						{/if}
-						<label class="mb-3.5 block">
-							<span class="mb-1.5 block text-[13px] font-semibold">Resposta esperada</span>
-							<input
-								bind:value={answer}
-								readonly={!data.item.editavel}
-								dir={data.activity.dir}
-								class="w-full rounded-field border border-warning/40 bg-base-100 px-3.5 py-2.5 font-content text-[15px] read-only:text-base-content/65"
-							/>
-						</label>
-						<p class="mb-2 text-[13px] font-semibold">Variantes também aceitas</p>
-						<div class="mb-3 flex flex-wrap gap-1.5">
-							{#each variants as v (v)}
-								<span
-									class="flex items-center gap-1.5 rounded-full border border-line bg-base-100 py-1.5 ps-3 pe-2 font-content text-[13.5px]"
-									dir={data.activity.dir}
-								>
-									{v}
-									{#if data.item.editavel}
-										<button
-											type="button"
-											onclick={() => (variants = variants.filter((x) => x !== v))}
-											class="grid size-[18px] place-items-center text-base-content/65 hover:text-error"
-											aria-label="Remover variante {v}"
-										>
-											<svg class="size-[11px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-												<path
-													d="M6 6l12 12M18 6L6 18"
-													stroke="currentColor"
-													stroke-width="3"
-													stroke-linecap="round"
-												/>
-											</svg>
-										</button>
-									{/if}
-								</span>
-							{/each}
-							{#if variants.length === 0}
-								<span class="text-[12.5px] text-base-content/65">Nenhuma além da principal.</span>
-							{/if}
-						</div>
-						{#if data.item.editavel}
-							<div class="mb-3 flex gap-2">
-								<input
-									bind:value={novaVariante}
-									onkeydown={(e) => {
-										if (e.key === 'Enter') {
-											e.preventDefault();
-											adicionarVariante();
-										}
-									}}
-									dir={data.activity.dir}
-									placeholder="Outra resposta aceita"
-									class="min-w-0 flex-1 rounded-field border border-warning/40 bg-base-100 px-3.5 py-2 font-content text-[14px]"
-								/>
-								<button
-									type="button"
-									onclick={adicionarVariante}
-									disabled={novaVariante.trim().length === 0}
-									class="btn btn-sm motion-tap btn-neutral font-semibold">Adicionar</button
-								>
-							</div>
-						{/if}
-						{#if data.suggestion && !sugestaoIgnorada && !variants.includes(data.suggestion)}
-							<div
-								class="flex items-center gap-2.5 rounded-field border border-dashed border-warning/45 bg-base-100 px-3 py-2.5"
-							>
-								<svg
-									class="size-4 shrink-0 text-warning"
-									viewBox="0 0 24 24"
-									fill="none"
-									aria-hidden="true"
-								>
-									<path
-										d="M13 4l-8 9h6l-2 7 8-9h-6z"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linejoin="round"
+
+							<div class="grid gap-2">
+								<p class="text-[13px] font-semibold">Também aceitas</p>
+								{#if variants.length > 0}
+									<ul class="flex list-none flex-wrap gap-1.5 p-0">
+										{#each variants as v (v)}
+											<li
+												class="flex items-center gap-1.5 rounded-full border border-line bg-base-100 py-1.5 ps-3 pe-2 font-content text-[13.5px]"
+												dir="auto"
+											>
+												{v}
+												<button
+													type="button"
+													onclick={() => (variants = variants.filter((x) => x !== v))}
+													class="grid size-[22px] place-items-center rounded-full text-base-content/65 hover:bg-base-200 hover:text-error"
+													aria-label="Remover {v}"
+												>
+													{@render icone('M6 6l12 12M18 6L6 18', 'size-[11px]')}
+												</button>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+								<div class="flex gap-2">
+									<input
+										bind:value={novaVariante}
+										onkeydown={(e) => {
+											if (e.key === 'Enter') {
+												e.preventDefault();
+												adicionarVariante();
+											}
+										}}
+										dir={data.resposta.dir}
+										placeholder="Outra resposta que também está certa"
+										aria-label="Outra resposta aceita"
+										class="min-w-0 flex-1 rounded-field border border-warning/40 bg-base-100 px-3.5 py-2 font-content text-[14px]"
 									/>
-								</svg>
-								<span class="flex-1 text-[13px] leading-snug">
-									Sugestão: aceitar também <span class="font-content font-semibold"
-										>{data.suggestion}</span
+									<button
+										type="button"
+										onclick={adicionarVariante}
+										disabled={!novaVariante.trim()}
+										class="btn btn-sm motion-tap btn-neutral font-semibold">Adicionar</button
 									>
-								</span>
-								<button
-									type="button"
-									onclick={() => (variants = [...variants, data.suggestion!])}
-									disabled={!data.item.editavel}
-									class="px-2 py-1.5 text-[12.5px] font-bold text-primary disabled:opacity-45"
+								</div>
+								{#if naoAceitaVariacao.length > 0}
+									<p class="text-[12.5px] leading-snug text-base-content/65">
+										Não precisa cadastrar variação só de {juntar(naoAceitaVariacao)}: em
+										{noMeio(data.resposta.idioma)}, a correção já ignora.
+									</p>
+								{/if}
+								{#if gradingMode === 'rubric'}
+									<p class="text-[12.5px] leading-snug text-base-content/65">
+										Na escrita livre, a resposta esperada serve só de referência para você ao
+										corrigir.
+									</p>
+								{/if}
+							</div>
+						{:else}
+							<div class="grid gap-1.5">
+								<span class="text-[13px] font-semibold">Resposta</span>
+								<p
+									class="rounded-field border border-warning/30 bg-base-100 px-3.5 py-2.5 font-content text-[15px]"
+									dir="auto"
 								>
-									Aceitar
-								</button>
-								<button
-									type="button"
-									onclick={() => (sugestaoIgnorada = true)}
-									class="px-2 py-1.5 text-[12.5px] font-semibold text-base-content/65"
-									>Ignorar</button
-								>
+									{data.item.answer || '—'}
+								</p>
+								{#if data.item.variants.length > 0}
+									<p class="text-[12.5px] text-base-content/65">
+										Também aceitas: <span class="font-content"
+											>{data.item.variants.join(' · ')}</span
+										>
+									</p>
+								{/if}
 							</div>
 						{/if}
 					</div>
 				</fieldset>
 
-				<p class="mb-2.5 text-[13px] font-semibold">Como corrigir</p>
-				<div class="mb-3.5 flex flex-wrap gap-1.5">
-					{#each gradings as g (g.mode)}
-						<button
-							type="button"
-							onclick={() => (gradingMode = g.mode)}
-							class="rounded-full px-3.5 py-[7px] text-[13px] transition-transform duration-150 hover:-translate-y-0.5
-							       {gradingMode === g.mode
-								? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
-								: 'border border-line bg-base-200 font-semibold text-base-content/65'}"
-						>
-							{g.label}
-						</button>
-					{/each}
-				</div>
-				<!-- Normalização é do LanguageProfile, não do item: mostrar aqui um
-				     interruptor por exercício seria uma regra de língua fora do perfil
-				     (CLAUDE.md). Estes são o que o par de idiomas já decide. -->
-				<div class="flex flex-wrap gap-2.5">
-					{#each flags as f (f.label)}
-						<span
-							class="flex items-center gap-2 rounded-full border border-line bg-base-200 px-3 py-[7px]
-							       text-[12.5px] font-semibold {f.on ? '' : 'text-base-content/65'}"
-						>
-							{f.label}
-							<input
-								type="checkbox"
-								checked={f.on}
-								disabled
-								class="toggle toggle-xs toggle-primary"
-							/>
-						</span>
-					{/each}
-				</div>
-				<p class="mt-2 text-[12.5px] text-base-content/65">
-					Vêm do idioma da atividade, não deste exercício.
-				</p>
+				<!-- 5. a correção -->
+				<section class="grid gap-2.5" aria-labelledby="titulo-correcao">
+					<h2 id="titulo-correcao" class="text-[15px] font-bold">Como é corrigida</h2>
+					{#if modos.length > 1}
+						<div class="grid gap-2 sm:grid-cols-2">
+							{#each modos as modo (modo)}
+								<label
+									class="flex cursor-pointer items-start gap-3 rounded-box border-[1.5px] border-line bg-base-100 px-3.5 py-3 transition-colors hover:border-primary/60 has-[:checked]:border-primary has-[:checked]:bg-primary/6"
+								>
+									<input type="radio" value={modo} bind:group={gradingMode} class="mt-0.5 radio" />
+									<span class="min-w-0">
+										<span class="block text-[14px] font-bold"
+											>{modo === 'rubric' ? 'Você corrige' : 'Automática'}</span
+										>
+										<span class="block text-[12.5px] leading-snug text-base-content/65"
+											>{DETALHE_DO_MODO[modo] ?? comoECorrigida(interaction, modo)}</span
+										>
+									</span>
+								</label>
+							{/each}
+						</div>
+					{:else}
+						<p class="text-[13px] leading-snug text-base-content/70">
+							{comoECorrigida(interaction, gradingMode)}
+						</p>
+					{/if}
+				</section>
 
-				<div class="mt-6 flex flex-wrap items-center gap-3">
+				<!-- salvar -->
+				<div class="grid gap-3 border-t border-line pt-6">
 					{#if impedimento}
-						<!-- Botão cinza sem motivo é o que fazia o professor clicar de novo
-						     achando que a tela travou. -->
 						<p
-							class="flex w-full items-center gap-2 rounded-field border-s-[3px] border-warning bg-base-200 px-3 py-2.5 text-[13px]"
+							class="flex items-center gap-2 rounded-field border-s-[3px] border-primary bg-base-200 px-3 py-2.5 text-[13px]"
 							role="status"
 						>
-							<svg
-								class="size-4 shrink-0 text-warning"
-								viewBox="0 0 24 24"
-								fill="none"
-								aria-hidden="true"
-							>
-								<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
-								<path
-									d="M12 7.5v5.5M12 16.5h.01"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-								/>
-							</svg>
+							{@render icone(
+								'M12 7.5v5.5M12 16.5h.01M12 3a9 9 0 100 18 9 9 0 000-18z',
+								'size-4 text-primary'
+							)}
 							{impedimento}
 						</p>
 					{/if}
-					<button
-						type="submit"
-						disabled={!podeSalvar || salvando}
-						class="btn h-[46px] motion-tap gap-2.5 btn-primary font-bold"
-					>
-						{#if salvando}
-							<Loading variant="fila" size={12} tone="current" label="Salvando" />
-							Salvando…
-						{:else}
-							Salvar item
-						{/if}
-					</button>
-					<a
-						href={resolve('/(studio)/atividades/[id]/revisar', { id: data.activity.id })}
-						class="btn h-[46px] motion-tap btn-neutral font-semibold no-underline">Voltar</a
-					>
+					{#if erroAoSalvar}
+						<p class="text-[13px] font-semibold text-error" role="alert">{erroAoSalvar}</p>
+					{/if}
+					<div class="flex flex-wrap items-center gap-3">
+						<button
+							type="submit"
+							disabled={!!impedimento || salvando || !alterado}
+							class="btn h-[46px] motion-tap gap-2.5 btn-primary font-bold"
+						>
+							{#if salvando}
+								<Loading variant="fila" size={12} tone="current" label="Salvando" />
+								Salvando…
+							{:else}
+								Salvar questão
+							{/if}
+						</button>
+						<p class="min-w-[14rem] flex-1 text-[12.5px] leading-snug text-base-content/65">
+							{alterado ? '' : 'Nada mudou ainda. '}Vale para o aluno quando você publicar.{data.jaNoAr
+								? ' O que está no ar não muda até lá.'
+								: ''}
+						</p>
+					</div>
 				</div>
 			</form>
 
-			<!-- As formas vivem no PAINEL, não dentro do celular: dentro dele elas
-			     ficavam atrás do enunciado e do campo de resposta, que é justamente
-			     o que design-system.md proíbe. Aqui elas ocupam o vazio embaixo do
-			     aparelho — só a faixa de baixo, porque em cima está o rótulo. -->
-			<aside class="relative overflow-hidden border-s border-line bg-base-200 p-[26px] px-6">
+			<!-- A prévia: as formas vivem no PAINEL, nunca dentro do celular (lá
+			     ficariam atrás do enunciado e da resposta — design-system.md). -->
+			<aside
+				class="relative overflow-hidden border-t border-line bg-base-200 px-5 py-6 lg:border-s lg:border-t-0 lg:px-6"
+			>
 				<AmbientShapes height="190px" edges="bottom" scale={0.62} />
 
 				<div class="relative z-1 mb-1.5 flex items-center gap-2.5">
-					<span class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
-						>Prévia do aluno</span
-					>
-					<span class="rounded-full bg-success/12 px-2 py-1 font-mono text-[11px] text-success"
-						>toRuntime()</span
-					>
+					<h2 class="text-[15px] font-bold">O que o aluno vê</h2>
+					{#if consulta.loading}<Loading
+							variant="fila"
+							size={8}
+							label="Atualizando a prévia"
+						/>{/if}
 				</div>
 				<p class="relative z-1 mb-4 text-[12.5px] leading-snug text-base-content/65">
-					Esta prévia usa o mesmo payload que vai para o browser do aluno. Se o gabarito aparecesse
-					aqui, ele estaria vazando de verdade.
+					Montada pelo mesmo caminho do link, com o que está no formulário — mesmo antes de salvar.
 				</p>
 
-				<!-- Um celular de verdade, centrado na coluna: `max-w-[340px]` com
-				     `min-h-[560px]`, como no protótipo. Altura MÍNIMA e não proporção
-				     fixa — a moldura acompanha o conteúdo quando a questão é longa em
-				     vez de cortá-la, e uma questão curta ainda mostra o respiro que o
-				     aluno vê. -->
 				<div
-					class="relative z-1 mx-auto flex min-h-[560px] w-full max-w-[340px] flex-col overflow-hidden
-					       rounded-[30px] border-8 border-bezel bg-base-100"
+					class="relative z-1 mx-auto flex min-h-[560px] w-full max-w-[340px] flex-col overflow-hidden rounded-[30px] border-8 border-bezel bg-base-100"
 				>
-					<div class="flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-2.5">
+					<div
+						class="flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-2.5"
+						aria-hidden="true"
+					>
 						<span class="size-7 shrink-0 rounded-full bg-base-200"></span>
 						<div class="h-2 flex-1 overflow-hidden rounded-full bg-base-300">
 							<div
-								class="h-full origin-left animate-[en-grow-x_1s_var(--ease-out-soft)_both] bg-primary"
+								class="h-full origin-left bg-primary"
 								style="width: {(data.item.index / data.itemCount) * 100}%"
 							></div>
 						</div>
@@ -652,124 +834,48 @@
 							>{data.item.index}/{data.itemCount}</span
 						>
 					</div>
-					<div class="flex flex-1 flex-col px-[17px] pt-3.5 pb-5">
-						<p class="mb-2.5 text-[10.5px] font-bold tracking-[0.08em] text-primary uppercase">
-							{data.item.skill} · {gradingLabel}
-						</p>
-						<p class="mb-3.5 font-display text-xl leading-tight font-semibold tracking-[-0.02em]">
-							{instruction}
-						</p>
-						<!-- Prompt de áudio não mostra a frase: ela É o gabarito. Interação
-						     sem lacuna (montar, escolher, ordenar) não tem `masked`, aí a
-						     prévia mostra o texto que o aluno realmente lê. -->
-						{#if promptKind === 'audio'}
+					<div
+						class="flex min-h-0 flex-1 flex-col overflow-y-auto px-[17px] pt-3.5 pb-5"
+						data-surface="player"
+					>
+						{#if previa?.ok}
+							<p class="mb-2.5 text-[11px] font-bold text-primary">{previa.runtime.skillLabel}</p>
+							{#key previa.runtime}
+								<PreviaDaQuestao runtime={previa.runtime} chave={data.item.id} compacta />
+							{/key}
+							{#if previa.audioPendente}
+								<p class="mt-3 text-[12px] leading-snug text-base-content/65">
+									O áudio desta frase é gerado quando você salvar.
+								</p>
+							{/if}
+							<div class="min-h-3.5 flex-1"></div>
 							<p
-								class="mb-3.5 flex items-center gap-2 rounded-field bg-accent/10 px-3.5 py-3 text-[13px] font-semibold text-accent"
+								class="mt-4 rounded-field bg-primary py-3 text-center text-[15px] font-bold text-primary-content"
+								aria-hidden="true"
 							>
-								<svg
-									class="size-[18px] shrink-0"
-									viewBox="0 0 24 24"
-									fill="none"
-									aria-hidden="true"
-								>
-									<path
-										d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16.5 9a4.5 4.5 0 010 6"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
-								Áudio — o aluno só ouve
+								{previa.runtime.gradedLater ? 'Enviar' : 'Verificar'}
+							</p>
+						{:else if previa && !previa.ok}
+							<p
+								class="m-auto max-w-[24ch] text-center text-[13px] leading-snug text-base-content/65"
+							>
+								{previa.error}
+							</p>
+						{:else if consulta.error}
+							<p
+								class="m-auto max-w-[24ch] text-center text-[13px] leading-snug text-base-content/65"
+							>
+								Não deu para montar a prévia agora.
 							</p>
 						{:else}
-							<p class="mb-3.5 font-content text-base leading-relaxed" dir={data.activity.dir}>
-								{(interaction === 'cloze' ? masked : '') || target}
-							</p>
+							<div class="grid gap-3">
+								<div class="h-6 w-3/4 skeleton"></div>
+								<div class="h-12 skeleton"></div>
+								<div class="h-12 skeleton"></div>
+							</div>
 						{/if}
-						<!-- A prévia mostra a FORMA da resposta da interação escolhida.
-						     Fixa em "Digite sua resposta", ela mentia em seis dos oito
-						     tipos — o professor trocava para "escolher" e via um campo de
-						     texto. Nenhum conteúdo de gabarito entra aqui: são as caixas
-						     vazias, não as alternativas. -->
-						{#if interaction === 'choice' || interaction === 'select'}
-							<div class="grid gap-2">
-								{#each [1, 2, 3] as n (n)}
-									<span
-										class="flex items-center gap-2 rounded-field border-[1.5px] border-line px-3 py-2.5 text-[13px] text-base-content/50"
-									>
-										<span
-											class="grid size-5 place-items-center rounded-full bg-base-200 font-mono text-[10px]"
-										>
-											{n}
-										</span>
-										Alternativa {n}
-									</span>
-								{/each}
-							</div>
-						{:else if interaction === 'assemble' || interaction === 'order'}
-							<div class="flex flex-wrap gap-1.5">
-								{#each [44, 62, 38, 54, 46] as largura (largura)}
-									<span
-										class="rounded-field border-[1.5px] border-line px-3 py-2"
-										style="width: {largura}px"
-									></span>
-								{/each}
-							</div>
-						{:else if interaction === 'match'}
-							<div class="grid grid-cols-2 gap-2">
-								{#each [1, 2, 3, 4] as n (n)}
-									<span class="rounded-field border-[1.5px] border-line px-3 py-2.5"></span>
-								{/each}
-							</div>
-						{:else if interaction === 'speak'}
-							<span
-								class="mx-auto grid size-16 place-items-center rounded-full bg-accent/12 text-accent"
-							>
-								<svg class="size-7" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-									<path
-										d="M9 5.5a3 3 0 016 0v6a3 3 0 01-6 0zM5.5 11.5a6.5 6.5 0 0013 0M12 18v3.5"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</span>
-						{:else}
-							<p
-								class="rounded-field border-[1.5px] border-line bg-base-100 px-3.5 py-3 font-content text-[15px] text-base-content/60"
-							>
-								Digite sua resposta
-							</p>
-						{/if}
-						<!-- Empurra a ação para o rodapé, como no Player: lá ela é fixa
-						     embaixo, e sem isto a prévia mostrava tudo grudado no topo. -->
-						<div class="min-h-3.5 flex-1"></div>
-						<p
-							class="rounded-field bg-primary py-3 text-center text-[15px] font-bold text-primary-content"
-						>
-							{gradingMode === 'rubric' ? 'Enviar' : 'Verificar'}
-						</p>
 					</div>
 				</div>
-
-				<p class="relative z-1 mt-3.5 flex items-center gap-2 text-xs text-base-content/65">
-					<svg
-						class="size-[15px] shrink-0 text-success"
-						viewBox="0 0 24 24"
-						fill="none"
-						aria-hidden="true"
-					>
-						<path
-							d="M4 12.5l5 5L20 6.5"
-							stroke="currentColor"
-							stroke-width="2.6"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					Nenhum campo de gabarito neste payload
-				</p>
 			</aside>
 		</div>
 	</div>

@@ -4,6 +4,7 @@ import { turmas } from '$lib/server/db/repos/classrooms';
 import { labelForTag } from '$lib/kernel/language/profiles';
 import { idiomaOuNulo } from '$lib/idiomas';
 import { etiquetaDaTurma } from '$lib/server/turmas/etiqueta';
+import { contaProfessor } from '$lib/server/db/repos/teachers';
 
 /** Quanto tempo faz, em português, sem trazer uma biblioteca de datas. */
 function haQuantoTempo(data: Date | null): string {
@@ -21,9 +22,16 @@ function haQuantoTempo(data: Date | null): string {
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const teacher = requireTeacher(locals);
-	const lista = await turmas(teacher).list();
+	const [lista, perfil] = await Promise.all([
+		turmas(teacher).list(),
+		contaProfessor(teacher).perfil()
+	]);
 
 	return {
+		// A "Nova turma" (bandeja) nasce no idioma do professor quando ele ensina UM
+		// só (Conta): aí a resposta é óbvia. Com dois ou mais, nenhum vem marcado —
+		// adivinhar entre eles erraria metade das vezes.
+		idiomaPadrao: perfil.idiomas.length === 1 ? idiomaOuNulo(perfil.idiomas[0]) : null,
 		classrooms: lista.map((turma) => ({
 			id: turma.id,
 			name: turma.name,
@@ -34,6 +42,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			idioma: idiomaOuNulo(turma.languageTag),
 			students: turma.students,
 			withEmail: turma.withEmail,
+			withAccount: turma.withAccount,
+			bounced: turma.bounced,
+			/** Para a busca de tela achar a turma pelo nome de um aluno. */
+			studentNames: turma.studentNames,
+			createdAt: turma.createdAt.toISOString(),
 			deliveries: turma.deliveries,
 			lastDelivery: haQuantoTempo(turma.lastDeliveryAt)
 		})),

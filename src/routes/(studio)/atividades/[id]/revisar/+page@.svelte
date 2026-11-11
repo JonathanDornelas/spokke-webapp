@@ -57,21 +57,21 @@
 						id: 'itm_01',
 						icon: 'assemble',
 						summary: 'Montar a frase a partir da tradução',
-						meta: 'assemble · reading',
+						meta: 'Montar a frase · leitura',
 						accepted: true
 					},
 					{
 						id: 'itm_02',
 						icon: 'choice',
 						summary: 'Ouvir e escolher entre 4 opções',
-						meta: 'choice · listening',
+						meta: 'Escolher a alternativa · escuta',
 						accepted: true
 					},
 					{
 						id: 'itm_03',
 						icon: 'writing',
 						summary: 'Digitar a frase ao ouvir o áudio',
-						meta: 'type · listening + writing',
+						meta: 'Digitar a resposta · escuta + escrita',
 						accepted: false,
 						discardReason: 'Muito parecido com o item 2'
 					}
@@ -86,7 +86,7 @@
 						id: 'itm_04',
 						icon: 'assemble',
 						summary: 'Montar a frase a partir da tradução',
-						meta: 'assemble · reading',
+						meta: 'Montar a frase · leitura',
 						accepted: true
 					}
 				]
@@ -169,7 +169,7 @@
 	};
 </script>
 
-<svelte:head><title>Revisar itens — entendo</title></svelte:head>
+<svelte:head><title>Revisar questões · {data.activity.title} · Spokke</title></svelte:head>
 
 <WizardShell
 	step={3}

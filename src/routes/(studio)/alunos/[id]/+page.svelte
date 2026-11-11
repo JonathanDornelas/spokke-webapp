@@ -13,7 +13,8 @@
 	import { withMock } from '$lib/dev/with-mock';
 	import HeaderCard from '$lib/components/HeaderCard.svelte';
 	import Loading from '$lib/components/Loading.svelte';
-	import { reenviarConvite, salvarAluno } from '../../turmas/turmas.remote';
+	import { reenviarConvite } from '../../turmas/turmas.remote';
+	import EditarAluno from '../../turmas/EditarAluno.svelte';
 
 	interface Tentativa {
 		id: string;
@@ -60,7 +61,7 @@
 			conviteVoltou: false,
 			account: null
 		},
-		classroom: { id: 'tur_01', name: '7º B — inglês', badge: '7B', color: 'violeta' },
+		classroom: { id: 'tur_01', name: '7º B — inglês', badge: '7B', color: 'azul' },
 		totals: { attempts: 3, finished: 2, average: 74 },
 		attempts: [
 			{
@@ -82,12 +83,12 @@
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
 	const data = $derived(withMock(dataProp, MOCK));
 
-	// **Editar o cadastro daqui.** `salvarAluno` já existia e só a chamada da
-	// turma o chamava: corrigir um e-mail digitado errado a partir desta tela
-	// exigia voltar, achar a linha e abrir a edição lá.
+	// **Editar o cadastro daqui**, na MESMA bandeja da chamada da turma
+	// (`turmas/EditarAluno.svelte`): corrigir um e-mail digitado errado a partir
+	// desta tela exigia voltar, achar a linha e abrir a edição lá.
 	let editando = $state(false);
-	/** "Corrigir e-mail e reenviar": salvo o cadastro, o convite sai de novo. */
-	let reenviarAoSalvar = $state(false);
+	/** "Corrigir e-mail e reenviar": o convite voltou, e a caixa de reenviar nasce marcada. */
+	let corrigindo = $state(false);
 
 	let reenviando = $state(false);
 	let aviso = $state<string | null>(null);
@@ -109,7 +110,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.student.name} — entendo</title></svelte:head>
+<svelte:head><title>{data.student.name} · Alunos · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a
@@ -130,7 +131,7 @@
 		{data.classroom ? data.classroom.name : 'Turmas'}
 	</a>
 
-	<!-- ═══ 1. cabeçalho ═══ O acerto médio é o único em violeta, com a regra
+	<!-- ═══ 1. cabeçalho ═══ O acerto médio é o único em azul, com a regra
 	     escrita embaixo — só das terminadas, senão quem parou na segunda questão
 	     puxa o número para baixo por um motivo que não é desempenho. -->
 	<HeaderCard
@@ -180,9 +181,10 @@
 			<button
 				type="button"
 				onclick={() => {
-					editando = !editando;
-					reenviarAoSalvar = false;
+					corrigindo = false;
+					editando = true;
 				}}
+				aria-haspopup="dialog"
 				class="btn h-[42px] motion-tap gap-2 btn-plain text-[13.5px]"
 			>
 				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -193,7 +195,7 @@
 						stroke-linejoin="round"
 					/>
 				</svg>
-				{editando ? 'Fechar' : 'Editar cadastro'}
+				Editar cadastro
 			</button>
 			{#if data.student.inviteId && data.student.email}
 				<button
@@ -233,7 +235,7 @@
 
 	<!-- ═══ 2. e-mail que voltou — só nesse estado ═══ A mesma faixa vermelha
 	     da turma, com a mesma ação. -->
-	{#if data.student.conviteVoltou && !editando}
+	{#if data.student.conviteVoltou}
 		<div
 			class="mb-[26px] flex flex-wrap items-center gap-x-3.5 gap-y-3 rounded-[13px] border border-error/32 bg-error/8 px-4 py-3.5"
 		>
@@ -256,54 +258,13 @@
 			<button
 				type="button"
 				onclick={() => {
+					corrigindo = true;
 					editando = true;
-					reenviarAoSalvar = true;
 				}}
 				class="btn h-10 shrink-0 motion-tap rounded-[9px] btn-error text-[13px] font-bold"
 				>Corrigir e-mail e reenviar</button
 			>
 		</div>
-	{/if}
-
-	{#if editando}
-		<form
-			{...salvarAluno.enhance(async ({ submit }) => {
-				await submit();
-				if (!salvarAluno.result?.ok) return;
-				if (reenviarAoSalvar && data.student.inviteId) {
-					const r = await reenviarConvite({ inviteId: data.student.inviteId });
-					aviso = r.ok ? 'Convite reenviado · a fila está andando' : (r.error ?? null);
-				}
-				editando = false;
-				reenviarAoSalvar = false;
-				await invalidateAll();
-			})}
-			class="mb-[26px] flex flex-wrap items-end gap-3 rounded-[14px] border border-line bg-base-200 p-4 lg:p-5"
-		>
-			<input type="hidden" name="studentId" value={data.student.id} />
-			<label class="min-w-[10rem] flex-1">
-				<span class="mb-1.5 block text-[0.78rem] font-semibold">Nome</span>
-				<input name="name" value={data.student.name} required class="input w-full" />
-			</label>
-			<label class="min-w-[12rem] flex-[1.4]">
-				<span class="mb-1.5 block text-[0.78rem] font-semibold">E-mail</span>
-				<input
-					name="email"
-					type="email"
-					value={data.student.email ?? ''}
-					placeholder="sem e-mail"
-					class="input w-full"
-				/>
-			</label>
-			<button type="submit" class="btn motion-tap btn-primary font-bold">
-				{reenviarAoSalvar ? 'Salvar e reenviar' : 'Salvar'}
-			</button>
-			{#if salvarAluno.result && !salvarAluno.result.ok}
-				<p class="w-full text-[13px] font-semibold text-error">
-					Não deu para salvar. Tente de novo.
-				</p>
-			{/if}
-		</form>
 	{/if}
 
 	<!-- ═══ 3. conta ligada ═══ Os dois e-mails são verdade: o professor
@@ -327,7 +288,7 @@
 						/>
 					</svg>
 				</span>
-				<p class="text-[13.5px] font-bold">Criou conta no entendo</p>
+				<p class="text-[13.5px] font-bold">Criou conta no Spokke</p>
 			</div>
 			<div class="grid min-w-[260px] flex-1 grid-cols-2 gap-x-4 gap-y-1 lg:gap-x-6 lg:gap-y-1.5">
 				<span class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
@@ -479,3 +440,12 @@
 		</div>
 	</div>
 </div>
+
+<EditarAluno
+	aberta={editando}
+	onfechar={() => (editando = false)}
+	aluno={data.student}
+	{corrigindo}
+	emailDaConta={data.student.account?.email ?? null}
+	onsalvo={(texto) => (aviso = texto)}
+/>

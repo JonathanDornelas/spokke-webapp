@@ -2,40 +2,48 @@
  * As cores de ETIQUETA — de turma e de módulo. Isomórfico: o servidor valida
  * contra a lista e a tela desenha com as classes.
  *
- * Violeta, teal, azul, magenta e ardósia. **Verde e âmbar ficam fora**: são a
+ * Azul, teal, violeta, magenta e ardósia. **Verde e âmbar ficam fora**: são a
  * semântica de correção (design-system.md) e não podem virar etiqueta — uma
  * turma "verde" leria como "acertou".
+ *
+ * **Azul é a cor da marca e vem primeiro**: é a etiqueta com que turma e módulo
+ * nascem. Violeta foi a marca até a troca para #3659CB e ficou como uma cor de
+ * etiqueta entre as outras, com token próprio (`--color-violeta`) — senão ela
+ * passaria a ser um segundo azul ao lado do azul.
  *
  * As classes são strings INTEIRAS e literais: o Tailwind só gera CSS para
  * classe que aparece completa no código-fonte.
  */
-export const CORES_DE_ETIQUETA = ['violeta', 'teal', 'azul', 'magenta', 'ardosia'] as const;
+export const CORES_DE_ETIQUETA = ['azul', 'teal', 'violeta', 'magenta', 'ardosia'] as const;
 export type CorDeEtiqueta = (typeof CORES_DE_ETIQUETA)[number];
+
+/** A etiqueta de turma e módulo novos. */
+export const COR_PADRAO: CorDeEtiqueta = 'azul';
 
 /** A etiqueta (fundo suave + texto) — o selo da turma ou do módulo. */
 export const CLASSE_DA_ETIQUETA: Record<CorDeEtiqueta, string> = {
-	violeta: 'bg-base-300 text-primary',
+	azul: 'bg-base-300 text-primary',
 	teal: 'bg-accent/16 text-accent',
-	azul: 'bg-info/15 text-info',
-	magenta: 'bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-error)_10%)] text-primary',
+	violeta: 'bg-violeta/14 text-violeta',
+	magenta: 'bg-[color-mix(in_oklab,var(--color-violeta)_12%,var(--color-error)_10%)] text-violeta',
 	ardosia: 'bg-base-300 text-base-content/70'
 };
 
 /** O nome da cor, para o `aria-label` e o `title` do seletor — a cor sozinha não se anuncia. */
 export const NOME_DA_COR: Record<CorDeEtiqueta, string> = {
-	violeta: 'Violeta',
-	teal: 'Teal',
 	azul: 'Azul',
+	teal: 'Teal',
+	violeta: 'Violeta',
 	magenta: 'Magenta',
 	ardosia: 'Ardósia'
 };
 
 /** O chip cheio do seletor de cor. */
 export const CLASSE_DO_CHIP: Record<CorDeEtiqueta, string> = {
-	violeta: 'bg-primary',
+	azul: 'bg-primary',
 	teal: 'bg-accent',
-	azul: 'bg-info',
-	magenta: 'bg-[color-mix(in_oklab,var(--color-primary)_60%,var(--color-error))]',
+	violeta: 'bg-violeta',
+	magenta: 'bg-[color-mix(in_oklab,var(--color-violeta)_60%,var(--color-error))]',
 	ardosia: 'bg-base-content/45'
 };
 
@@ -43,9 +51,9 @@ export function ehCorDeEtiqueta(valor: unknown): valor is CorDeEtiqueta {
 	return typeof valor === 'string' && (CORES_DE_ETIQUETA as readonly string[]).includes(valor);
 }
 
-/** Cor gravada que não está mais na paleta cai na primeira, em vez de quebrar a tela. */
+/** Cor gravada que não está mais na paleta cai na padrão, em vez de quebrar a tela. */
 export function corOuPadrao(valor: unknown): CorDeEtiqueta {
-	return ehCorDeEtiqueta(valor) ? valor : 'violeta';
+	return ehCorDeEtiqueta(valor) ? valor : COR_PADRAO;
 }
 
 /**

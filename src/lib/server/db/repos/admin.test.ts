@@ -63,6 +63,6 @@ describe('o que o admin lê de um professor', () => {
 		expect(serializado).not.toContain('Aluna Secreta');
 		expect(serializado).not.toContain('aluna@test.dev');
 		expect(serializado).not.toContain('Turma X');
-		expect(serializado).not.toContain('stripeCustomerId');
+		expect(serializado).not.toContain('checkoutUrl');
 	});
 });

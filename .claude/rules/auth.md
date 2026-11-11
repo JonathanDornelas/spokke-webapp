@@ -106,6 +106,30 @@ Tudo pelo Better Auth, nas DUAS instâncias; nada de hash ou token escrito à m�
   também sai no console do servidor; em produção nunca — link de redefinição no log é senha no log.
 - Redefinir não abre sessão: a tela leva ao entrar (no modo certo) com "Senha nova salva".
 
+## Login com Google
+
+"Continuar com o Google" em entrar e em criar conta, **nas DUAS instâncias** (pedido do dono do
+repositório, 2026-11-09), cada uma com a sua URL de retorno (`/api/auth/callback/google` e
+`/api/auth-aluno/callback/google`). Pronto e desligado: sem `GOOGLE_CLIENT_ID` e
+`GOOGLE_CLIENT_SECRET` o provedor nem é registrado e as telas não mostram o botão
+(`server/auth/google.ts`, `(auth)/+layout.server.ts`).
+
+- **O Google diz QUEM é a pessoa, e só.** Escopos básicos, a foto do perfil descartada
+  (`mapProfileToUser`) e **nenhum token gravado** (`databaseHooks.account` com `semTokens`, mais
+  `updateAccountOnSignIn: false`) — o produto não chama API do Google em nome de ninguém, então
+  guardar acesso à conta seria risco sem uso. `google.test.ts` confere.
+- **Conta com senha não é ligada sozinha.** O cadastro por senha não verifica o e-mail; ligar no
+  login deixaria quem cadastrou o endereço de outra pessoa com uma porta (a senha) na conta que ela
+  abrisse pelo Google. O Better Auth já recusa (`requireLocalEmailVerified`, padrão): a volta traz
+  `?error=account_not_linked` e a tela explica (`(auth)/erro-do-google.ts`). Ligar é um BOTÃO com a
+  sessão aberta (`LigarGoogle.svelte`, `linkSocial`, e-mail igual exigido) — na Conta do professor
+  e na área do aluno. Desligar só aparece quando sobra a senha.
+- **Quem nasceu pelo Google cria a senha pelo link de "esqueci a senha"**, não por um campo na
+  Conta: uma sessão roubada não ganha, assim, uma porta permanente. O cadastro pelo Google passa
+  pelos mesmos hooks — trial e avatar sorteado no professor.
+- O cookie `<prefixo>.state` vive os 5 minutos da ida e volta ao Google (Cookies, em
+  `institucional.ts`).
+
 ## Superfície pública
 
 O Player é anônimo por design e nenhuma biblioteca de auth ajuda ali. Ver `.claude/rules/server.md`
@@ -121,7 +145,7 @@ Conta é para reencontrar o histórico em outro aparelho — nada mais.
 **Duas instâncias de Better Auth, não um campo `role`.** `server/auth/index.ts` é o professor
 (`Teacher`); `server/auth/aluno.ts` é o aluno (`StudentAccount`, `StudentSession`,
 `StudentCredential`, `StudentVerification`), com `basePath: '/api/auth-aluno'` e
-`cookiePrefix: 'entendo-aluno'`. O professor tem assinatura, atividades e turmas pendurados nele:
+`cookiePrefix: 'spokke-aluno'`. O professor tem assinatura, atividades e turmas pendurados nele:
 misturar os dois na mesma tabela faria toda query de professor precisar de um filtro a mais, e o
 dia em que alguém esquecesse esse filtro seria incidente. Aqui as duas identidades não têm como
 se confundir — cookies, tabelas e guards diferentes.
@@ -156,6 +180,19 @@ verifica e-mail no cadastro (não há provedor), e um colega que soubesse o ende
 chamada e o histórico do outro. O vínculo nunca rouba: ficha já ligada a outra conta fica como
 está.
 
+**O CONVITE DE CONTA é o segundo caminho, e é o do módulo.** Módulo libera no MAPA, e o mapa é da
+conta — então o professor precisa de um jeito de chamar o aluno para ela sem mandar uma atividade.
+`Student.accountInviteToken` (192 bits, `repos/convites-de-conta.ts`) é o link
+`/aluno/convite/<token>`, e chega de dois jeitos, à escolha do professor: o Spokke manda por
+e-mail (job `convite-conta`), ou ele copia e manda por onde a turma conversa. Sem sessão, a página
+leva às telas de sempre (`/cadastro` e `/entrar` com `como=aluno` e `voltar`); com sessão, ela
+diz QUAL conta está aberta e **ligar é um botão** (`entrarNaTurmaPeloConvite`, `requireAluno`,
+token no corpo e id da sessão) — nunca efeito de abrir o link: o aparelho pode estar com a conta de
+outra pessoa, e ligar dá ao professor o que ela responder logada. "Gerar outro link" troca o token
+(o antigo para de abrir), e trocar o e-mail de quem JÁ recebeu o convite por e-mail também — o
+endereço errado recebeu a chave. O e-mail tem teto por professor (120 por hora, na memória):
+cada um é cota do provedor.
+
 **Entrar não pode custar o passado.** Ao logar, `adotarMinhasTentativas` passa para a conta o que
 aquele APARELHO respondeu sem conta (escopo: o `anonId` do cookie `httpOnly`). É a mesma promessa
 do `claimAttempts` do convite, pelo mesmo motivo: criar a conta logo depois de responder parecia
@@ -171,7 +208,9 @@ um anônimo com o nome da conta, mesmo com o aluno na chamada. Há teste de repo
 duas fronteiras (`student-accounts.test.ts`).
 
 **Dado coletado: nome, e-mail e senha. Nada além disso.** Vale a mesma regra da seção abaixo —
-campo novo aqui é decisão do dono do repositório.
+campo novo aqui é decisão do dono do repositório. Entrar pelo Google (decisão dele, 2026-11-09)
+troca a senha pelo identificador da conta Google e traz o mesmo nome e e-mail — sem foto e sem
+token ("Login com Google", acima).
 
 ## Dados do aluno e LGPD
 
@@ -189,8 +228,8 @@ repositório, e o desenho é o que a regra acima exige de qualquer coleta nova:
    (`Attempt.audioConsent = false`) — consentimento presumido não vale. Sem a marca, o áudio é
    transcrito e descartado na mesma requisição, como sempre foi, e o exercício funciona igual.
 2. **Retenção curta e automática: 7 dias**, aplicada pela regra de ciclo de vida do bucket, não
-   por um job nosso que pode falhar em silêncio. É menos que os 10 dias do áudio de atividade
-   de propósito: aquele é conteúdo do professor e se regenera, este é a voz de uma pessoa.
+   por um job nosso que pode falhar em silêncio. O áudio de atividade nem prazo tem (é conteúdo
+   do professor, dentro do estoque do plano); este é a voz de uma pessoa, e fica o mínimo.
 3. **O objeto é privado.** O prefixo `fala/` não tem leitura anônima; quem serve é uma rota do
    Studio com o `teacherId` no `where`. Uma URL pública seria a voz de um aluno acessível a
    quem descobrisse o endereço.
@@ -207,6 +246,19 @@ nome); e quem escolhe é a pessoa — a conta NASCE com um sorteado pelo sistema
 nenhum dado vem dela), e trocar é opcional. Quem não tem um gravado é desenhado pelo `avatarPadrao`
 do nome (`$lib/avatar/montar.ts`), sem gravar nada.
 Não tem prazo de retenção próprio porque não é observação sobre a pessoa: ele morre com a conta.
+
+**O RELATO DE PROBLEMA é a terceira coleta, também pedida pelo dono do repositório** (2026-11-09:
+"enviando um relatório com tudo possível para identificarmos o erro"), com as mesmas garantias:
+
+1. **É o aluno que manda, e a tela diz o que vai junto** — a questão, a resposta dele nela e os
+   detalhes do aparelho (navegador, tela, erros da página) — antes do botão de enviar.
+2. **Sem o nome dele e sem IP.** O que identifica a origem é a tentativa (`attemptId`), e o relato
+   vai para a EQUIPE (intranet e `CONTATO_PARA`), nunca para o professor nem para outro aluno.
+3. **Retenção explícita, por job: 180 dias** (`server/relatos/retencao.ts`, rodado pelo worker de
+   hora em hora), e apagar a tentativa leva os relatos (`onDelete: Cascade`).
+
+O diário de erros da página (`$lib/client/diario.ts`) fica só na memória da aba e anota o TIPO dos
+passos, nunca o que o aluno digita; ele só sai dali dentro de um relato.
 
 **Adotar tentativas soltas deixou de ser automático.** Entrar e criar conta não vinculam mais nada
 sozinhos: a área do aluno CONTA quantas há neste aparelho e oferece adotar. A suposição de que o

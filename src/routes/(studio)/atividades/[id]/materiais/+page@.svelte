@@ -16,6 +16,7 @@
 	import MaterialForm, { type MaterialRef, type Modo } from '$lib/components/MaterialForm.svelte';
 	import MaterialList from '$lib/components/MaterialList.svelte';
 	import WizardShell from '$lib/components/WizardShell.svelte';
+	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import {
 		KIND_TO_KERNEL,
 		PILL_TONE,
@@ -26,6 +27,7 @@
 	} from '$lib/components/material-form';
 	import { withMock } from '$lib/dev/with-mock';
 	import { aceitarPropostasIa, gerarPropostasIa } from '../../../materiais/ia.remote';
+	import { sugerirTraducao } from '../../../materiais/traducao.remote';
 	import type { ResultadoMaterial } from '$lib/components/MaterialForm.svelte';
 	import type { EstadoDaIa, RespostaDaGeracao } from '$lib/billing/ia';
 	import type { ContentUnitKind } from '$lib/kernel/content/types';
@@ -48,9 +50,11 @@
 			tag: string;
 			targetLabel: string;
 			sourceLabel: string;
+			sourceTag: string;
 		};
 		materials: MaterialRow[];
 		ia: EstadoDaIa;
+		traducaoAutomatica: boolean;
 	}
 
 	const MOCK: PageData = {
@@ -60,7 +64,8 @@
 			dir: 'ltr',
 			tag: 'en-US',
 			targetLabel: 'Inglês',
-			sourceLabel: 'Português'
+			sourceLabel: 'Português',
+			sourceTag: 'pt-BR'
 		},
 		materials: [
 			{
@@ -103,7 +108,8 @@
 			saldo: 0,
 			custoPorProposta: 1,
 			idiomas: null
-		}
+		},
+		traducaoAutomatica: false
 	};
 
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
@@ -141,6 +147,17 @@
 			activityId: data.activity.id
 		});
 		return r.ok ? { ok: true, propostas: r.propostas, saldo: r.saldo } : r;
+	}
+
+	// A sugestão de tradução enquanto o professor digita. Falhar é normal (o
+	// tradutor pode estar carregando): a tela diz e o servidor traduz ao salvar.
+	async function sugerir(texto: string, de: string, para: string): Promise<string | null> {
+		try {
+			const r = await sugerirTraducao({ texto, de, para });
+			return r.ok ? r.traducao : null;
+		} catch {
+			return null;
+		}
 	}
 
 	async function aceitarIa(kind: ContentUnitKind, dados: Record<string, unknown>[]) {
@@ -289,7 +306,7 @@
 	);
 </script>
 
-<svelte:head><title>Materiais — entendo</title></svelte:head>
+<svelte:head><title>Materiais · {data.activity.title} · Spokke</title></svelte:head>
 
 <WizardShell
 	step={2}
@@ -297,15 +314,18 @@
 	backLabel="Detalhes"
 	status={statusTexto}
 	hint={hintTexto}
+	rolagem="colunas"
 >
 	<div class="flex min-h-0 flex-1 flex-col lg:flex-row">
 		<!-- O formulário é coluna fixa no desktop; no celular cobre a lista até o
 		     professor pedir para ver os materiais. `min-w-0` nas duas colunas: item
 		     de flex nasce com `min-width: auto`, então uma frase longa esticava a
-		     coluna e a página ganhava rolagem horizontal. -->
+		     coluna e a página ganhava rolagem horizontal. A coluna tem a altura da
+		     tela (`rolagem="colunas"`), e quem rola é o corpo do formulário: o
+		     cabeçalho e o botão de adicionar ficam sempre à vista. -->
 		<form
 			{...enviar}
-			class="min-w-0 flex-col border-b border-line lg:flex lg:w-[500px] lg:shrink-0 lg:border-e lg:border-b-0 {formAberto
+			class="min-h-0 min-w-0 flex-1 flex-col border-b border-line lg:flex lg:w-[500px] lg:flex-none lg:border-e lg:border-b-0 {formAberto
 				? 'flex'
 				: 'hidden'}"
 		>
@@ -327,240 +347,260 @@
 				ia={data.ia}
 				ongerarIa={gerarIa}
 				onaceitarIa={aceitarIa}
+				traducaoAutomatica={data.traducaoAutomatica}
+				linguaDoAluno={data.activity.sourceTag}
+				onsugerirTraducao={sugerir}
 				onfechar={() => (formAberto = false)}
 				fecharRotulo="Ver os {statusTexto}"
 				fecharSoNoCelular
 			/>
 		</form>
 
-		<div class="min-w-0 flex-1 px-4 py-5 lg:block lg:px-7 lg:py-6 {formAberto ? 'hidden' : ''}">
-			<div class="mb-4 flex flex-wrap items-end gap-x-4 gap-y-3">
-				<div class="min-w-[180px] flex-1">
-					<h2
-						class="mb-1 font-display text-[22px] font-semibold tracking-[-0.024em] lg:text-[26px]"
-					>
-						Materiais desta atividade
-					</h2>
-					<p class="text-[13px] text-base-content/65">
-						{statusTexto}{daBiblioteca > 0
-							? ` · ${daBiblioteca} ${daBiblioteca === 1 ? 'vindo' : 'vindos'} da biblioteca`
-							: ''}
-					</p>
-				</div>
-				<div class="flex flex-wrap gap-2">
-					<button
-						type="button"
-						onclick={() => (formAberto = true)}
-						class="btn btn-sm motion-tap gap-2 btn-primary lg:hidden"
-					>
-						<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-							<path
-								d="M12 5v14M5 12h14"
-								stroke="currentColor"
-								stroke-width="2.2"
-								stroke-linecap="round"
-							/>
-						</svg>
-						Adicionar
-					</button>
-					{#if !mostrarBiblioteca}
+		<!-- A lista é a outra coluna que rola por dentro, com a faixa de formas no
+		     FIM dela: com poucos materiais a faixa fica embaixo, no vazio; com
+		     muitos, vem depois do último — o texto nunca passa por cima das formas. -->
+		<div
+			class="min-h-0 min-w-0 flex-1 flex-col overflow-y-auto lg:flex {formAberto
+				? 'hidden'
+				: 'flex'}"
+		>
+			<div class="flex-1 px-4 py-5 lg:px-7 lg:py-6">
+				<div class="mb-4 flex flex-wrap items-end gap-x-4 gap-y-3">
+					<div class="min-w-[180px] flex-1">
+						<h2
+							class="mb-1 font-display text-[22px] font-semibold tracking-[-0.024em] lg:text-[26px]"
+						>
+							Materiais desta atividade
+						</h2>
+						<p class="text-[13px] text-base-content/65">
+							{statusTexto}{daBiblioteca > 0
+								? ` · ${daBiblioteca} ${daBiblioteca === 1 ? 'vindo' : 'vindos'} da biblioteca`
+								: ''}
+						</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
 						<button
 							type="button"
-							onclick={abrirBiblioteca}
-							class="btn btn-sm motion-tap gap-2 btn-outline"
+							onclick={() => (formAberto = true)}
+							class="btn btn-sm motion-tap gap-2 btn-primary lg:hidden"
 						>
-							<svg class="size-[15px] shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 								<path
-									d="M3 5.5h6a3 3 0 013 3v10a2.5 2.5 0 00-2.5-2.5H3zM21 5.5h-6a3 3 0 00-3 3v10a2.5 2.5 0 012.5-2.5H21z"
+									d="M12 5v14M5 12h14"
 									stroke="currentColor"
-									stroke-width="2"
-									stroke-linejoin="round"
+									stroke-width="2.2"
+									stroke-linecap="round"
 								/>
 							</svg>
-							Usar da biblioteca
+							Adicionar
 						</button>
-					{/if}
-				</div>
-			</div>
-
-			<!-- A biblioteca é do professor, não da atividade: trazer daqui LIGA o
-			     material às duas, não copia (paginas.md "Materiais"). -->
-			{#if mostrarBiblioteca}
-				<section class="mb-4 min-w-0 rounded-box border border-line bg-base-200 p-4">
-					<div class="mb-3 flex items-baseline gap-3">
-						<h3 class="font-display text-[20px] font-semibold">Da sua biblioteca</h3>
-						<div class="flex-1"></div>
-						<button
-							type="button"
-							onclick={() => (mostrarBiblioteca = false)}
-							class="p-1 text-[12.5px] font-semibold text-base-content/65 hover:text-base-content"
-							>Fechar</button
-						>
+						{#if !mostrarBiblioteca}
+							<button
+								type="button"
+								onclick={abrirBiblioteca}
+								class="btn btn-sm motion-tap gap-2 btn-outline"
+							>
+								<svg
+									class="size-[15px] shrink-0"
+									viewBox="0 0 24 24"
+									fill="none"
+									aria-hidden="true"
+								>
+									<path
+										d="M3 5.5h6a3 3 0 013 3v10a2.5 2.5 0 00-2.5-2.5H3zM21 5.5h-6a3 3 0 00-3 3v10a2.5 2.5 0 012.5-2.5H21z"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linejoin="round"
+									/>
+								</svg>
+								Usar da biblioteca
+							</button>
+						{/if}
 					</div>
+				</div>
 
-					{#await disponiveis}
-						<div class="h-[3.25rem] skeleton"></div>
-					{:then lista}
-						{#if lista.length === 0}
-							<p class="text-[13px] leading-snug text-base-content/65">
-								Tudo que você já cadastrou já está nesta atividade.
-							</p>
-						{:else}
-							{@const visiveis = filtrar(lista)}
-							<!-- Busca e filtro por tipo: a biblioteca cresce a cada atividade,
-							     e rolar uma lista de 200 frases para achar as três da aula
-							     passada não é escolher, é procurar. -->
-							<div class="mb-3 flex flex-wrap items-center gap-2">
-								<input
-									bind:value={buscaBiblioteca}
-									placeholder="Buscar…"
-									class="input h-auto min-w-[9rem] flex-1 py-2 text-[13.5px]"
-									aria-label="Buscar na biblioteca"
-								/>
-								<div class="flex flex-wrap gap-1.5">
-									{#each [{ id: 'todos' as const, label: 'Todos' }, ...TIPOS] as f (f.id)}
-										<button
-											type="button"
-											onclick={() => (filtroBiblioteca = f.id)}
-											aria-pressed={filtroBiblioteca === f.id}
-											class="rounded-full px-3 py-1.5 text-[12px] transition-colors
-											       {filtroBiblioteca === f.id
-												? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
-												: 'border border-line bg-base-100 font-semibold text-base-content/65'}"
-											>{f.label}</button
-										>
-									{/each}
-								</div>
-								<FiltroIdioma
-									tags={lista.map((m) => m.idioma)}
-									bind:valor={filtroIdiomaBib}
-									formato="chips"
-								/>
-							</div>
+				<!-- A biblioteca é do professor, não da atividade: trazer daqui LIGA o
+			     material às duas, não copia (paginas.md "Materiais"). -->
+				{#if mostrarBiblioteca}
+					<section class="mb-4 min-w-0 rounded-box border border-line bg-base-200 p-4">
+						<div class="mb-3 flex items-baseline gap-3">
+							<h3 class="font-display text-[20px] font-semibold">Da sua biblioteca</h3>
+							<div class="flex-1"></div>
+							<button
+								type="button"
+								onclick={() => (mostrarBiblioteca = false)}
+								class="p-1 text-[12.5px] font-semibold text-base-content/65 hover:text-base-content"
+								>Fechar</button
+							>
+						</div>
 
-							{#if visiveis.length === 0}
+						{#await disponiveis}
+							<div class="h-[3.25rem] skeleton"></div>
+						{:then lista}
+							{#if lista.length === 0}
 								<p class="text-[13px] leading-snug text-base-content/65">
-									Nada aqui com esse filtro.
+									Tudo que você já cadastrou já está nesta atividade.
 								</p>
 							{:else}
-								<!-- `max-h` em proporção da viewport: a lista rola dentro do
-								     painel em vez de empurrar o resto da tela para baixo. -->
-								<ul class="grid max-h-[45vh] list-none gap-2 overflow-y-auto p-0">
-									{#each visiveis as m (m.id)}
-										{@const marcado = escolhidos.includes(m.id)}
-										{@const tipo = tipoDe(m.kind)}
-										<li>
-											<!-- A linha INTEIRA alterna a escolha: um alvo de 2px no fim
-											     da linha é o pior jeito de marcar quinze itens. -->
+								{@const visiveis = filtrar(lista)}
+								<!-- Busca e filtro por tipo: a biblioteca cresce a cada atividade,
+							     e rolar uma lista de 200 frases para achar as três da aula
+							     passada não é escolher, é procurar. -->
+								<div class="mb-3 flex flex-wrap items-center gap-2">
+									<input
+										bind:value={buscaBiblioteca}
+										placeholder="Buscar…"
+										class="input h-auto min-w-[9rem] flex-1 py-2 text-[13.5px]"
+										aria-label="Buscar na biblioteca"
+									/>
+									<div class="flex flex-wrap gap-1.5">
+										{#each [{ id: 'todos' as const, label: 'Todos' }, ...TIPOS] as f (f.id)}
 											<button
 												type="button"
-												onclick={() => alternarEscolha(m.id)}
-												aria-pressed={marcado}
-												class="flex w-full min-w-0 items-center gap-3 rounded-field border px-3.5 py-2.5 text-start
+												onclick={() => (filtroBiblioteca = f.id)}
+												aria-pressed={filtroBiblioteca === f.id}
+												class="rounded-full px-3 py-1.5 text-[12px] transition-colors
+											       {filtroBiblioteca === f.id
+													? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
+													: 'border border-line bg-base-100 font-semibold text-base-content/65'}"
+												>{f.label}</button
+											>
+										{/each}
+									</div>
+									<FiltroIdioma
+										tags={lista.map((m) => m.idioma)}
+										bind:valor={filtroIdiomaBib}
+										formato="chips"
+									/>
+								</div>
+
+								{#if visiveis.length === 0}
+									<p class="text-[13px] leading-snug text-base-content/65">
+										Nada aqui com esse filtro.
+									</p>
+								{:else}
+									<!-- `max-h` em proporção da viewport: a lista rola dentro do
+								     painel em vez de empurrar o resto da tela para baixo. -->
+									<ul class="grid max-h-[45vh] list-none gap-2 overflow-y-auto p-0">
+										{#each visiveis as m (m.id)}
+											{@const marcado = escolhidos.includes(m.id)}
+											{@const tipo = tipoDe(m.kind)}
+											<li>
+												<!-- A linha INTEIRA alterna a escolha: um alvo de 2px no fim
+											     da linha é o pior jeito de marcar quinze itens. -->
+												<button
+													type="button"
+													onclick={() => alternarEscolha(m.id)}
+													aria-pressed={marcado}
+													class="flex w-full min-w-0 items-center gap-3 rounded-field border px-3.5 py-2.5 text-start
 												       transition-[border-color,background-color]
 												       {marcado ? 'border-primary bg-base-300' : 'border-line bg-base-100 hover:border-primary'}"
-											>
-												<span
-													class="grid size-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px]
-													       {marcado ? 'border-primary bg-primary text-primary-content' : 'border-line'}"
 												>
-													{#if marcado}
-														<svg
-															class="size-[11px]"
-															viewBox="0 0 24 24"
-															fill="none"
-															aria-hidden="true"
-														>
-															<path
-																d="M4 12.5l5 5L20 6.5"
-																stroke="currentColor"
-																stroke-width="3"
-																stroke-linecap="round"
-																stroke-linejoin="round"
-															/>
-														</svg>
-													{/if}
-												</span>
-												<span
-													class="shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap {PILL_TONE[
-														tipo.tone
-													]}">{tipo.label}</span
-												>
-												<span class="min-w-0 flex-1">
 													<span
-														class="block truncate font-content text-[14px]"
-														dir={data.activity.dir}
-														data-content-lang={m.idioma ?? data.activity.tag}>{m.primary}</span
+														class="grid size-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px]
+													       {marcado ? 'border-primary bg-primary text-primary-content' : 'border-line'}"
 													>
-													<span class="block truncate text-[12px] text-base-content/65"
-														>{m.secondary}</span
+														{#if marcado}
+															<svg
+																class="size-[11px]"
+																viewBox="0 0 24 24"
+																fill="none"
+																aria-hidden="true"
+															>
+																<path
+																	d="M4 12.5l5 5L20 6.5"
+																	stroke="currentColor"
+																	stroke-width="3"
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																/>
+															</svg>
+														{/if}
+													</span>
+													<span
+														class="shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap {PILL_TONE[
+															tipo.tone
+														]}">{tipo.label}</span
 													>
-												</span>
-												<IdiomaTag tag={m.idioma} compacta />
-											</button>
-										</li>
-									{/each}
-								</ul>
+													<span class="min-w-0 flex-1">
+														<span
+															class="block truncate font-content text-[14px]"
+															dir={data.activity.dir}
+															data-content-lang={m.idioma ?? data.activity.tag}>{m.primary}</span
+														>
+														<span class="block truncate text-[12px] text-base-content/65"
+															>{m.secondary}</span
+														>
+													</span>
+													<IdiomaTag tag={m.idioma} compacta />
+												</button>
+											</li>
+										{/each}
+									</ul>
 
-								<div class="mt-3 flex flex-wrap items-center gap-2.5">
-									<button
-										type="button"
-										onclick={() =>
-											(escolhidos =
-												escolhidos.length === visiveis.length ? [] : visiveis.map((m) => m.id))}
-										class="p-1 text-[12.5px] font-semibold text-base-content/65 hover:text-base-content"
-										>{escolhidos.length === visiveis.length
-											? 'Limpar seleção'
-											: `Selecionar os ${visiveis.length}`}</button
-									>
-									<div class="flex-1"></div>
-									<button
-										type="button"
-										onclick={trazerDaBiblioteca}
-										disabled={escolhidos.length === 0 || trazendo}
-										class="btn btn-sm motion-tap btn-primary"
-									>
-										{#if trazendo}
-											<Loading variant="fila" size={11} tone="current" label="Trazendo" />
-											Trazendo…
-										{:else if escolhidos.length === 0}
-											Trazer
-										{:else}
-											Trazer {escolhidos.length}
-										{/if}
-									</button>
-								</div>
+									<div class="mt-3 flex flex-wrap items-center gap-2.5">
+										<button
+											type="button"
+											onclick={() =>
+												(escolhidos =
+													escolhidos.length === visiveis.length ? [] : visiveis.map((m) => m.id))}
+											class="p-1 text-[12.5px] font-semibold text-base-content/65 hover:text-base-content"
+											>{escolhidos.length === visiveis.length
+												? 'Limpar seleção'
+												: `Selecionar os ${visiveis.length}`}</button
+										>
+										<div class="flex-1"></div>
+										<button
+											type="button"
+											onclick={trazerDaBiblioteca}
+											disabled={escolhidos.length === 0 || trazendo}
+											class="btn btn-sm motion-tap btn-primary"
+										>
+											{#if trazendo}
+												<Loading variant="fila" size={11} tone="current" label="Trazendo" />
+												Trazendo…
+											{:else if escolhidos.length === 0}
+												Trazer
+											{:else}
+												Trazer {escolhidos.length}
+											{/if}
+										</button>
+									</div>
+								{/if}
 							{/if}
-						{/if}
-					{/await}
-				</section>
-			{/if}
+						{/await}
+					</section>
+				{/if}
 
-			{#if total === 0}
-				<div
-					class="rounded-box border-[1.5px] border-dashed border-line bg-base-200 p-[26px] text-center"
-				>
-					<p class="mb-1.5 font-display text-[20px] font-semibold">Nenhum material ainda</p>
-					<p class="text-[13px] leading-snug text-base-content/65">
-						Cole uma lista de frases ao lado, ou traga algo que você já cadastrou.
+				{#if total === 0}
+					<div
+						class="rounded-box border-[1.5px] border-dashed border-line bg-base-200 p-[26px] text-center"
+					>
+						<p class="mb-1.5 font-display text-[20px] font-semibold">Nenhum material ainda</p>
+						<p class="text-[13px] leading-snug text-base-content/65">
+							Cole uma lista de frases ao lado, ou traga algo que você já cadastrou.
+						</p>
+					</div>
+				{:else}
+					<MaterialList
+						materiais={data.materials}
+						contexto="wizard"
+						contentTag={data.activity.tag}
+						dir={data.activity.dir}
+						editandoId={editando?.id ?? null}
+						{removendoId}
+						onedit={editar}
+						onremove={remover}
+					/>
+					<p class="mt-3.5 text-[12.5px] leading-relaxed text-pretty text-base-content/65">
+						Remover tira o material desta atividade. Ele continua na sua biblioteca e em outras
+						atividades que o usem.
 					</p>
-				</div>
-			{:else}
-				<MaterialList
-					materiais={data.materials}
-					contexto="wizard"
-					contentTag={data.activity.tag}
-					dir={data.activity.dir}
-					editandoId={editando?.id ?? null}
-					{removendoId}
-					onedit={editar}
-					onremove={remover}
-				/>
-				<p class="mt-3.5 text-[12.5px] leading-relaxed text-pretty text-base-content/65">
-					Remover tira o material desta atividade. Ele continua na sua biblioteca e em outras
-					atividades que o usem.
-				</p>
-			{/if}
+				{/if}
+			</div>
+			<div class="pointer-events-none relative h-[150px] shrink-0 lg:h-[190px]">
+				<AmbientShapes height="100%" edges="bottom" />
+			</div>
 		</div>
 	</div>
 

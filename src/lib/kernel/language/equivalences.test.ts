@@ -68,3 +68,38 @@ describe('equivalências do profile', () => {
 		expect(grupos).toContainEqual(['22', 'vinte e dois']);
 	});
 });
+
+// O caso relatado: "Never give up on your dreams", o aluno escreveu "nunca
+// desista dos seus sonhos" e o gabarito tinha "de seus" — recebia "quase".
+describe('o artigo antes do possessivo, em português', () => {
+	it('aceita "dos seus" e "de seus" como a mesma resposta', () => {
+		const nota = tolerantScore(
+			'nunca desista dos seus sonhos',
+			['Nunca desista de seus sonhos'],
+			ptBR
+		);
+		expect(nota.value).toBe(1);
+	});
+
+	it('vale com "em" e com o artigo solto', () => {
+		expect(normalize('Ela está no seu quarto', ptBR)).toBe(
+			normalize('Ela está em seu quarto', ptBR)
+		);
+		expect(normalize('Nas suas férias', ptBR)).toBe(normalize('Em suas férias', ptBR));
+		expect(normalize('Siga os seus sonhos', ptBR)).toBe(normalize('Siga seus sonhos', ptBR));
+		expect(normalize('da nossa casa', ptBR)).toBe(normalize('de nossa casa', ptBR));
+	});
+
+	// O "a" solto pode ser a preposição: apagá-lo aceitaria "dei o livro sua irmã".
+	it('não apaga o "a" do feminino singular solto', () => {
+		expect(normalize('dei o livro a sua irmã', ptBR)).not.toBe(
+			normalize('dei o livro sua irmã', ptBR)
+		);
+	});
+
+	it('não mexe no possessivo trocado — aí é outra resposta', () => {
+		expect(
+			tolerantScore('nunca desista dos meus sonhos', ['Nunca desista de seus sonhos'], ptBR).value
+		).toBeLessThan(1);
+	});
+});

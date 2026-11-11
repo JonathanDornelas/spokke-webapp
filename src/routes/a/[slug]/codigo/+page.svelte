@@ -21,7 +21,7 @@
 	}
 </script>
 
-<svelte:head><title>Código da turma — entendo</title></svelte:head>
+<svelte:head><title>Código da turma · Spokke</title></svelte:head>
 
 <div
 	class="relative flex min-h-0 flex-1 flex-col [justify-content:safe_center] overflow-y-auto px-gutter
@@ -29,9 +29,7 @@
 >
 	<AmbientShapes edges="both" />
 
-	<div
-		class="relative z-1 mx-auto w-full max-w-[440px] animate-[en-fade-up_560ms_var(--ease-out-soft)_both]"
-	>
+	<div class="relative z-1 mx-auto w-full max-w-[440px] animate-entrada">
 		<span
 			class="mb-5 inline-grid size-[52px] place-items-center rounded-full bg-base-300 text-primary"
 		>

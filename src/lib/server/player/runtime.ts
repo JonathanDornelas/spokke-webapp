@@ -5,6 +5,7 @@ import { getInteraction } from '$lib/kernel/interactions/registry';
 import type { GradingMode, InteractionKind, Skill } from '$lib/kernel/interactions/types';
 import type { LanguageProfile } from '$lib/kernel/language/profile';
 import { tecladoDe, type Teclado } from '$lib/kernel/language/teclado';
+import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import { ttsHash } from '$lib/server/tts';
 
 /**
@@ -22,13 +23,6 @@ export interface StoredItemRow {
 	grading: unknown;
 	locale: unknown;
 }
-
-const SKILL_LABEL: Record<Skill, string> = {
-	listening: 'Listening',
-	speaking: 'Speaking',
-	reading: 'Reading',
-	writing: 'Writing'
-};
 
 /**
  * O enunciado que o aluno lê. O kernel só emite a CHAVE porque é agnóstico
@@ -119,9 +113,9 @@ export interface RuntimeItem {
  * anunciar isso só ocuparia espaço.
  */
 const GRADING_LABEL: Partial<Record<GradingMode, string>> = {
-	tolerant: 'Tolerant',
-	asr: 'ASR',
-	rubric: 'Rubrica'
+	tolerant: 'tolerante',
+	asr: 'reconhecimento de voz',
+	rubric: 'corrigida pelo professor'
 };
 
 /**
@@ -206,7 +200,11 @@ export function buildRuntimeItem(
 	const targetProfile = getProfile(locale.target);
 	const registered = getInteraction(interaction.type);
 	const skills = registered.skills(prompt);
-	const skill = skills[0] ?? 'reading';
+	// O rótulo do cabeçalho é o que a questão PEDE, não o enunciado. Todo prompt
+	// de texto rende `reading`, e ela vinha primeiro na lista: "Diga esta frase
+	// em voz alta" aparecia como Leitura, "Complete a frase" também. A leitura
+	// só nomeia a questão quando é a única coisa nela (kernel.md, `selectItems`).
+	const skill = skills.find((s) => s !== 'reading') ?? skills[0] ?? 'reading';
 
 	// A seed do item mistura a seed da tentativa com o id do item: cada
 	// questão embaralha diferente, e F5 não muda nada (regra nº 8).
@@ -240,7 +238,7 @@ export function buildRuntimeItem(
 		prompt: instruction,
 		passage: visibleText,
 		skill,
-		skillLabel: SKILL_LABEL[skill],
+		skillLabel: skillLabels[skill],
 		sourceLabel: labelForTag(locale.source),
 		targetLabel: labelForTag(locale.target),
 		hint: itemHint(prompt.kind, grading, interaction.type, targetProfile),

@@ -1,0 +1,20 @@
+# PRODUÇÃO (Linux) — o object storage na rede `spokke` (ver deploy/compose/app.yml):
+#
+#   docker compose --env-file ../env/infra.env -f docker/minio.yml -f deploy/compose/minio.yml up -d
+#
+# A aplicação grava em `spokke-minio:9000`, e o BROWSER do aluno baixa o áudio
+# por `https://midia.spokke.com.br/spokke-midia/tts/...`: quem atende é o Caddy,
+# que só deixa passar GET e HEAD em `tts/` (deploy/caddy/Caddyfile). O painel
+# (9001) e a API inteira ficam presos ao 127.0.0.1.
+#
+# O container `init` não entra na rede: ele fala com o MinIO pela rede do
+# próprio projeto, como em desenvolvimento, e escreve o bucket, a leitura
+# anônima só em `tts/` e a regra de 7 dias de `fala/`.
+
+services:
+  minio:
+    networks: [default, spokke]
+
+networks:
+  spokke:
+    external: true

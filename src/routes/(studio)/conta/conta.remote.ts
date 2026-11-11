@@ -33,7 +33,8 @@ export const solicitarPlano = command(
 		const resultado = await getBillingProvider().iniciarAssinatura(
 			{ id: teacher.id, name: teacher.name, email: teacher.email },
 			plano,
-			ciclo
+			ciclo,
+			{ origem: getRequestEvent().url.origin }
 		);
 		return resultado.tipo === 'redirecionar'
 			? { tipo: 'redirecionar' as const, url: resultado.url }
@@ -57,6 +58,17 @@ export const agendarCancelamento = command(async () => {
 	if (estado.origem !== 'assinatura' || estado.cancelAtPeriodEnd) {
 		return { ok: false as const, error: 'Não há assinatura em vigor para cancelar.' };
 	}
+	// O provedor PRIMEIRO: se o Mercado Pago recusar, nada muda aqui — marcar
+	// "cancelada" com o cartão ainda sendo cobrado seria o pior dos dois mundos.
+	try {
+		await getBillingProvider().cancelarRenovacao(teacher.id);
+	} catch (err) {
+		console.warn('[cobrança] cancelar no provedor', err);
+		return {
+			ok: false as const,
+			error: 'Não deu para cancelar no Mercado Pago agora. Nada mudou — tente de novo em instantes.'
+		};
+	}
 	await cancelar(teacher.id, { noFimDoPeriodo: true }, 'professor');
 	return { ok: true as const };
 });
@@ -78,6 +90,13 @@ export const desfazerCancelamento = command(async () => {
 	const estado = await acessoDoProfessor(teacher);
 	if (!estado.cancelAtPeriodEnd) {
 		return { ok: false as const, error: 'Não há cancelamento agendado.' };
+	}
+	if (!getBillingProvider().podeDesfazerCancelamento) {
+		return {
+			ok: false as const,
+			error:
+				'No Mercado Pago, a assinatura cancelada não volta. Assine de novo pelos planos quando quiser.'
+		};
 	}
 	await reativar(teacher.id, 'professor');
 	return { ok: true as const };

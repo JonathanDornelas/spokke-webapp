@@ -180,12 +180,12 @@
 	}
 </script>
 
-<svelte:head><title>Atividades — entendo</title></svelte:head>
+<svelte:head><title>Atividades · Spokke</title></svelte:head>
 
 {#if data.totalCount === 0}
 	<div class="relative flex min-h-[70vh] items-center overflow-hidden px-4 py-12 lg:px-7 lg:py-14">
 		<AmbientShapes height="230px" />
-		<div class="relative z-1 max-w-[46ch] animate-[en-fade-up_620ms_var(--ease-out-soft)_both]">
+		<div class="relative z-1 max-w-[46ch] animate-entrada">
 			<p class="mb-4 text-xs font-bold tracking-[0.13em] text-primary uppercase">
 				Bem-vinda, {data.teacher.firstName}
 			</p>

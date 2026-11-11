@@ -1,4 +1,5 @@
 import type { InteractionKind } from '$lib/kernel/interactions/types';
+import { ROTULO_DA_INTERACAO } from '$lib/atividades/editor-item';
 
 /**
  * O resumo LEGÍVEL de um item gerado — a frase que a etapa de revisão e a
@@ -24,10 +25,18 @@ const RESUMO_POR_GERADOR: Record<string, string> = {
 	'closing-match': 'Associar os pares — revisão do que apareceu na atividade'
 };
 
-/** Item sem `generatedBy` é autoria manual (nível 3 de kernel.md). */
-export function resumoDoItem(generatedBy: string | null): string {
-	if (!generatedBy) return 'Item manual';
-	return RESUMO_POR_GERADOR[generatedBy] ?? 'Item gerado';
+/**
+ * Item sem `generatedBy` é autoria manual (nível 3 de kernel.md): o resumo é o
+ * tipo de questão, porque não há gerador que diga mais — e a chave do kernel
+ * ("type", "cloze") nunca vai para a tela.
+ */
+export function resumoDoItem(generatedBy: string | null, interacao?: InteractionKind): string {
+	if (!generatedBy) {
+		return interacao
+			? `${ROTULO_DA_INTERACAO[interacao]} · criada por você`
+			: 'Questão criada por você';
+	}
+	return RESUMO_POR_GERADOR[generatedBy] ?? 'Questão gerada do material';
 }
 
 /**

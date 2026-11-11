@@ -10,6 +10,8 @@
 	// `camposMaterial` espera, mais tudo que se calcula no cliente: a prévia
 	// do lote, o rendimento do conjunto, o aviso de repetido e "o que o aluno
 	// vai ver".
+	import { untrack } from 'svelte';
+	import Alternador from './Alternador.svelte';
 	import Loading from './Loading.svelte';
 	import IdiomaTag from './IdiomaTag.svelte';
 	import { IDIOMAS, idiomaDe } from '$lib/idiomas';
@@ -55,6 +57,8 @@
 				added: number;
 				reused: number;
 				ignored: number;
+				/** Linhas cuja tradução veio do tradutor automático. */
+				traduzidas?: number;
 				foraDoLimite?: number;
 				aviso?: string | null;
 				motivo?: MotivoDoBloqueio | null;
@@ -79,7 +83,10 @@
 		ongerarIa,
 		onaceitarIa,
 		idioma = $bindable(null),
-		idiomaPadrao = null
+		idiomaPadrao = null,
+		traducaoAutomatica = false,
+		linguaDoAluno = null,
+		onsugerirTraducao
 	}: {
 		/** Muda o título, o rendimento e o rótulo de salvar — nunca os campos. */
 		contexto: 'biblioteca' | 'wizard';
@@ -121,6 +128,16 @@
 		idioma?: string | null;
 		/** O idioma com que um material NOVO nasce na biblioteca — o que o professor mais usa. */
 		idiomaPadrao?: string | null;
+		/**
+		 * O servidor tem tradutor (`TRANSLATE_PROVIDER`). Ligado, a tradução de par
+		 * de frases e de vocabulário sai sozinha: sugerida enquanto o professor
+		 * digita, e feita no servidor para o que chegar em branco (adr-006).
+		 */
+		traducaoAutomatica?: boolean;
+		/** Para onde a tradução vai: a língua do aluno (da atividade, ou a da biblioteca). */
+		linguaDoAluno?: string | null;
+		/** Pede a sugestão — a PÁGINA chama a remote function. `null` é "não deu agora". */
+		onsugerirTraducao?: (texto: string, de: string, para: string) => Promise<string | null>;
 	} = $props();
 
 	const wiz = $derived(contexto === 'wizard');
@@ -160,10 +177,78 @@
 	// Texto e diálogo não têm "um por linha"; editar é sempre um de cada vez.
 	const modoEfetivo = $derived<Modo>(editing ? 'um' : modo === 'lista' && !podeColar ? 'um' : modo);
 
+	// ── tradução automática ─────────────────────────────────────────────────
+	// O campo da tradução vem preenchido enquanto o professor escreve a frase, e
+	// ele confere. A regra que segura tudo: **o que ELE escreveu nunca é
+	// sobrescrito.** `traducaoAuto` é o último texto que veio do tradutor; se o
+	// campo é diferente dele (e não está vazio), o campo é do professor.
+	const podeTraduzir = $derived(
+		traducaoAutomatica &&
+			!!linguaDoAluno &&
+			tagConteudo !== 'und' &&
+			tagConteudo !== linguaDoAluno &&
+			(kind === 'pair' || kind === 'vocab')
+	);
+	let traducaoAuto = $state<string | null>(null);
+	let traduzindo = $state(false);
+	let semTradutor = $state(false);
+	/** Cada pedido ganha um número; resposta de pedido velho é descartada. */
+	let pedidoDaTraducao = 0;
+	const traducaoEhAutomatica = $derived(!!traducaoAuto && traducao === traducaoAuto);
+
+	async function pedirTraducao(texto: string, forcar = false) {
+		if (!onsugerirTraducao || !linguaDoAluno) return;
+		const meu = ++pedidoDaTraducao;
+		traduzindo = true;
+		const sugestao = await onsugerirTraducao(texto, tagConteudo, linguaDoAluno);
+		if (meu !== pedidoDaTraducao) return;
+		traduzindo = false;
+		semTradutor = sugestao === null;
+		if (sugestao === null || alvo.trim() !== texto) return;
+		// O professor pode ter começado a escrever a tradução enquanto esperava.
+		const doProfessor = traducao.trim() !== '' && traducao !== traducaoAuto;
+		if (doProfessor && !forcar) return;
+		traducao = sugestao;
+		traducaoAuto = sugestao;
+	}
+
+	/** "Traduzir de novo": troca a tradução atual pela do tradutor, a pedido. */
+	function traduzirDeNovo() {
+		const texto = alvo.trim();
+		if (texto) void pedirTraducao(texto, true);
+	}
+
+	// Depende SÓ da frase (e de a tradução estar ligada): ler `traducao` aqui
+	// faria a própria sugestão disparar outra, em laço.
+	$effect(() => {
+		const texto = alvo.trim();
+		if (!podeTraduzir || modoEfetivo !== 'um') return;
+		return untrack(() => {
+			const doProfessor = traducao.trim() !== '' && traducao !== traducaoAuto;
+			if (doProfessor) return;
+			if (!texto) {
+				// Apagou a frase: a tradução automática dela sai junto.
+				pedidoDaTraducao++;
+				traduzindo = false;
+				if (traducaoEhAutomatica) traducao = '';
+				traducaoAuto = null;
+				return;
+			}
+			// Uma pausa na digitação, não uma tecla: cada pedido é CPU do serviço
+			// que também transcreve a fala dos alunos.
+			const espera = setTimeout(() => void pedirTraducao(texto), 650);
+			return () => clearTimeout(espera);
+		});
+	});
+
 	export function limpar() {
 		editando = null;
 		alvo = '';
 		traducao = '';
+		traducaoAuto = null;
+		semTradutor = false;
+		pedidoDaTraducao++;
+		traduzindo = false;
 		raw = '';
 		nota = '';
 		exemplo = '';
@@ -187,6 +272,10 @@
 		modo = 'um';
 		alvo = m.target;
 		traducao = m.source;
+		// A tradução gravada é do professor (ou ele já a conferiu): editar a frase
+		// não a troca sozinha — "Traduzir de novo" está ali se ele quiser.
+		traducaoAuto = null;
+		semTradutor = false;
 		raw = m.raw;
 		nota = m.note;
 		exemplo = m.example;
@@ -303,8 +392,13 @@
 	});
 
 	// ── colar uma lista ─────────────────────────────────────────────────────
-	const linhasLote = $derived(modoEfetivo === 'lista' ? previewRawLines(lote) : []);
+	// Com o tradutor ligado a linha sem separador ENTRA — o mesmo parser do
+	// servidor, com a mesma opção, então a prévia continua sendo o que é gravado.
+	const linhasLote = $derived(
+		modoEfetivo === 'lista' ? previewRawLines(lote, { traduzirSemSeparador: podeTraduzir }) : []
+	);
 	const loteOk = $derived(linhasLote.filter((l) => l.ok).length);
+	const loteAutomatico = $derived(linhasLote.filter((l) => l.automatica).length);
 	const loteRuim = $derived(linhasLote.length - loteOk);
 
 	/** Leva o cursor até a linha sem separador — é onde o conserto acontece. */
@@ -564,7 +658,8 @@
 					? alvo.trim().length > 0 && raw.trim().length > 0
 					: kind === 'dialogue'
 						? falas.filter((f) => f.text.trim()).length >= 2
-						: alvo.trim().length > 0 && traducao.trim().length > 0;
+						: // Com o tradutor ligado, a tradução em branco é feita ao salvar.
+							alvo.trim().length > 0 && (traducao.trim().length > 0 || podeTraduzir);
 		}
 	});
 	const saveLabel = $derived(
@@ -607,17 +702,18 @@
 				: 'Sentido'
 	);
 
-	const segmento =
-		'rounded-full px-3.5 py-2 text-[12.5px] font-bold whitespace-nowrap transition-colors';
+	// Os chips de quantidade da IA. O "Como adicionar" é o `Alternador`.
 	const segmentoOn = 'bg-primary text-primary-content';
 	const segmentoOff = 'text-base-content/65 hover:text-base-content';
 </script>
 
 <div class="flex h-full min-h-0 flex-col bg-base-100">
 	<!-- cabeçalho -->
-	<div class="flex shrink-0 items-start gap-3 border-b border-line px-4 py-4 lg:px-[22px]">
+	<div class="flex shrink-0 items-start gap-3 border-b border-line px-5 py-4 lg:px-6 lg:py-5">
 		<div class="min-w-0 flex-1">
-			<p class="mb-1 font-display text-[20px] font-semibold tracking-[-0.02em]">
+			<p
+				class="mb-1 font-display text-[20px] leading-tight font-semibold tracking-[-0.02em] lg:text-[22px]"
+			>
 				{editing ? 'Editar material' : wiz ? 'Adicionar material' : 'Novo material'}
 			</p>
 			<p class="text-[12.5px] leading-normal text-pretty text-base-content/65">
@@ -634,9 +730,9 @@
 			<button
 				type="button"
 				onclick={onfechar}
-				class="btn btn-sm shrink-0 gap-2 btn-neutral {fecharRotulo
-					? ''
-					: 'w-[38px] px-0'} {fecharSoNoCelular ? 'lg:hidden' : ''}"
+				class="btn shrink-0 gap-2 btn-neutral {fecharRotulo
+					? 'btn-sm'
+					: 'size-10 min-h-10 p-0'} {fecharSoNoCelular ? 'lg:hidden' : ''}"
 				aria-label={fecharRotulo ?? (wiz ? 'Voltar para os materiais desta atividade' : 'Fechar')}
 			>
 				<svg class="size-[15px] shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -653,44 +749,19 @@
 	</div>
 
 	<!-- corpo -->
-	<div class="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-[22px]">
-		{#if !wiz}
-			<!-- idioma: a tag do material na biblioteca. No wizard ele é o da atividade. -->
-			<div class="mb-[18px] flex flex-wrap items-center gap-x-3 gap-y-2">
-				<label
-					for="material-idioma"
-					class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
-					>Idioma</label
-				>
-				{#if idiomaTravado}
-					<input type="hidden" name="idioma" value={idioma ?? ''} />
-					<IdiomaTag tag={idioma} />
-					<span class="text-[12px] text-base-content/65"
-						>travado: está em {editando?.usedIn}
-						{editando?.usedIn === 1 ? 'atividade' : 'atividades'} desse idioma</span
-					>
-				{:else}
-					<select
-						id="material-idioma"
-						name="idioma"
-						bind:value={idioma}
-						class="select h-[38px] min-h-[38px] w-auto py-0 text-[13px]"
-					>
-						<option value="">Sem idioma</option>
-						{#each IDIOMAS as i (i.tag)}
-							<option value={i.tag}>{i.rotulo}</option>
-						{/each}
-					</select>
-					<span class="text-[12px] text-base-content/65">a língua que o aluno vai aprender</span>
-				{/if}
-			</div>
-		{/if}
-
+	<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 lg:px-6 lg:py-6">
 		<!-- tipo: cartões que dizem o que o aluno faz -->
-		<p class="mb-2.5 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
-			{editing ? 'Tipo · travado' : 'O que você quer que o aluno faça'}
-		</p>
+		<h3 class="mb-2.5 text-[15px] font-bold">
+			{editing ? 'O que o aluno faz' : 'O que o aluno vai fazer'}
+			{#if editing}<span class="text-[12.5px] font-normal text-base-content/60">· travado</span
+				>{/if}
+		</h3>
 		<input type="hidden" name="kind" value={kernelKind} />
+		{#if !wiz}
+			<!-- Para onde vai a tradução automática na biblioteca; no wizard o
+			     servidor usa a língua do aluno da própria atividade. -->
+			<input type="hidden" name="linguaDoAluno" value={linguaDoAluno ?? ''} />
+		{/if}
 		<div class="mb-2.5 grid gap-2 sm:grid-cols-2">
 			{#each TIPOS as t (t.id)}
 				{@const sel = t.id === kind}
@@ -701,7 +772,7 @@
 					disabled={locked}
 					aria-pressed={sel}
 					title={locked ? 'O tipo de um material não muda depois de criado' : t.title}
-					class="flex items-start gap-2.5 rounded-box border-[1.5px] p-3.5 text-start transition-[border-color,background-color,transform] duration-150 enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45
+					class="flex items-start gap-2.5 rounded-box border-[1.5px] p-3.5 text-start transition-[border-color,background-color,transform,translate,scale] duration-150 enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45
 					       {sel
 						? 'border-primary bg-primary/6'
 						: 'border-line bg-base-100 enabled:hover:border-primary'}"
@@ -774,49 +845,64 @@
 			</p>
 		{/if}
 
-		<!-- modo de entrada -->
-		{#if !editing}
-			<div
-				class="mb-4 flex w-fit max-w-full flex-wrap gap-[3px] rounded-full border border-line bg-base-200 p-[3px]"
-				role="group"
-				aria-label="Como adicionar"
-			>
-				<button
-					type="button"
-					onclick={() => (modo = 'um')}
-					aria-pressed={modoEfetivo === 'um'}
-					class="{segmento} {modoEfetivo === 'um' ? segmentoOn : segmentoOff}"
-					>Um de cada vez</button
-				>
-				{#if podeColar}
-					<button
-						type="button"
-						onclick={() => (modo = 'lista')}
-						aria-pressed={modoEfetivo === 'lista'}
-						class="{segmento} {modoEfetivo === 'lista' ? segmentoOn : segmentoOff}"
-						>Colar uma lista</button
-					>
-				{/if}
-				<button
-					type="button"
-					onclick={() => (modo = 'ia')}
-					aria-pressed={modoEfetivo === 'ia'}
-					class="{segmento} flex items-center gap-1.5 {modoEfetivo === 'ia'
-						? segmentoOn
-						: segmentoOff}"
-				>
-					<svg class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-						<path
-							d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9zM18.5 16.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"
-							stroke="currentColor"
-							stroke-width="1.7"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					Gerar com IA
-				</button>
-			</div>
-		{/if}
+		<!-- idioma e modo: os dois mudam o que os campos abaixo pedem ("Frase em
+		     japonês", um campo ou uma lista), então ficam logo antes deles. -->
+		<div class="mb-5 grid gap-4 border-t border-line pt-5">
+			{#if !wiz}
+				<!-- idioma: a tag do material na biblioteca. No wizard ele é o da atividade. -->
+				<div class="fieldset">
+					<label for="material-idioma" class="fieldset-legend">Idioma</label>
+					{#if idiomaTravado}
+						<input type="hidden" name="idioma" value={idioma ?? ''} />
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+							<IdiomaTag tag={idioma} />
+							<span class="text-[12.5px] text-base-content/65"
+								>travado: está em {editando?.usedIn}
+								{editando?.usedIn === 1 ? 'atividade' : 'atividades'} desse idioma</span
+							>
+						</div>
+					{:else}
+						<select
+							id="material-idioma"
+							name="idioma"
+							bind:value={() => idioma ?? '', (v) => (idioma = v || null)}
+							class="select w-full sm:max-w-[18rem]"
+						>
+							<option value="">Sem idioma</option>
+							{#each IDIOMAS as i (i.tag)}
+								<option value={i.tag}>{i.rotulo}</option>
+							{/each}
+						</select>
+						<span class="fieldset-label"
+							>A língua que o aluno vai aprender. Define a direção do texto e como a frase é
+							dividida.</span
+						>
+					{/if}
+				</div>
+			{/if}
+
+			{#if !editing}
+				<div class="fieldset">
+					<span class="fieldset-legend">Como adicionar</span>
+					<Alternador
+						opcoes={podeColar
+							? [
+									{ id: 'um' as const, label: 'Um de cada vez' },
+									{ id: 'lista' as const, label: 'Colar uma lista' },
+									{ id: 'ia' as const, label: 'Gerar com IA' }
+								]
+							: [
+									{ id: 'um' as const, label: 'Um de cada vez' },
+									{ id: 'ia' as const, label: 'Gerar com IA' }
+								]}
+						valor={modoEfetivo}
+						onmudar={(m) => (modo = m)}
+						rotulo="Como adicionar"
+						largura="cheia"
+					/>
+				</div>
+			{/if}
+		</div>
 
 		<!-- aviso de edição compartilhada -->
 		{#if editing && editando && editando.usedIn > 0}
@@ -919,16 +1005,55 @@
 						{/if}
 					</div>
 					<div>
-						<label for="mf-trad" class="mb-1.5 block text-[12.5px] font-bold"
-							>{rotuloTraducao}</label
-						>
+						<label for="mf-trad" class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
+							{rotuloTraducao}
+							{#if podeTraduzir}
+								<span class="text-[11.5px] font-medium text-base-content/65"
+									>sai sozinha, você confere</span
+								>
+							{/if}
+						</label>
 						<input
 							id="mf-trad"
 							name="source"
 							bind:value={traducao}
+							aria-describedby={podeTraduzir ? 'mf-trad-status' : undefined}
 							class="input w-full font-content text-[14.5px]"
-							placeholder={kind === 'pair' ? EXEMPLO.pair.trad : EXEMPLO.vocab.trad}
+							placeholder={podeTraduzir
+								? 'A tradução aparece aqui'
+								: kind === 'pair'
+									? EXEMPLO.pair.trad
+									: EXEMPLO.vocab.trad}
 						/>
+						{#if podeTraduzir}
+							<!-- O estado da tradução em TEXTO: quem usa leitor de tela ouve
+							     "traduzindo", e o "Traduzir de novo" só aparece quando a
+							     tradução do campo é do professor, não a sugerida. -->
+							<div
+								id="mf-trad-status"
+								class="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-base-content/65"
+								role="status"
+							>
+								{#if traduzindo}
+									<Loading variant="fila" size={10} label="Traduzindo" />
+									<span>Traduzindo…</span>
+								{:else if semTradutor && !traducao.trim()}
+									<span>O tradutor não respondeu agora. Escreva a tradução.</span>
+								{:else if traducaoEhAutomatica}
+									<span>Tradução automática. Confira e ajuste se precisar.</span>
+								{:else if !traducao.trim()}
+									<span>Ela aparece quando você terminar de escrever.</span>
+								{/if}
+								{#if alvo.trim() && !traduzindo && traducao.trim() && !traducaoEhAutomatica}
+									<button
+										type="button"
+										onclick={traduzirDeNovo}
+										class="font-semibold text-primary underline-offset-2 hover:underline"
+										>Traduzir de novo</button
+									>
+								{/if}
+							</div>
+						{/if}
 					</div>
 					{#if kind === 'pair'}
 						<div>
@@ -1168,8 +1293,16 @@
 			<!-- ══ colar uma lista ══ -->
 		{:else if modoEfetivo === 'lista'}
 			<div>
-				<label for="mf-lote" class="mb-1.5 block text-[12.5px] font-bold">
+				<label
+					for="mf-lote"
+					class="mb-1.5 flex flex-wrap items-baseline gap-x-2 text-[12.5px] font-bold"
+				>
 					{kind === 'vocab' ? 'Um termo por linha' : 'Uma frase por linha'}
+					{#if podeTraduzir}
+						<span class="text-[11.5px] font-medium text-base-content/65"
+							>a tradução depois do separador é opcional: sem ela, sai sozinha</span
+						>
+					{/if}
 				</label>
 				<textarea
 					id="mf-lote"
@@ -1205,6 +1338,12 @@
 								{plural(linhasLote.length, 'linha', 'linhas')} · {loteOk}
 								{loteOk === 1 ? 'vira' : 'viram'} material
 							</span>
+							{#if loteAutomatico > 0}
+								<span class="text-[12px] text-base-content/65">
+									{loteAutomatico}
+									{loteAutomatico === 1 ? 'ganha' : 'ganham'} tradução automática ao adicionar
+								</span>
+							{/if}
 							<div class="min-w-1 flex-1"></div>
 							{#if loteRuim > 0}
 								<span
@@ -1228,53 +1367,73 @@
 								</span>
 							{/if}
 						</div>
-						{#each linhasLote as l, i (i)}
-							<div
-								class="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 last:border-0 {l.ok
-									? ''
-									: 'bg-warning/6'}"
-							>
-								<span class="w-4 shrink-0 font-mono text-[11.5px] text-base-content/65"
-									>{i + 1}</span
+						<!-- As linhas rolam DENTRO da prévia, com o resumo parado em cima: uma
+						     lista de cinquenta frases empurrava "O que o aluno vai ver" e o
+						     resto do formulário para longe. Sem `overscroll-contain` de
+						     propósito — chegando ao fim da lista, a rolagem segue para o
+						     formulário em vez de travar. Focável para quem rola pelo teclado. -->
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<div
+							role="region"
+							aria-label="Prévia das linhas coladas"
+							tabindex="0"
+							class="max-h-[min(18rem,40dvh)] overflow-y-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+						>
+							{#each linhasLote as l, i (i)}
+								<div
+									class="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 last:border-0 {l.ok
+										? ''
+										: 'bg-warning/6'}"
 								>
-								{#if l.ok}
-									<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
-										<span
-											class="font-content text-[13.5px] font-semibold"
-											dir={direcao}
-											data-content-lang={tagConteudo}>{l.left}</span
-										>
-										<span class="text-[12.5px] text-base-content/65">{l.right}</span>
-									</span>
-									<svg
-										class="size-[15px] shrink-0 text-success"
-										viewBox="0 0 24 24"
-										fill="none"
-										aria-hidden="true"
+									<span class="w-4 shrink-0 font-mono text-[11.5px] text-base-content/65"
+										>{i + 1}</span
 									>
-										<path
-											d="M5 12.5l4.5 4.5L19 7"
-											stroke="currentColor"
-											stroke-width="2.4"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
-								{:else}
-									<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
-										<span class="font-content text-[13.5px] text-base-content/65 line-through"
-											>{l.left}</span
+									{#if l.ok}
+										<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+											<span
+												class="font-content text-[13.5px] font-semibold"
+												dir={direcao}
+												data-content-lang={tagConteudo}>{l.left}</span
+											>
+											{#if l.automatica}
+												<span class="text-[12.5px] text-base-content/65 italic"
+													>tradução automática</span
+												>
+											{:else}
+												<span class="text-[12.5px] text-base-content/65">{l.right}</span>
+											{/if}
+										</span>
+										<svg
+											class="size-[15px] shrink-0 text-success"
+											viewBox="0 0 24 24"
+											fill="none"
+											aria-hidden="true"
 										>
-										<span class="text-[12px] font-bold text-warning">sem separador</span>
-									</span>
-									<button
-										type="button"
-										onclick={() => corrigirLinha(i + 1)}
-										class="btn btn-sm shrink-0 btn-plain text-[12px] text-primary">Corrigir</button
-									>
-								{/if}
-							</div>
-						{/each}
+											<path
+												d="M5 12.5l4.5 4.5L19 7"
+												stroke="currentColor"
+												stroke-width="2.4"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									{:else}
+										<span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1">
+											<span class="font-content text-[13.5px] text-base-content/65 line-through"
+												>{l.left}</span
+											>
+											<span class="text-[12px] font-bold text-warning">sem separador</span>
+										</span>
+										<button
+											type="button"
+											onclick={() => corrigirLinha(i + 1)}
+											class="btn btn-sm shrink-0 btn-plain text-[12px] text-primary"
+											>Corrigir</button
+										>
+									{/if}
+								</div>
+							{/each}
+						</div>
 					</div>
 				{/if}
 			</div>
@@ -1289,7 +1448,7 @@
 							type="button"
 							onclick={() => (fonte = f.id)}
 							aria-pressed={sel}
-							class="flex min-w-[104px] flex-1 items-center gap-2 rounded-field border-[1.5px] px-3 py-2.5 text-start transition-[border-color,background-color,transform] duration-150 hover:-translate-y-0.5
+							class="flex min-w-[104px] flex-1 items-center gap-2 rounded-field border-[1.5px] px-3 py-2.5 text-start transition-[border-color,background-color,transform,translate,scale] duration-150 hover:-translate-y-0.5
 							       {sel ? 'border-primary bg-primary/6' : 'border-line bg-base-100 hover:border-primary'}"
 						>
 							<span
@@ -1621,6 +1780,11 @@
 				{resultado.added} adicionados{resultado.ignored
 					? `, ${resultado.ignored} sem separador ${resultado.ignored === 1 ? 'ignorada' : 'ignoradas'}`
 					: ''}{resultado.reused ? `, ${resultado.reused} você já tinha` : ''}.
+				{#if resultado.traduzidas}
+					{resultado.traduzidas === 1
+						? 'Uma tradução veio do tradutor automático: confira na lista.'
+						: `${resultado.traduzidas} traduções vieram do tradutor automático: confira na lista.`}
+				{/if}
 			</p>
 			{#if resultado.aviso}
 				<!-- As linhas que não couberam no estoque do plano: dizer QUANTAS, e o
@@ -1665,10 +1829,8 @@
 		{/if}
 
 		<!-- o que o aluno vai ver -->
-		<div class="mt-[22px]">
-			<p class="mb-2.5 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
-				O que o aluno vai ver
-			</p>
+		<div class="mt-7 border-t border-line pt-5">
+			<h3 class="mb-2.5 text-[15px] font-bold">O que o aluno vai ver</h3>
 			<div class="overflow-hidden rounded-box border border-line">
 				<div
 					class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-base-200 px-3.5 py-2.5"
@@ -1741,14 +1903,19 @@
 
 	<!-- rodapé -->
 	<div
-		class="flex shrink-0 flex-wrap items-center gap-2.5 border-t border-line bg-base-200 px-4 py-3 lg:px-[22px]"
+		class="flex shrink-0 flex-wrap items-center gap-2.5 border-t border-line bg-base-200 px-5 py-3.5 lg:px-6"
 	>
 		<span
 			class="hidden min-w-[180px] flex-1 text-[12px] leading-normal text-base-content/65 lg:block"
 			>{footNote}</span
 		>
 		{#if editing}
-			<button type="button" onclick={limpar} class="btn btn-sm btn-ghost">Cancelar</button>
+			<!-- Na biblioteca a bandeja FECHA; no wizard a coluna volta a "Adicionar". -->
+			<button
+				type="button"
+				onclick={!wiz && onfechar ? onfechar : limpar}
+				class="btn min-h-11 motion-tap btn-plain">Cancelar</button
+			>
 		{/if}
 		<button
 			type={modoEfetivo === 'ia' ? 'button' : 'submit'}

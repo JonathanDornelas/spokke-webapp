@@ -4,7 +4,7 @@ paths:
   - 'src/lib/components/**'
 ---
 
-# Componentes — entendo
+# Componentes — Spokke
 
 Componentes canônicos em `src/lib/components/`. Reutilize-os em vez de reinventar: as classes e
 os estados aqui já seguem `design-system.md` (semântica de correção, alvo de toque, teclado,
@@ -90,7 +90,9 @@ Regras que valem sobre tudo isto: `.claude/rules/design-system.md`.
 {/if}
 ```
 
-`motion-tap` (em `app.css`) dá o press de 120ms com escala 0.97. No Player use sempre
+`motion-tap` (em `app.css`) é o toque: afunda a 0.97 em 120 ms e volta em 200 ms com ~4% de sobra
+(`--ease-out-back`) — "afundou e soltou". A transição dele cobre também `translate`, cor, borda e
+sombra, para não apagar o hover que a tela puser no mesmo elemento. No Player use sempre
 `size="lg"`. `type="button"` por padrão — evita submit acidental dentro de um `<form>`; passe
 `type="submit"` explicitamente quando for o botão de envio.
 
@@ -302,7 +304,7 @@ Props: `{ variant?: 'info' | 'warning' | 'error' | 'success'; children: Snippet 
 ## Espera — `Loading.svelte`, `LoadingBar.svelte`, `NavigationProgress.svelte`
 
 Três variações do MESMO vocabulário do ambiente — círculo, triângulo, hexágono e anel tracejado —
-e as mesmas três cores (violeta cheio, violeta a 60%, teal a 70%). Trocar de variante não pode
+e as mesmas três cores (azul cheio, azul a 60%, teal a 70%). Trocar de variante não pode
 parecer trocar de produto.
 
 Props de `Loading`: `{ variant?: 'orbita' | 'fila' | 'traco'; size?: number; label?: string; pace?: 'normal' | 'devagar'; tone?: 'brand' | 'current' }`.
@@ -316,7 +318,7 @@ Props de `Loading`: `{ variant?: 'orbita' | 'fila' | 'traco'; size?: number; lab
 - **`size` é sempre a ALTURA em px.** Na fila isso é a altura da linha (padrão 14), não o
   diâmetro de uma bolinha — ela é uma linha baixa, não uma caixa quadrada.
 - **`tone="current"` dentro de botão colorido.** As formas herdam `currentColor`; com `brand`
-  elas sairiam violeta sobre violeta.
+  elas sairiam azul sobre azul.
 - **`pace="devagar"` (1,75×) acima de dez segundos.** A órbita rápida lê como travamento; a
   lenta lê como trabalho acontecendo.
 - As durações dentro de cada variante são primas entre si de propósito: o conjunto nunca volta à
@@ -381,13 +383,16 @@ a fila de TTS e o bucket em 50% para ganhar um degrau.
 arquivo muda mesmo, a posição é restaurada por FRAÇÃO (os dois têm durações diferentes) depois
 do `loadedmetadata`, e o `play()` só acontece aí — chamá-lo antes de o `src` novo ser aplicado
 era abortado pelo carregamento, e a promessa rejeitada sem `catch` deixava o player mudo até
-recarregar a página. Arquivo lento que sumiu (o áudio tem 10 dias) cai para o normal. As repetições contam para
+recarregar a página. Arquivo lento que não carregou (síntese na fila, job que falhou) cai para o normal. As repetições contam para
 a tentativa — quem instrumenta isso é o `onplay` que a tela passa.
 
 No celular as pílulas de velocidade descem para uma linha própria rotulada "Velocidade": em
-largura de telefone elas espremem a onda contra o botão de tocar.
+largura de telefone elas espremem a onda contra o botão de tocar. **`emLinha` desliga isso**: tocar,
+onda e velocidade numa linha só em QUALQUER tela. É o celular da home — ele tem sempre a largura de
+um telefone, mas quem decide o breakpoint é a tela de quem o vê, e no celular de verdade a segunda
+linha empurrava a questão para fora da tela do aparelho.
 
-Props: `{ src: string; srcSlow?: string; onplay?: () => void; playing?: boolean; duration?: string; plays?: number }`
+Props: `{ src: string; srcSlow?: string; onplay?: () => void; playing?: boolean; duration?: string; plays?: number; emLinha?: boolean }`
 (`playing` é `$bindable`, padrão `false`). O bind existe só para catálogo/demo poder abrir já com
 a onda animada sem chamar `audio.play()` de verdade — nunca inicialize `playing` como `true`
 numa tela real do Player, isso violaria a regra de autoplay. `duration`/`plays` são opcionais e
@@ -406,7 +411,7 @@ QUESTÃO, com velocidade alternável, e segue o volume do aparelho. Este rege s�
   sozinho seria a mesma falha por outro sentido.
 - **O padrão é 0.6, não 1 nem 0.** Trinta aparelhos no talo numa sala é barulho, não retorno;
   e um recurso que nasce mudo é um recurso que ninguém descobre. A escolha vive em
-  `localStorage` (`entendo-volume`) e vale por aparelho.
+  `localStorage` (`spokke-volume`) e vale por aparelho.
 - **Os arquivos são baixados no clique de "Verificar"**, não na montagem da tela
   (`som.preparar()`). A correção acontece no servidor, então o áudio viaja em paralelo com a
   ida até lá e já está pronto quando o veredito chega. Baixar os quatro ao montar seriam
@@ -491,7 +496,7 @@ componente só diz o que foi tocado.
   `blur` antes do `focus`: trocar o `inputmode` para `none` num campo já focado não recolhe o
   teclado do aparelho, só um foco novo lê o valor novo. "Ocultar" tira o foco (`onocultar`),
   senão o teclado do aparelho saltava no lugar do virtual.
-- **Ela SOBE e DESCE, não aparece.** `teclado-in` (300ms, desacelerando) e `teclado-out` (190ms,
+- **Ela SOBE e DESCE, não aparece.** `teclado-in` (`media`, 300 ms, desacelerando) e `teclado-out` (`curta`, 200 ms,
   acelerando), no `app.css`, só `transform` e `opacity`. O painel desliza dentro de uma moldura
   `overflow: hidden`, então nunca passa por cima do rodapé nem do campo; e continua montado até o
   `animationend` da saída (`montado` ≠ `aberto`), senão sumiria de uma vez.
@@ -519,7 +524,7 @@ componente só diz o que foi tocado.
   marcas, e no corpo da letra sumiam num canto da tecla.
 - **Pronúncia sob a tecla** (`Tecla.leitura`), em mono 9,5px, `aria-hidden` — o leitor de tela já
   pronuncia a letra no `lang` certo. Desligável; a escolha é por aparelho
-  (`$lib/client/pronuncia.svelte.ts`, `entendo-pronuncia`) e vale também para a linha "Leitura"
+  (`$lib/client/pronuncia.svelte.ts`, `spokke-pronuncia`) e vale também para a linha "Leitura"
   sob o campo (`LeituraDoCampo.svelte`, que só aparece na grade: na barra o texto já é latino).
   Teclado sem pronúncia nas teclas (o pinyin — a tecla já É a pronúncia) não mostra a chave, e a
   linha "Leitura" some quando seria igual ao que foi digitado.
@@ -631,13 +636,59 @@ Modal, painel lateral e gaveta ENTRAM e SAEM — aparecer de uma vez parecia a t
 de uma vez, um travamento. Três transições, as mesmas em toda tela: `veu` (só opacidade),
 `painelLateral` (`lado: 'fim'` para o painel da direita, `'inicio'` para a gaveta) e `modal` (sobe
 18px enquanto aparece). Entrar desacelera (300 ms), sair acelera e some mais rápido (200 ms) — use
-`in:` e `out:` separados, é a direção que escolhe a curva. Dentro de um componente que o PAI monta
-com `{#if}` (o `ProgramacaoPainel`), `|global`: no Svelte 5 a transição é local por padrão e a saída
-não rodaria. `prefers-reduced-motion` zera a duração ali dentro — o Svelte anima pela Web
-Animations API, que a regra global do `app.css` não alcança.
+`in:` e `out:` separados, é a direção que escolhe a curva. `prefers-reduced-motion` zera a duração
+ali dentro — o Svelte anima pela Web Animations API, que a regra global do `app.css` não alcança.
 
-O painel que fica MONTADO fechado (a biblioteca, por causa do `bind:this` do formulário) faz o mesmo
-por CSS: `invisible` + `inert` quando fechado, e a visibilidade só vira no fim da saída.
+**Painel lateral é sempre a `Bandeja` (abaixo)** — nenhuma tela monta o seu. A gaveta do celular é
+a única que usa `painelLateral` direto (`lado: 'inicio'`).
+
+## Bandeja — `Bandeja.svelte`
+
+Todo formulário de CRIAR e EDITAR do Studio que não é atividade abre aqui, pela direita, sobre a
+tela de onde veio: nova turma, editar turma, adicionar aluno, editar cadastro (chamada e ficha do
+aluno), enviar atividade, novo/editar módulo, acrescentar atividades, adicionar turmas, a
+programação, o material da biblioteca e o convite da escola. Antes cada tela tinha o seu jeito —
+painel de 520px, formulário que abria no meio da página empurrando a lista, página inteira para
+criar uma turma. (A atividade continua no wizard: é uma tarefa de quatro etapas, não um formulário.)
+
+Props: `{ aberta; onfechar; titulo?; descricao?; rotulo?; marca?: Snippet; children: Snippet; resumo?; erro?; rodape?: Snippet; moldura?; manterMontada? }`.
+
+- **Largura ~40% da tela**: `--largura-bandeja` (`clamp(28rem, 40vw, 46rem)`, no `@theme`) — piso
+  para não espremer o formulário num notebook, teto para não virar uma segunda página num monitor
+  largo. Abaixo de `sm`, a tela inteira.
+- **Anatomia fixa.** Cabeçalho: a `marca` (a etiqueta do que se cria, na cor escolhida, mudando
+  enquanto se digita — ou o avatar do aluno), o título e UMA frase sobre o que muda e o que não muda,
+  e o X. Corpo: os campos, o único pedaço que rola. Rodapé (`base-200`): o `resumo` — a consequência
+  em texto ("3 alunos · 2 recebem convite") —, o `erro` do servidor escrito com ícone, e as ações, a
+  principal na ponta. No celular as ações dividem a largura.
+- **O rodapé fica FORA do `<form>`**; quem envia é `<button type="submit" form={id}>`. O Enter dentro
+  de um campo continua enviando: o botão ligado pelo atributo conta como o botão padrão do formulário.
+- **Monta só aberta** (padrão): fechar desmonta, então reabrir uma edição começa do que está GRAVADO.
+  Quem guarda o alvo (o aluno, o módulo) o mantém depois de fechar, para a saída mostrar o conteúdo
+  em vez de esvaziar no meio do deslize. As transições são LOCAIS de propósito — com `|global`, uma
+  navegação segurava a página velha na tela pelo tempo da saída. Quem precisa remontar a cada
+  abertura (a programação, cuja cópia local nasce do gravado) usa um `{#key}` e abre no quadro
+  SEGUINTE ao da montagem, senão a entrada não anima.
+- `manterMontada`: o conteúdo existe fechado, `invisible` + `inert` — a biblioteca chama `novo()` e
+  `editar()` do `MaterialForm` por `bind:this`. Ali `moldura={false}`: o formulário desenha o próprio
+  cabeçalho e rodapé (é o mesmo da etapa 2 do wizard), com as mesmas medidas.
+- **Foco**: abre no `[data-autofoco]` (o primeiro campo de digitar; numa lista de escolha, nenhum —
+  no celular ele abriria o teclado à toa) ou no próprio painel, que se anuncia pelo título. O Tab dá a
+  volta dentro, Esc e o clique no véu fecham, e o foco volta a quem abriu.
+- **Campos**: `fieldset` / `fieldset-legend` / `fieldset-label` (o rótulo, o campo e UMA linha
+  dizendo para que ele serve). Opcional é escrito no rótulo (`· opcional`), nunca por asterisco no
+  obrigatório. Um bloco à parte (os alunos da turma nova, as atividades do módulo novo) ganha título
+  de 15px e um filete em cima — e o "opcional" vai no título dele.
+- **Escolher UMA coisa é rádio (`.radio`), escolher VÁRIAS é `.checkbox`**, e a linha inteira é o
+  alvo (`has-[:checked]` pinta a borda). Nada de um botão "Enviar" por linha: a lista escolhe, o
+  rodapé diz o que vai acontecer, e o botão age.
+
+Os seletores que se repetem nas bandejas são componentes: `SeletorDeEtiqueta.svelte` (a cor, ver
+"Etiqueta de cor") e `SeletorDeAtividades.svelte` (`{ atividades; escolhidas: $bindable; vazio? }`) —
+a mesma lista no "Novo módulo" e no "Acrescentar atividades": busca a partir de sete, filtro de
+idioma, e **o número da posição em cada escolhida**, porque a ordem do clique é a ordem do módulo.
+
+Catálogo vivo: `/dev/components#bandeja`.
 
 **O véu é `bg-overlay`, preto translúcido nos dois temas.** Era `bg-base-content/40`, que no escuro
 é um véu BRANCO — a página clareava em vez de recuar. O `::backdrop` do `<dialog>` usa o mesmo token.
@@ -650,7 +701,15 @@ usando os keyframes `en-float-a`, `en-float-c`, `en-drift-spin`, `en-float-b` do
 própria; a borda é resolvida com `mask-image` em fade, nunca corte reto. São sutis por design
 (opacidade 25–35%) — não é bug se mal aparecerem num screenshot pequeno.
 
-Props opcionais: `{ height?: string; tone?: 'primary' | 'success'; layout?: 'band' | 'column'; edges?: 'top' | 'bottom' | 'both'; scale?: number }`.
+Props opcionais: `{ height?: string; tone?: 'primary' | 'success'; layout?: 'band' | 'column' | 'corner' | 'tela'; edges?: 'top' | 'bottom' | 'both'; scale?: number }`.
+
+`layout="tela"` espalha sete formas (nenhuma família repetida) pela página INTEIRA, nas margens e
+em alturas diferentes, com o canto de cima à esquerda livre para a marca. É o fundo das telas de
+entrar, criar conta e recuperar a senha (`(auth)/+layout.svelte`): ali o cartão fica no meio de um
+fundo vazio, e as duas faixas de `edges="both"` deixavam o meio chapado. O cartão é opaco, então o
+que passa por trás dele some; nenhuma forma fica atrás de texto. **O movimento é o `en-vagar-*`**
+(app.css), com amplitude de até 80 px e ciclos de 13 a 23 s: com o vaivém de ~30 px das faixas,
+numa página quase vazia, as formas pareciam paradas, e foi esse o retorno do dono do repositório.
 
 `scale` só existe para quem desenha uma TELA DENTRO DE OUTRA — hoje só o painel da prévia do
 editor de item, que é uma coluna estreita ao lado do formulário. As formas crescem por `clamp(mín, Nvw, máx)`, e `vw` é a VIEWPORT: dentro de uma
@@ -689,7 +748,9 @@ onde o conteúdo vem depois. Faixa do lado errado cai atrás de texto, que é o 
 As quatro etapas do wizard não montam a faixa cada uma: ela vive uma vez em `WizardShell.svelte`,
 ancorada embaixo (150px no celular, 190px no desktop). Ela vem ANTES do conteúdo no DOM e o
 conteúdo é `relative` — entre irmãos posicionados sem `z-index`, quem vem depois pinta por cima —,
-então as telas filhas não precisam de `z-1` em cada bloco.
+então as telas filhas não precisam de `z-1` em cada bloco. A exceção é a etapa 2
+(`WizardShell rolagem="colunas"`): ali a casca tem a altura da tela e cada coluna rola por dentro,
+então a faixa vai no FIM da coluna da lista, e o texto que rola nunca passa por cima dela.
 
 `tone="success"` troca `primary` por `success` nas formas coloridas — só a tela de resultado do
 Player usa isso, quando o desfecho é positivo. As classes de cor são strings **inteiras e
@@ -715,7 +776,7 @@ Props: `{ numbers?: { value: string | number; label: string; tone?: 'primary' | 
 - **Os números são uma lista curta em linha**, não uma grade que espalha quatro valores pela
   largura toda: lidos juntos eles respondem uma pergunta só ("qual é o tamanho disto?"), e a
   distância entre eles quebrava a leitura. Quem merece cor é dito por `tone` — um por cartão, no
-  máximo dois (o que recebe convite em violeta, o e-mail que voltou em vermelho).
+  máximo dois (o que recebe convite em azul, o e-mail que voltou em vermelho).
 - `badge` é a etiqueta de 46px à esquerda do título: as iniciais do aluno, a sigla da turma na
   cor dela, ou um ícone. `children` é o `h1` (22px no celular, 28 no desktop) mais a linha de
   contexto em 13,5px. `actions` são os botões de 42px — `btn-plain` para o secundário, porque o
@@ -767,18 +828,23 @@ itens). `delay` (ms) escalona a animação de entrada quando várias barras apar
 
 Props: `{ dias: DiaDaSemana[]; rotulo?: string }` — `dias` sai de `proximosDias` (`$lib/modulos/agenda.ts`).
 A mesma faixa na lista de módulos (de todos e de cada um) e no módulo aberto. Um cartão por TURMA por
-dia, porque é um e-mail por aluno por data ("Frutas 3 +1"); cada um abre a programação daquela turma
+dia, porque é uma liberação por turma por data ("Frutas 3 +1"); cada um abre a programação daquela turma
 (`?turma=`). O dia com envio é largo e o vazio estreito (`grid-cols-(--cols-lg)`, montado dos dias),
 para a semana caber numa linha sem espremer o que importa; no celular a faixa rola de lado e o dia
 vazio continua ali — "nada" é informação. Rascunho é contorno tracejado MAIS o aviso escrito, nunca só
 a cor.
 
-## Etiqueta de cor — o seletor
+## Etiqueta de cor — `SeletorDeEtiqueta.svelte`
 
-Turma e módulo escolhem a cor pela ETIQUETA já com a sigla (`CLASSE_DA_ETIQUETA`, quadrado de 46px com
-o de 32px dentro), não por uma bolinha de cor: o professor vê como ela vai aparecer na lista. O nome da
-cor vai no `aria-label` e no `title` (`NOME_DA_COR`, `$lib/etiquetas.ts`) — cor sozinha não se anuncia.
-É o mesmo desenho em "Novo módulo", "Editar módulo", "Editar turma" e "Nova turma".
+Props: `{ cor: $bindable; sigla: string; name?: string; rotulo? }`.
+
+Turma e módulo escolhem a cor pela ETIQUETA já com a sigla (`CLASSE_DA_ETIQUETA`, quadrado de 48px com
+o de 32px dentro), não por uma bolinha de cor: o professor vê como ela vai aparecer na lista. São
+rádios de verdade (as setas andam entre as cores; com `name`, o valor vai no `<form>`), e o nome da
+cor vai no texto escondido e no `title` (`NOME_DA_COR`, `$lib/etiquetas.ts`) — cor sozinha não se
+anuncia. Era o mesmo markup copiado em quatro formulários, cada um num tamanho; agora é o componente
+em "Nova turma", "Editar turma", "Novo módulo" e "Editar módulo" — e a `marca` da bandeja mostra a
+etiqueta grande, mudando junto.
 
 ## Tag de idioma — `IdiomaTag.svelte` + `FiltroIdioma.svelte`
 
@@ -822,12 +888,36 @@ turma, ficha do aluno, tentativas (lista e detalhe), cabeçalho da questão no P
 o mapa do módulo. O avatar do aluno vem da CONTA dele (`StudentAccount.avatar`, da conta logada na
 tentativa ou da ligada à ficha); aluno sem conta ganha o `avatarPadrao` do nome.
 
-`AvatarEditor.svelte` — props `{ codigo: $bindable; aberto?: $bindable; onusar?; oncancelar? }`.
+`AvatarEditor.svelte` — props `{ codigo: $bindable; aberto?: $bindable; nome?; onusar?; oncancelar? }`.
+**É a tela de criar personagem de um jogo**, em três colunas: o PALCO (sempre escuro, `panel`, nos
+dois temas: a luz da marca, o personagem numa moldura de canto em degrau, o pedestal e o chão
+quadriculado em perspectiva, a plaquinha com o `nome`, os três tamanhos reais, "Sortear" e
+"Desfazer"), a TRILHA de categorias (um `tablist`, com o cursor de menu ▶ na aberta e um ponto nas
+que mudaram desde que o editor abriu) e a OFICINA (o título, o seletor "◀ opção ▶" com a posição,
+a nota, a grade de miniaturas e, embaixo, a paleta da peça). "Prontos" é a primeira aba da trilha,
+separada das onze categorias, e o seletor dela passa de um personagem montado para o outro. Pele e
+fundo, que são só cor, viram miniaturas como as outras — o tom no rosto de agora diz mais que um
+quadradinho solto. No celular a trilha vira uma faixa que rola de lado e o palco encolhe para uma
+linha.
+
+**O tamanho não muda com o que se escolhe.** O diálogo tem altura e largura FIXAS
+(`min(1080px, …)` × `min(680px, …)`; tela cheia abaixo de `lg`) e só a grade rola por dentro. Ele
+era do tamanho do conteúdo, centralizado: cada categoria tinha outra quantidade de peças e as abas
+quebravam em duas linhas, então o modal encolhia e crescia a cada toque. A nota tem altura mínima de
+três linhas pelo mesmo motivo — a grade não sobe e desce entre uma aba e outra. Seis colunas no
+desktop: as dezesseis peças de cabelo e de roupa cabem sem rolar.
+
+Toda mudança passa por `mudar()`, que guarda o código anterior: "Desfazer" e o Ctrl+Z voltam um passo
+de cada vez (até 50). O rodapé diz quantas partes mudaram desde que o editor abriu; a cor de
+uma casa compartilhada conta para a PRIMEIRA categoria que a usa — trocar a cor do cabelo não marca
+"a barba mudou". O personagem dá um pulinho em três quadros a cada troca (`animate-salto`, por
+`{#key codigo}`). O código de dezoito números nunca aparece na tela (paginas.md "Conta").
+
 **É um `<dialog>` de verdade, não uma `div` com fundo escuro**: foco preso, Escape e backdrop vêm
 do elemento, e "sem framework de UI" é razão para usar a plataforma, não para reimplementar o que
 ela já faz à mão (e pela metade). Cancelar — inclusive por Escape ou clique no véu — devolve o
 avatar como estava ao abrir, senão "fechar sem querer" gravava a mudança. **Fechar anima antes de
-fechar** (`en-modal-out` e `en-veu-out`, 180 ms): o `close()` nativo sumia com diálogo e véu no
+fechar** (`animate-modal-saida` e `animate-veu-saida`, `--duration-curta`): o `close()` nativo sumia com diálogo e véu no
 mesmo quadro, então o Escape tem o fechar imediato impedido e o `close()` vem no `animationend`
 (com um `setTimeout` de rede). O clique no véu cai no próprio `<dialog>` — o `<dialog>` modal não
 fecha sozinho por ele. Abre a partir do rosto que a pessoa já vê (o gravado ou o `avatarPadrao`).
@@ -836,13 +926,14 @@ fecha sozinho por ele. Abre a partir do rosto que a pessoa já vê (o gravado ou
 se aquele cabelo combina com aquela pele. São ~20 avatares por categoria, e é por isso que o
 gerador junta pixels vizinhos numa faixa só em vez de emitir um `<rect>` por pixel.
 
-A prévia mostra os **três tamanhos reais de uso** (56, 40, 32) ao lado do grande: é ali que se
-descobre que as sardas somem em 32px — e é para ser assim.
+O palco mostra os **três tamanhos reais de uso** — cabeçalho (56, redondo), turma (40) e lista (32)
+— embaixo do grande: é ali que se descobre que as sardas somem em 32px, e é para ser assim.
 
 Acessório é a única categoria de escolha MÚLTIPLA (até três ao mesmo tempo, casas 13, 16 e 17).
 No teto, a mais antiga sai para a nova entrar: recusar em silêncio deixaria o toque sem resposta, e
 avisar "já tem três" num editor de enfeite seria cerimônia demais. A regra está em `editar.ts`, com
-teste — é a única lógica de verdade do editor.
+teste, junto de `escolhaAtual` (o nome e a posição que o seletor mostra) e `ciclar` (as setas, que
+dão a volta nas pontas).
 
 ---
 
@@ -851,8 +942,18 @@ teste — é a única lógica de verdade do editor.
 A tabela de planos, UMA para a home (seção `#planos`) e para `(site)/planos`. Props
 `{ planoAtual?: PlanoId | null; mostrarCabecalho?; mostrarRodape?; titulo?; lede?; compacto? }`.
 
-**Os preços são PLACEHOLDER e vivem em `$lib/content/planos.ts`, nunca aqui** — ver paginas.md
-"Planos e preços". O componente desenha o que aquele arquivo diz.
+**Os preços chegam por `$lib/content/planos.ts` (que os lê de `$lib/billing/precos.ts`), nunca
+daqui** — ver paginas.md "Planos e preços". O componente desenha o que aquele arquivo diz.
+
+**É um carrossel** (pedido do dono do repositório): o cartão em foco fica no centro em tamanho
+cheio e os vizinhos aparecem a 92%, esmaecidos, com as pontas do trilho sumindo em degradê. **Abre
+no Pro.** Embaixo, as setas ‹ › e um ponto por plano (no centro, porque nas laterais elas cobririam
+as pontas dos vizinhos no celular). Também andam as setas do teclado com o foco dentro, o arrasto
+com o dedo e o clique num cartão do lado (menos no botão dele, que age). O Tab até o botão de um
+cartão o traz ao centro (`onfocusin`). **A posição é CSS**: a largura do cartão sai do contêiner
+(`@container`, `100cqw`) e o trilho anda `índice × (cartão + vão)` por `translate` — o servidor já
+manda o Pro no centro, sem medir nada em JS e sem salto na hidratação. Padrão da APG: região
+rotulada, um `group` por cartão ("Pro, 2 de 4") e um `aria-live` com o cartão em foco.
 
 O cartão do plano atual ganha "Seu plano agora", e esse selo vence o destaque de marketing. Recurso
 ausente é um **traço apagado, não um X vermelho**: vermelho é a semântica de correção e não decora
@@ -863,9 +964,15 @@ não se anuncia.
 
 ## Material — `MaterialForm.svelte` + `MaterialList.svelte` + `material-form.ts`
 
-O formulário de material é UM, para a biblioteca (`(studio)/materiais`, painel sobre a lista) e
-para a etapa 2 do wizard (`atividades/[id]/materiais`, coluna fixa). O que ele faz e por quê está
-em paginas.md "Studio"; aqui, como se usa.
+O formulário de material é UM, para a biblioteca (`(studio)/materiais`, numa `Bandeja` montada
+sobre a lista) e para a etapa 2 do wizard (`atividades/[id]/materiais`, coluna fixa). O que ele faz
+e por quê está em paginas.md "Studio"; aqui, como se usa.
+
+**A ordem dos campos é a da decisão**: o que o aluno vai fazer (os cartões de tipo, com o rendimento
+logo abaixo), depois idioma e "Como adicionar" (o `Alternador`: um de cada vez, colar uma lista,
+gerar com IA) — os dois mudam o que os campos pedem, então ficam logo antes deles —, os campos, e por
+último "O que o aluno vai ver". Na edição o "Cancelar" FECHA a bandeja da biblioteca; no wizard ele
+devolve a coluna a "Adicionar".
 
 **A PÁGINA é dona do `<form>`**, o componente só desenha os campos com os `name` que
 `camposMaterial` espera (mais os hidden de `kind`, `questions` e `lines`). A página envolve
@@ -954,6 +1061,11 @@ Cada interação abre com um RÓTULO do que se espera ("Escolha uma resposta", "
 coluna da direita é um campo solto sem pergunta. Em `match` os cabeçalhos das colunas são os
 nomes dos idiomas, que chegam pelo runtime (`sourceLabel`/`targetLabel`) — não são gabarito.
 
+O celular da home passa três props que só ele usa (paginas.md "Exemplo"): `dicaDeTeclado={false}` no
+`AssembleInteraction`, e `corrigida` no `AssembleInteraction` (as peças que sobraram saem) e no
+`SpeakInteraction` (o microfone e o "Entendemos" saem — o veredito já diz o que se ouviu). Ali a
+questão inteira tem de caber na tela do aparelho; no Player elas ficam no padrão.
+
 `AssembleInteraction` ignora um id já escolhido: duplo clique rápido chega duas vezes antes do
 re-render tirar o token do banco, e o mesmo id duas vezes rebenta o `{#each}` com chave.
 
@@ -977,6 +1089,60 @@ de dois arrays, `AssembleInteraction` é a composição específica de item do P
 
 ---
 
+## Uma questão como o aluno vê — `PreviaDaQuestao.svelte`
+
+Props: `{ runtime: RuntimeDaQuestao; chave: string; compacta?: boolean }`. Desenha UMA questão —
+enunciado, áudio, texto de apoio e a interação — com os componentes do Player, a partir do que
+`buildRuntimeItem` devolveu no servidor. É a mesma na prévia da atividade inteira e no editor de
+questão: duas prévias desenhadas cada uma do seu jeito divergiam do Player no primeiro tipo novo. A
+resposta é estado local (nada é enviado); quem troca de questão remonta com `{#key}`.
+
+## Nomes em português — habilidade e tipo de questão
+
+A tela nunca mostra a chave do kernel. Habilidade sai de `skillLabels`
+(`kernel/interactions/skill-schema.ts`: Escuta, Fala, Leitura, Escrita) e tipo de questão de
+`ROTULO_DA_INTERACAO` (`$lib/atividades/editor-item.ts`: "Digitar a resposta", "Completar a lacuna",
+"Montar a frase"…). Havia quatro mapas com "Listening"/"Writing" espalhados (Player, detalhe,
+publicar, editor), e a revisão e os resultados mostravam "assemble" e "type" crus. O modo de
+correção que o aluno vê no cabeçalho da questão também é em português ("tolerante", "reconhecimento
+de voz", "corrigida pelo professor").
+
+---
+
+## Metadados e prévia de compartilhamento — `Metadados.svelte`
+
+Props: `{ titulo; descricao; tituloDaAba?; imagem?; imagemAlt?; tipo?: 'website' | 'article'; indexar?; publicadoEm?; atualizadoEm?; secao? }`.
+As três últimas são do artigo do blog (`tipo="article"`): `article:published_time`,
+`article:modified_time` e `article:section`. **Não existe `article:author`**: o blog não assina.
+Toda página PÚBLICA abre com ele no lugar de um `<svelte:head>` solto: título da aba, descrição,
+canonical, Open Graph (`og:title`, `og:description`, `og:image` com 1200×630 e `alt`, `og:url`,
+`og:type`, `og:locale` `pt_BR`, `og:site_name`) e Twitter Card `summary_large_image`.
+
+- **Tudo no HTML inicial, renderizado no servidor.** O robô que monta a prévia do WhatsApp e do
+  LinkedIn não roda JavaScript; `e2e/smoke.spec.ts` lê o HTML cru da home para provar isso.
+- **URL absoluta** a partir da origem do pedido (`page.url.origin`): em produção, o `ORIGIN` do
+  adapter-node faz dela a do domínio público. `og:url` e o canonical são a mesma URL, sem query.
+- **As imagens são duas, em `static/og/`**: `spokke.png` (a marca e a promessa, padrão) e
+  `atividade.png` (o link que o professor manda para a turma e o convite de turma). Foram
+  desenhadas em HTML com os tokens da marca e renderizadas pelo Chromium do Playwright; mudar a
+  promessa pede gerar de novo, no mesmo tamanho. No artigo do blog a imagem é a capa dele (JPEG
+  em `static/blog/capas/`), e o `og:image:type` sai da extensão do arquivo.
+- **`indexar={false}`** dá `noindex` e tira o canonical, mas MANTÉM a prévia: é o caso do link da
+  atividade (`a/[slug]`: o título dela e "N questões de inglês, uns M minutos" — nunca uma
+  questão, e `e2e/aluno.spec.ts` confere que o gabarito não aparece) e do convite de turma.
+- As áreas logadas (painel, administração, área do aluno, telas do Player) levam
+  `<meta name="robots" content="noindex">` no layout; entrar e recuperar a senha também, o
+  cadastro não. O `robots.txt` bloqueia só `/api/`: bloquear `/a/` impediria o robô da prévia de
+  ler o título do link.
+- **Título da aba com "·", nunca travessão** (voz do projeto de SEO): "Planos e preços · Spokke".
+  **O padrão vale para o site INTEIRO** — páginas públicas, Studio, Player, painel interno e erro:
+  **o que é a página · onde ela fica · Spokke**, do mais específico para o mais geral, e a marca
+  sempre por último. "Atividades · Spokke", "Present perfect · Atividades · Spokke", "Publicar ·
+  Present perfect · Spokke", "Questão 3 · Present perfect · Spokke", "Pedidos · Painel interno ·
+  Spokke", "Assinatura · Conta · Spokke". Sem termo interno ("Revisar questões", não "Revisar
+  itens"). A ÚNICA que começa pela marca é a home, que é a que conta para busca. Havia "— Spokke",
+  "— painel interno" e "— resultados" misturados, e três telas do Player sem a marca.
+
 ## Casca das páginas públicas — `SiteHeader.svelte`, `SiteFooter.svelte`, `SiteHero.svelte`, `LegalPage.svelte`
 
 A home e as páginas institucionais (`(site)/**`) compartilham cabeçalho e rodapé — é um desenho
@@ -984,6 +1150,28 @@ só, não dois parecidos. `(site)/+layout.svelte` monta `SiteHeader`/`SiteFooter
 monta os dois também, e só ela usa o snippet `extra` de `SiteHeader` pra acrescentar o toggle de
 tema manual (home.md "Toggle de tema" — nenhuma outra página pública tem esse controle, seguem
 `prefers-color-scheme` puro).
+
+O rodapé tem, no bloco da marca, os ícones das redes (`redes` em `institucional.ts`: sem `url` o
+ícone fica sem link, com o mesmo hover do que terá link — a fileira não muda quando os perfis
+entrarem) e, na linha de baixo, oposto ao "©", os selos de
+verificação (SSL e Google Safe Browsing, `selosDeVerificacao`), em PNG próprio
+(`static/selos/`, gerado por `scripts/gerar-selos.mjs`): a imagem é o link, e o `alt` diz o que
+ele faz. O domínio verificado é o da página
+aberta (`page.url`), com `dominioDoSite` (`spokke.com.br`) só em localhost — ver
+`docs/selos-e-seguranca.md` "5b".
+
+**No celular a navegação do `SiteHeader` vive num menu** (o "Blog Cabecalho" do Claude Design): o
+botão de três linhas abre, abaixo da barra, os links e o "Entrar no Studio" em largura inteira;
+Esc e o clique num link fecham. No desktop nada muda. O link da rota em que se está ganha
+`aria-current="page"` (as âncoras da home nunca contam). **O "Blog" é item fixo**: o último da nav da
+home (`defaultNav`) e da de `(site)`, e um link da coluna "Plataforma" do rodapé.
+
+**Medição — `MedicaoDoSite.svelte`**, no layout raiz. Sem `PUBLIC_GA_ID` não renderiza nada. Com
+ele, mostra o aviso de medição (no celular, menos de um oitavo da altura) só nas páginas públicas
+(`rotaMedida` em `$lib/client/medicao.ts`), e o Google Analytics só carrega depois do "Aceitar".
+Um ouvinte de clique registra os elementos marcados com `data-evento` (mais `data-rotulo` e
+`data-artigo`): a tela marca o HTML e não importa nada. O rodapé tem "Preferências de cookies"
+(só com a medição ligada), que revoga e faz o aviso voltar.
 
 `SiteHeader` recebe `nav` (array `{ href, label }`) com default apontando pras âncoras da home
 (`/#habilidades` etc.) — páginas fora da home passam a própria lista. **Resolva rota real com
@@ -999,6 +1187,37 @@ com a mesma composição de formas de ambiente confinada a uma faixa lateral sem
 
 ---
 
+## Blog — `src/lib/components/blog/`
+
+Os desenhos do projeto "Blog" do Claude Design, **menos o autor** (nenhum componente desenha nome,
+foto ou caixa de autor). Regras de rota em paginas.md "Blog"; conteúdo em `docs/blog.md`.
+
+- `CartaoDoArtigo` — `{ artigo: ResumoDoArtigo; variante?: 'padrao' | 'destaque' | 'compacto'; selo? }`.
+  O cartão inteiro é clicável pelo `::after` do link do TÍTULO (o leitor de tela lê um link com o
+  nome do artigo). Chips: tema, "Para escolas" (público escola/ambos) e "Rascunho" (só em dev).
+  `padrao` sem capa não tem imagem; o `destaque` sem capa mostra a composição de formas de
+  `IlustracaoDoArtigo` (três, escolhida pelo slug). Só o rascunho fica sem capa: todo artigo no ar
+  tem uma foto (docs/blog.md "Capas"). Hover: `cartao-interativo`.
+- `ConversaoDoBlog` — `{ publico; slug?; variante?: 'escura' | 'clara'; titulo? }`: a faixa final.
+  Texto e destinos saem de `conversaoDoPublico` (`$lib/blog/links.ts`), com `?origem=`.
+- `NoSpokke` — o bloco "No Spokke" / "Na sua escola": filete de 4px na marca, o texto e UMA chamada.
+- `ExemploPronto` — as frases no idioma alvo (`data-content-lang`, `lang` e `dir` do profile, que o
+  servidor já resolveu), a tradução embaixo e "Copiar a lista" (só as frases, uma por linha: o
+  formato da lista colada). Sem área de transferência, o botão diz para copiar à mão.
+- `SumarioDoArtigo` — `formato: 'celular'` é um `<details>` nativo; `'lateral'` é a coluna fixa que
+  marca a seção atual (a última cujo título passou de 160px do topo) com `aria-current="location"`.
+- `PerguntasFrequentes` (`<details>`, a primeira aberta), `CompartilharArtigo` (copiar link e
+  WhatsApp, sem script de terceiro), `Migalhas` (a página atual sem link), `ChipsDeTemas` (temas
+  como links, mais "Para escolas"), `PaginacaoDoBlog` (links de verdade, não a `Pagination` do
+  Studio), `IndiceDoBlog` e `HubDoBlog` (o corpo das páginas) e `DadosEstruturados` (o JSON-LD, com
+  `<` escapado e a tag montada por partes — o nome dela inteiro dentro do `<script>` do componente
+  confunde o parser do Svelte e o do Prettier).
+
+O texto do Markdown é desenhado pela utility `prosa-do-blog` (`app.css`), aplicada SÓ nos blocos de
+texto: dentro de um componente ela pintaria o `<ol>` e o `<p>` dele.
+
+---
+
 ## Entrada em scroll — `src/lib/actions/reveal.ts`
 
 A animação nasce **rodando**; a action só pausa e despausa via `IntersectionObserver`. Nunca
@@ -1006,8 +1225,51 @@ prenda um bloco em `opacity: 0` esperando JS.
 
 ```svelte
 {#each cards as card, i (card.id)}
-	<div class="reveal-row" use:reveal={{ delay: i * 90 }}>…</div>
+	<div class="reveal-row" use:reveal={{ ordem: i }}>…</div>
 {/each}
 ```
 
-Bloco de seção entra sem delay; cartões dentro de uma grade escalonam em 90ms.
+Bloco de seção entra sem atraso; cartões dentro de uma grade passam a ORDEM, e o `reveal-row` calcula
+o atraso com o `--stagger` (60 ms, teto no 6º) — a action não escolhe milissegundos.
+
+---
+
+## Seletor em pílula — `Alternador.svelte`
+
+Props: `{ opcoes: { id, label }[]; valor: $bindable; rotulo: string; largura?: 'cheia' | 'auto'; onmudar?; class? }`.
+O controle de poucas opções lado a lado (entrar como professor/aluno, um a um / colar uma lista,
+alunos / envios). **A pílula desliza** até a opção escolhida — é um elemento só, posicionado pelo
+índice entre colunas iguais, andando por `translate` em `--duration-media` com `--ease-in-out-soft`;
+nada de medir largura em JS. Botões com `aria-pressed` num `role="group"` rotulado, e não abas:
+nenhuma das telas tem painel de aba de verdade. Era o mesmo markup copiado em cinco telas.
+
+## Cartão clicável — `cartao-interativo` (utility)
+
+O cartão que é um link inteiro (peça do início, turma, atividade enviada, módulo do aluno, cartões
+da home): sobe 3 px, a borda puxa para a cor da marca e ganha sombra na cor da marca; ao apertar, afunda
+um nada. Um gesto, uma utility — cada tela tinha o seu, com 2, 3 e 5 px e `transition-all`.
+Controle pequeno (chip, opção, token) não usa: sobe 2 px com `hover:-translate-y-0.5`.
+
+---
+
+## Google — `(auth)/BotaoGoogle.svelte` + `LigarGoogle.svelte`
+
+As duas portas do Google, e as duas só aparecem com ele ligado no servidor (auth.md "Login com
+Google"). A marca do Google é um arquivo (`static/marcas/google.svg`), não um SVG com cor de tema:
+as regras de marca do botão pedem o G original, com as cores dele.
+
+- `BotaoGoogle` — props `{ como: 'professor' | 'aluno'; destino; destinoDeQuemChega?; voltaComErro }`.
+  "Continuar com o Google" em entrar e em criar conta: escolhe o cliente pelo `como` e diz para onde
+  voltar (quem já tinha conta, quem acabou de criar, e a própria tela quando dá erro). Espera com a
+  `fila` até a página trocar.
+- `LigarGoogle` — props `{ como; email; ligado; temSenha; aqui }`. O corpo do cartão "Entrar com o
+  Google" da Conta e da área do aluno: liga (`linkSocial`, com o e-mail igual) e desliga só quando
+  sobra a senha. Lê a volta do Google (`?google=ligado` / `?google=erro&error=…`) e diz o que
+  aconteceu. A página põe a moldura do cartão.
+
+## Relatar problema — `a/[slug]/q/[n]/RelatarProblema.svelte`
+
+O `<dialog>` do relato de problema (paginas.md "Player"). Props `{ aberto ($bindable); questao;
+total; temAudio; fala; montar }` — `montar` é a função da tela que junta, NA HORA de enviar, o que
+vai além do motivo. É carregado com `import()` no primeiro clique, e o tipo da entrada sai da remote
+function (`Parameters<typeof relatarProblema>[0]`), sem importar nada de `$lib/server`.

@@ -26,8 +26,10 @@ export function ttsHash(text: string, voice: string, speed: number): string {
  * (db.md "MediaAsset"). O que o prefixo dá é escopo de tenant: os arquivos de um
  * professor ficam todos sob a mesma pasta.
  *
- * O prefixo `tts/` importa: é nele que a regra de ciclo de vida do bucket se
- * ancora (ver `docker/minio.yml`).
+ * O prefixo `tts/` importa: é o único com leitura anônima no bucket (ver
+ * `docker/minio.yml`). Ele NÃO tem regra de ciclo de vida — o áudio de atividade
+ * não vence; sai quando nenhuma atividade do professor o usa mais
+ * (`limpeza.ts`).
  */
 export function ttsObjectKey(teacherId: string, hash: string): string {
 	return `tts/${teacherId}/${hash}.${TTS_EXTENSAO}`;
@@ -41,19 +43,11 @@ export function ttsObjectKey(teacherId: string, hash: string): string {
  */
 export const TTS_EXTENSAO = 'mp3';
 
-/** Quantos dias o áudio vive no bucket. Espelha a regra do MinIO — as duas precisam bater. */
-export const TTS_DIAS_DE_VIDA = 10;
-
-export function ttsExpiraEm(from = new Date()): Date {
-	return new Date(from.getTime() + TTS_DIAS_DE_VIDA * 24 * 60 * 60 * 1000);
-}
-
 /**
- * Quantos dias a GRAVAÇÃO DO ALUNO vive no bucket. Menos que o áudio de
- * atividade de propósito: aquele é conteúdo do professor e se regenera sozinho;
- * este é a voz de uma pessoa, não se recria, e por isso fica o mínimo que ainda
- * serve para o professor dar retorno. Espelha a regra do MinIO — as duas
- * precisam bater.
+ * Quantos dias a GRAVAÇÃO DO ALUNO vive no bucket. É o único prazo que sobrou:
+ * o áudio de atividade deixou de vencer (é conteúdo do professor, dentro do
+ * estoque do plano), mas a voz de uma pessoa fica o mínimo que ainda serve para
+ * o professor dar retorno. Espelha a regra do MinIO — as duas precisam bater.
  */
 export const FALA_DIAS_DE_VIDA = 7;
 

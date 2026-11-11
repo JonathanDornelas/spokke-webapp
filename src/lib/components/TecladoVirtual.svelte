@@ -144,7 +144,7 @@
 
 	const tecla =
 		'flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-[9px] border border-b-2 px-0.5 leading-none ' +
-		'transition-[border-color,background-color,transform] duration-150 active:translate-y-[2px] ' +
+		'transition-[border-color,background-color,transform,translate,scale] duration-150 active:translate-y-[2px] ' +
 		'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary disabled:opacity-50';
 	// A ALTURA da tecla da grade acompanha a da tela: 44px num celular alto,
 	// 34px num iPhone SE, 32px no piso. Fixa em 48 (o alvo de toque do Player),

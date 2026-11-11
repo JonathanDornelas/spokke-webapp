@@ -16,17 +16,17 @@
 # reserva, e os picos não acontecem juntos. Os de MEMÓRIA somam menos que 16, que
 # é o número que precisa fechar.
 
-name: entendo-minio
+name: spokke-minio
 
 services:
   minio:
     image: minio/minio:latest
-    container_name: entendo-minio
+    container_name: spokke-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY_ID:-entendo}
-      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_ACCESS_KEY:-entendo-dev-secret}
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY_ID:-spokke}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_ACCESS_KEY:-spokke-dev-secret}
     ports:
       # 9000 é a API S3 — é por ela que o worker grava e que o BROWSER do aluno
       # baixa o áudio. 9001 é o painel, só para olhar o bucket em dev.
@@ -50,22 +50,22 @@ services:
   # é um serviço de pé.
   init:
     image: minio/mc:latest
-    container_name: entendo-minio-init
+    container_name: spokke-minio-init
     depends_on:
       minio:
         condition: service_healthy
     environment:
-      CHAVE: ${STORAGE_ACCESS_KEY_ID:-entendo}
-      SEGREDO: ${STORAGE_SECRET_ACCESS_KEY:-entendo-dev-secret}
-      BUCKET: ${STORAGE_BUCKET:-entendo-midia}
+      CHAVE: ${STORAGE_ACCESS_KEY_ID:-spokke}
+      SEGREDO: ${STORAGE_SECRET_ACCESS_KEY:-spokke-dev-secret}
+      BUCKET: ${STORAGE_BUCKET:-spokke-midia}
     entrypoint: ['/bin/sh', '-c']
     # `$$` escapa a interpolação do compose: quem lê estas variáveis é o shell
     # dentro do container, não o arquivo aqui.
     command:
       - |
         set -e
-        mc alias set entendo http://minio:9000 "$$CHAVE" "$$SEGREDO"
-        mc mb --ignore-existing "entendo/$$BUCKET"
+        mc alias set spokke http://minio:9000 "$$CHAVE" "$$SEGREDO"
+        mc mb --ignore-existing "spokke/$$BUCKET"
 
         # Leitura anônima SÓ no prefixo `tts/`. O áudio é o mesmo conteúdo que o
         # aluno recebe na questão e o browser dele baixa a URL direto — mas o
@@ -75,33 +75,27 @@ services:
         # de alunos: pública, bastaria adivinhar o endereço. Quem serve aquele
         # áudio é uma rota do Studio que confere se o professor é dono da
         # tentativa.
-        mc anonymous set download "entendo/$$BUCKET/tts"
+        mc anonymous set download "spokke/$$BUCKET/tts"
 
-        # **Os dois prazos de vida, do lado do MinIO.** É a expiração nativa do S3
+        # **Um prazo de vida, do lado do MinIO.** É a expiração nativa do S3
         # (ILM): o servidor apaga sozinho, sem job nosso varrendo bucket.
         #
-        # `tts/` são 10 dias — áudio de atividade, conteúdo do professor, que se
-        # regenera sozinho a partir do texto. `fala/` são 7 — a gravação do
-        # aluno, que é a voz de uma pessoa e NÃO se recria; ela fica o mínimo
-        # que ainda serve para o professor dar retorno.
+        # `fala/` são 7 dias — a gravação do aluno, que é a voz de uma pessoa e
+        # NÃO se recria; ela fica o mínimo que ainda serve para o professor dar
+        # retorno. O mesmo prazo está em `FALA_DIAS_DE_VIDA`
+        # (`server/tts/index.ts`), que grava a coluna de expiração.
         #
-        # Os mesmos prazos estão em `TTS_DIAS_DE_VIDA` e `FALA_DIAS_DE_VIDA`
-        # (`server/tts/index.ts`), que é o que grava as colunas de expiração —
-        # os dois lados têm de bater, senão o banco aponta para um objeto que já
-        # não existe (ou o contrário).
+        # **`tts/` não tem regra, de propósito.** O áudio de atividade vivia 10
+        # dias e passou a ficar enquanto alguma atividade do professor o usa —
+        # quem apaga é `server/tts/limpeza.ts`, quando a atividade sai.
         #
         # `import` REESCREVE a configuração inteira, e é por isso que ele está
         # aqui e não um `rule add`: subir o compose de novo não pode empilhar uma
-        # segunda regra igual.
+        # segunda regra igual — e é o que TIRA a regra antiga de `tts/` de um
+        # bucket que já a tinha.
         cat > /tmp/ciclo-de-vida.json <<'JSON'
         {
           "Rules": [
-            {
-              "ID": "tts-10-dias",
-              "Status": "Enabled",
-              "Filter": { "Prefix": "tts/" },
-              "Expiration": { "Days": 10 }
-            },
             {
               "ID": "fala-do-aluno-7-dias",
               "Status": "Enabled",
@@ -111,12 +105,12 @@ services:
           ]
         }
         JSON
-        mc ilm rule import "entendo/$$BUCKET" < /tmp/ciclo-de-vida.json \
-          || mc ilm import "entendo/$$BUCKET" < /tmp/ciclo-de-vida.json
+        mc ilm rule import "spokke/$$BUCKET" < /tmp/ciclo-de-vida.json \
+          || mc ilm import "spokke/$$BUCKET" < /tmp/ciclo-de-vida.json
 
-        echo "--- ciclo de vida de entendo/$$BUCKET ---"
-        mc ilm rule ls "entendo/$$BUCKET" || mc ilm ls "entendo/$$BUCKET"
+        echo "--- ciclo de vida de spokke/$$BUCKET ---"
+        mc ilm rule ls "spokke/$$BUCKET" || mc ilm ls "spokke/$$BUCKET"
 
 volumes:
   dados:
-    name: entendo-minio-data
+    name: spokke-minio-data

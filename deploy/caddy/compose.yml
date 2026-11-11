@@ -1,0 +1,46 @@
+# O proxy da frente — HTTPS, o redirecionamento do www e a mídia pública.
+#
+#   cd deploy/caddy && docker compose up -d
+#
+# É o ÚNICO container com porta aberta para a internet (80 e 443). O certificado
+# é do Let's Encrypt, pedido e renovado sozinho pelo Caddy — por isso os
+# registros A do DNS precisam apontar para o servidor antes de subir isto. Os
+# certificados ficam no volume `spokke-caddy-data`: recriar o container não pede
+# certificado de novo (o Let's Encrypt tem limite semanal).
+#
+# `ACME_EMAIL` vem do `.env` ao lado (deploy/env/caddy.env.exemplo): é para onde
+# o Let's Encrypt escreve se um certificado estiver para vencer sem renovar.
+
+name: spokke-caddy
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: spokke-caddy
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL no deploy/caddy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - dados:/data
+      - config:/config
+    networks: [spokke]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+networks:
+  spokke:
+    external: true
+
+volumes:
+  dados:
+    name: spokke-caddy-data
+  config:
+    name: spokke-caddy-config

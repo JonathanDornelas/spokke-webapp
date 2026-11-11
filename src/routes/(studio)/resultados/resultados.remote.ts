@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { requireTeacher } from '$lib/server/auth/guard';
+import { atualizarCorrecao } from '$lib/server/notificacoes';
 import { prisma } from '$lib/server/db/client';
 
 /**
@@ -53,6 +54,27 @@ export const comentarResposta = command(
 			}
 		});
 		if (count === 0) error(404, 'Resposta não encontrada');
+
+		if (grade !== undefined) {
+			const resposta = await prisma.attemptItem.findFirst({
+				where: {
+					id: answerId,
+					attempt: { publication: { activityVersion: { activity: { teacherId: teacher.id } } } }
+				},
+				select: {
+					item: {
+						select: {
+							activityVersion: { select: { activity: { select: { id: true, title: true } } } }
+						}
+					}
+				}
+			});
+			if (resposta) {
+				await atualizarCorrecao(teacher.id, resposta.item.activityVersion.activity, {
+					criar: false
+				});
+			}
+		}
 
 		return { ok: true };
 	}

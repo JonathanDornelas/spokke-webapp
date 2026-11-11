@@ -1,6 +1,8 @@
 import type { PageServerLoad } from './$types';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { modulos } from '$lib/server/db/repos/modules';
+import { atividades } from '$lib/server/db/repos/activities';
+import { nivelOuNulo } from '$lib/atividades/nivel';
 import { programacoes } from '$lib/server/db/repos/programacoes';
 import { eventosDaAgenda } from '$lib/server/modulos/agenda';
 import {
@@ -35,11 +37,12 @@ const ddmm = (d: Date) => rotuloDoInstante(d).split(' ')[1];
 export const load: PageServerLoad = async ({ locals }) => {
 	const teacher = requireTeacher(locals);
 	const repo = programacoes(teacher);
-	const [lista, alocacoes, eventos, ultimos] = await Promise.all([
+	const [lista, alocacoes, eventos, ultimos, todas] = await Promise.all([
 		modulos(teacher).list(),
 		repo.todas(),
 		eventosDaAgenda(teacher),
-		repo.ultimoEnvioPorTurma()
+		repo.ultimoEnvioPorTurma(),
+		atividades(teacher).list()
 	]);
 	const hoje = hojeEmBrasilia();
 
@@ -150,7 +153,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				e.dia <= somarDias(hoje, 6)
 		);
 		alerta = {
-			titulo: `O envio de ${rotuloDoInstante(envio.dueAt)} para ${alocacao.turma.name} não saiu.`,
+			titulo: `A liberação de ${rotuloDoInstante(envio.dueAt)} para ${alocacao.turma.name} não aconteceu.`,
 			detalhe: `${nome} ${envio.reason ? TEXTO_DO_MOTIVO[envio.reason] : 'não pôde sair'}${
 				tambem
 					? `, e ${tambem.turma.nome} também a recebe ${tambem.dia === hoje ? 'hoje' : `em ${rotuloDaData(tambem.dia)}`}`
@@ -186,6 +189,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 			turmasRecebendo: turmasRecebendo.size
 		},
 		alerta,
-		semana: proximosDias(eventos, hoje)
+		semana: proximosDias(eventos, hoje),
+		// O que o "Novo módulo" pode levar já ao nascer. Arquivada fica fora: ela
+		// está fora do ar para quem não começou.
+		atividades: todas
+			.filter((a) => !a.archivedAt)
+			.map((a) => ({
+				id: a.id,
+				title: a.title,
+				level: nivelOuNulo(a.level),
+				idioma: a.targetLang,
+				noAr: a.versions.some((v) => v.publications.length > 0)
+			}))
 	};
 };

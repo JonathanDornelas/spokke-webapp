@@ -38,10 +38,10 @@
 	}
 </script>
 
-<svelte:head><title>Nova senha — entendo</title></svelte:head>
+<svelte:head><title>Nova senha · Spokke</title></svelte:head>
 
 <div
-	class="w-full max-w-[384px] rounded-box border border-line bg-base-100 p-8 shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)]"
+	class="w-full max-w-[384px] animate-entrada rounded-box border border-line bg-base-100 p-8 shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)]"
 >
 	{#if !token || expired}
 		<div class="text-center">
@@ -58,9 +58,11 @@
 					/>
 				</svg>
 			</span>
-			<h1 class="mb-2 font-display text-xl font-semibold tracking-[-0.02em]">Link expirado</h1>
+			<h1 class="mb-2 font-display text-xl font-semibold tracking-[-0.02em]">
+				Este link não vale mais
+			</h1>
 			<p class="mb-[18px] text-[13.5px] leading-relaxed text-base-content/65">
-				Este link já foi usado ou passou de 1 hora. Peça um novo para continuar.
+				Ele já foi usado ou passou de 1 hora. Peça outro e use logo em seguida.
 			</p>
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- rota resolvida mais o modo (?como=aluno); a regra não enxerga a concatenação. -->
 			<a
@@ -72,7 +74,12 @@
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		</div>
 	{:else}
-		<h1 class="mb-[18px] font-display text-[22px] font-semibold tracking-[-0.02em]">Nova senha</h1>
+		<h1 class="mb-1.5 font-display text-[22px] font-semibold tracking-[-0.02em]">
+			Crie uma senha nova
+		</h1>
+		<p class="mb-[18px] text-[13.5px] leading-snug text-base-content/65">
+			Use pelo menos 8 caracteres. Depois, é só entrar com ela.
+		</p>
 		<form class="grid gap-3.5" onsubmit={onSubmit}>
 			<label class="block">
 				<span class="mb-1.5 block text-[13px] font-semibold">Nova senha</span>
@@ -87,7 +94,7 @@
 				/>
 			</label>
 			<label class="block">
-				<span class="mb-1.5 block text-[13px] font-semibold">Confirmar</span>
+				<span class="mb-1.5 block text-[13px] font-semibold">Repita a senha</span>
 				<input
 					type="password"
 					autocomplete="new-password"

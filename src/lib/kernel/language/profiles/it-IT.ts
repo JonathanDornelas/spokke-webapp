@@ -57,5 +57,7 @@ export const itIT: LanguageProfile = {
 			return [junto];
 		},
 		[['100', 'cento']]
-	)
+	),
+	// "Sono stanco" e "Io sono stanco". Ver `LanguageProfile.sujeitoOmitivel`.
+	sujeitoOmitivel: { pronomes: ['io', 'noi'], conjuncoes: ['e', 'ed', 'o', 'né'] }
 };

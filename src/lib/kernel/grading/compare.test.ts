@@ -164,3 +164,56 @@ describe('tolerantScore', () => {
 		expect(r.value).toBe(1);
 	});
 });
+
+/**
+ * O sujeito que a língua omite (`LanguageProfile.sujeitoOmitivel`). O caso que
+ * trouxe isto: "I'm looking forward to the weekend", a resposta "Estou ansioso
+ * para o fim de semana", e o aluno que escreveu "Eu estou ansioso…" recebia
+ * "quase".
+ */
+describe('sujeito omitível', () => {
+	const aceitas = [
+		'Estou ansioso para o fim de semana',
+		'Eu estou ansioso para o fim de semana',
+		'Estou ansiosa para o fim de semana.'
+	];
+
+	it('com uma aceita que traz o "eu", a questão aceita com e sem ele, em qualquer variante', () => {
+		expect(tolerantScore('Eu estou ansioso para o fim de semana', aceitas, ptBR).value).toBe(1);
+		expect(tolerantScore('Eu estou ansiosa para o fim de semana', aceitas, ptBR).value).toBe(1);
+		expect(tolerantScore('estou ansiosa para o fim de semana', aceitas, ptBR).value).toBe(1);
+	});
+
+	it('o professor escreveu com o pronome: sem ele também vale', () => {
+		expect(tolerantScore('Não gosto de café', ['Eu não gosto de café'], ptBR).value).toBe(1);
+	});
+
+	it('nunca um pronome que nenhuma aceita traz', () => {
+		expect(tolerantScore('Nós estou ansioso para o fim de semana', aceitas, ptBR).value).toBe(0.5);
+		// Sem aceita com sujeito, o "eu" a mais continua "quase": quem propõe a
+		// forma com o pronome é a geração, conferida pela ida e volta do tradutor.
+		expect(
+			tolerantScore(
+				'Eu estou ansioso para o fim de semana',
+				['Estou ansioso para o fim de semana'],
+				ptBR
+			).value
+		).toBe(0.5);
+	});
+
+	it('sujeito composto e pronome sozinho ficam como estão', () => {
+		const composto = ['Eu e meu irmão moramos em São Paulo'];
+		expect(tolerantScore('E meu irmão moramos em São Paulo', composto, ptBR).value).toBe(0.5);
+		expect(tolerantScore('eu', ['eu'], ptBR).value).toBe(1);
+		expect(tolerantScore('nós', ['eu'], ptBR).value).toBe(0);
+	});
+
+	it('língua que não omite o sujeito não muda nada', () => {
+		const r = tolerantScore(
+			'Am looking forward to the weekend',
+			["I'm looking forward to the weekend"],
+			enUS
+		);
+		expect(r.value).toBe(0.5);
+	});
+});

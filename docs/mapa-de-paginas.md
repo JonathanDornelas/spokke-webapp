@@ -1,4 +1,4 @@
-# Mapa de páginas — entendo
+# Mapa de páginas — Spokke
 
 > **Documento HISTÓRICO** (setembro de 2026): foi o briefing para o Claude Design desenhar as telas.
 > Ele usa nomes que já mudaram — `(marketing)` virou `(site)`, `dashboard` e `correcao` não existem,
@@ -138,8 +138,8 @@ vazar quais e-mails têm conta), carregando durante submit.
 primários para cá (ou para o dashboard, se logado).
 **O que mostra e faz:** nome, e-mail, senha. Ao concluir, cria `Teacher` e inicia sessão. Se
 houver período de trial (ver `billing.md`), este é o momento em que ele começa a contar —
-comunicar isso na tela ("14 dias grátis, sem cartão" ou o que for decidido) é decisão de produto
-que este documento não resolve, porque `billing.md` não define o trial concretamente.
+comunicar isso na tela é "14 dias grátis". O teste vai exigir cartão, cadastrado no gateway quando
+ele existir (`billing.md` "Trial"); até lá a tela não fala de cartão.
 **Estados:** vazio, e-mail já cadastrado, senha fraca, carregando.
 
 ### 2.3 Esqueci a senha — `/esqueci-senha`
@@ -388,23 +388,25 @@ confirmação de exclusão.
 **Rota já referenciada em `billing.md`** (`paths: - 'src/routes/(studio)/assinatura/**'`), sem
 mockup visual ainda.
 
-**Por que existe:** ponto único de gestão de cobrança. `billing.md` estabelece que o Stripe SDK
-nunca é chamado diretamente do produto — tudo passa por uma abstração `BillingProvider` — e que o
-estado de verdade da assinatura vem do webhook, nunca do redirect do Checkout. Para o design, isso
+**Por que existe:** ponto único de gestão de cobrança. `billing.md` estabelece que o gateway (o
+Mercado Pago) nunca é chamado diretamente do produto — tudo passa por uma abstração
+`BillingProvider` — e que o estado de verdade da assinatura vem do webhook, nunca do redirect do
+checkout. Para o design, isso
 significa que **esta tela não pode assumir que o pagamento foi confirmado só porque o professor
 voltou de um checkout** — o estado "processando" é real e pode durar alguns segundos.
 
 **O que mostra e faz:** plano atual, status (trial / ativo / atrasado / cancelado), data da
-próxima cobrança ou fim do período. Botão para abrir o portal de cobrança do Stripe (troca de
-cartão, histórico de faturas — gerenciado pelo Stripe, não recriado aqui). Botão de
-cancelar/reativar. Se a assinatura estiver em atraso, aviso do que já está bloqueado — `billing.md`
+próxima cobrança ou fim do período. O Mercado Pago não tem portal de cliente: troca de cartão e
+faturas ficam na conta do Mercado Pago de quem paga, não recriadas aqui. Botão de cancelar no fim
+do período (que cancela lá primeiro) — e, como lá a assinatura cancelada não volta, "Assinar de
+novo" no lugar de "Desfazer cancelamento". Se a assinatura estiver em atraso, aviso do que já está bloqueado — `billing.md`
 descreve "degradação, não desligamento": links já publicados continuam funcionando para os
 alunos mesmo com assinatura vencida; o que trava é criar/publicar atividade nova. Este aviso
 precisa deixar essa distinção clara, para não assustar o professor achando que os links já
 publicados vão parar de funcionar.
 
-**Dados:** estado de assinatura (fonte: webhook do Stripe, refletido em tabela própria — não
-modelada em detalhe em `db.md`, mas referenciada por `billing.md`).
+**Dados:** estado de assinatura (fonte: webhook do Mercado Pago, aplicado por `assinaturas.ts` aos
+campos do `Teacher`; o id de cada assinatura no provedor fica em `ProviderSubscription`).
 **Estados:** trial ativo (com contagem regressiva, se houver trial), ativo, pagamento atrasado
 (com o aviso de degradação), cancelado, processando (voltando do checkout, aguardando o webhook
 confirmar).
@@ -584,9 +586,7 @@ Marcadas ao longo do texto, reunidas aqui para revisão rápida antes de repassa
    negócio exata definida.
 4. O "dono" da atividade de demonstração pública (página 1.2) é uma decisão de produto/infra, não
    assumida aqui.
-5. Trial (duração, exige cartão ou não) não é definido em `billing.md` além de "Stripe primeiro,
-   atrás de interface própria" — a página de Cadastro e a de Assinatura precisam desse dado antes
-   do texto final ser escrito, mas o layout pode ser desenhado sem ele.
+5. Trial: definido em `billing.md` "Trial" (14 dias, vai exigir cartão no gateway).
 
 ## Apêndice B — O que fica pendente mesmo depois de todas as páginas desenhadas
 

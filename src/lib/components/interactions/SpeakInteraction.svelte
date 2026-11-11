@@ -19,7 +19,8 @@
 		segundos = 0,
 		maxSegundos = 30,
 		ouvido = null,
-		ouvindo = false
+		ouvindo = false,
+		corrigida = false
 	}: {
 		item: SpeakRuntimeItem;
 		recording?: boolean;
@@ -31,6 +32,12 @@
 		ouvido?: string | null;
 		/** A gravação subiu e a transcrição ainda não voltou. */
 		ouvindo?: boolean;
+		/**
+		 * Já corrigida e sem como regravar: o microfone e o "Entendemos" saem (o
+		 * veredito embaixo já diz o que se ouviu). Só o celular da home usa — ali a
+		 * frase e o veredito precisam caber na tela do aparelho.
+		 */
+		corrigida?: boolean;
 	} = $props();
 
 	const impedimento: Partial<Record<EstadoDaGravacao, string>> = {
@@ -45,11 +52,13 @@
 	<p class="font-mono text-[13px] text-base-content/65">{item.ipa}</p>
 {/if}
 
-<p class="mt-6 mb-3.5 text-[12.5px] font-semibold text-base-content/65">
-	{estado === 'pronto' ? 'Gravado — toque para regravar' : 'Grave sua voz'}
-</p>
+{#if !corrigida}
+	<p class="mt-6 mb-3.5 text-[12.5px] font-semibold text-base-content/65">
+		{estado === 'pronto' ? 'Gravado — toque para regravar' : 'Grave sua voz'}
+	</p>
+{/if}
 
-<div class="mt-auto mb-6 flex flex-col items-center gap-3">
+<div class="mt-auto mb-6 flex flex-col items-center gap-3" class:hidden={corrigida}>
 	<Recorder
 		{recording}
 		size="lg"

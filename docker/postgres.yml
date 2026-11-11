@@ -7,9 +7,10 @@
 # sobrevive a rebuild da aplicação, e derrubar a aplicação não pode derrubar
 # dado. É a mesma razão de o MinIO ter o dele.
 #
-# **Já tem um `entendo-postgres` feito à mão?** Remova-o uma vez
-# (`docker rm -f entendo-postgres`) antes do primeiro `up`: o banco NÃO se
-# perde, porque o volume abaixo é fixado no mesmo nome que ele já usa.
+# **Veio do `entendo-postgres`?** O projeto se chamava entendo até novembro de
+# 2026. O banco foi COPIADO (pg_dump/pg_restore) para o volume novo abaixo, e o
+# antigo ficou parado como cópia de segurança — docs/operacao.md, "Migração do
+# nome", tem o passo a passo e quando apagar o velho.
 #
 # As migrations continuam sendo aplicadas à mão (`pnpm db:migrate`) — subir o
 # container não migra nada.
@@ -21,23 +22,23 @@
 # reserva, e os picos não acontecem juntos. Os de MEMÓRIA somam menos que 16, que
 # é o número que precisa fechar.
 
-name: entendo-postgres
+name: spokke-postgres
 
 services:
   postgres:
     image: postgres:16
-    container_name: entendo-postgres
+    container_name: spokke-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-entendo}
+      POSTGRES_DB: ${POSTGRES_DB:-spokke}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - dados:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-entendo}']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-spokke}']
       interval: 5s
       timeout: 3s
       retries: 12
@@ -48,8 +49,8 @@ services:
           memory: 2G
 
 volumes:
-  # Nome FIXO, e não o `entendo-postgres_dados` que o compose geraria: é o
-  # volume que o container feito à mão já usa, então adotar o compose não
-  # recomeça o banco.
+  # Nome FIXO, e não o `spokke-postgres_dados` que o compose geraria: o nome do
+  # volume não pode depender do nome do projeto do compose, senão renomear o
+  # projeto recomeçaria o banco vazio.
   dados:
-    name: entendo-postgres-data
+    name: spokke-postgres-data

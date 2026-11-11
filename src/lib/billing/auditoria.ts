@@ -47,10 +47,16 @@ export function textoDoEvento(tipo: string, dadosBrutos: unknown): string {
 			return 'Período de teste encerrado';
 		case 'plano_solicitado':
 			return `Pedido do plano ${nomeDoPlano(d.plano)} (${d.ciclo ?? 'mensal'})`;
+		case 'checkout_iniciado':
+			return `Checkout do plano ${nomeDoPlano(d.plano)} (${d.ciclo ?? 'mensal'}) aberto no Mercado Pago`;
 		case 'plano_ativado':
 			return d.de && d.de !== d.para
 				? `Plano trocado de ${nomeDoPlano(d.de)} para ${nomeDoPlano(d.para)}, até ${dataCurta(d.ate)}`
 				: `Plano ${nomeDoPlano(d.para)} ativo até ${dataCurta(d.ate)}`;
+		case 'plano_sem_vencimento':
+			return `Plano ${nomeDoPlano(d.para)} sem vencimento, concedido pela equipe${d.motivo ? `: ${d.motivo}` : ''}`;
+		case 'sem_vencimento_encerrado':
+			return `Plano sem vencimento encerrado pela equipe${d.motivo ? `: ${d.motivo}` : ''}`;
 		case 'cancelamento_agendado':
 			return 'Cancelamento agendado para o fim do período';
 		case 'cancelamento_desfeito':

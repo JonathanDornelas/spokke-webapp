@@ -25,7 +25,17 @@ export function turmas(teacher: TeacherScope) {
 				where: { teacherId: teacher.id },
 				orderBy: { createdAt: 'desc' },
 				include: {
-					students: { select: { id: true, email: true } },
+					students: {
+						select: {
+							id: true,
+							name: true,
+							email: true,
+							accountId: true,
+							// O ÚLTIMO convite diz se o e-mail voltou — a mesma régua da chamada.
+							invites: { orderBy: { createdAt: 'desc' }, take: 1, select: { bouncedAt: true } }
+						},
+						orderBy: { name: 'asc' }
+					},
 					deliveries: { select: { id: true, createdAt: true }, orderBy: { createdAt: 'desc' } }
 				}
 			});
@@ -35,10 +45,17 @@ export function turmas(teacher: TeacherScope) {
 				name: turma.name,
 				languageTag: turma.languageTag,
 				color: turma.color,
+				createdAt: turma.createdAt,
 				students: turma.students.length,
 				// É este o número que recebe convite — e por isso ele aparece
 				// antes de qualquer botão de enviar.
 				withEmail: turma.students.filter((a) => a.email).length,
+				/** Quem já ligou a ficha a uma conta de aluno (vê o mapa dos módulos). */
+				withAccount: turma.students.filter((a) => a.accountId).length,
+				/** Alunos cujo último convite voltou — o único estado que pede ação. */
+				bounced: turma.students.filter((a) => a.invites[0]?.bouncedAt).length,
+				/** Os nomes, para a busca da lista achar "em que turma está a Juliana". */
+				studentNames: turma.students.map((a) => a.name),
 				deliveries: turma.deliveries.length,
 				lastDeliveryAt: turma.deliveries[0]?.createdAt ?? null
 			}));
@@ -189,10 +206,29 @@ export function alunos(teacher: TeacherScope) {
 			return count;
 		},
 
+		/**
+		 * Trocar o e-mail de quem já recebeu o convite de CONTA por e-mail invalida
+		 * aquele link: se o endereço estava errado, o convite foi parar na caixa de
+		 * outra pessoa, e o token é o que liga uma conta à ficha (auth.md). Link
+		 * que o professor copiou e nunca saiu por e-mail continua valendo.
+		 */
 		async update(id: string, entrada: AlunoEntrada): Promise<boolean> {
+			const atual = await prisma.student.findFirst({
+				where: { id, teacherId: teacher.id },
+				select: { email: true, accountId: true, accountInviteSentAt: true }
+			});
+			if (!atual) return false;
+			const conviteFoiParaOutroEndereco =
+				!atual.accountId && !!atual.accountInviteSentAt && atual.email !== entrada.email;
 			const { count } = await prisma.student.updateMany({
 				where: { id, teacherId: teacher.id },
-				data: { name: entrada.name, email: entrada.email }
+				data: {
+					name: entrada.name,
+					email: entrada.email,
+					...(conviteFoiParaOutroEndereco
+						? { accountInviteToken: null, accountInviteSentAt: null }
+						: {})
+				}
 			});
 			return count > 0;
 		},

@@ -49,7 +49,7 @@
 	const temAssinatura = $derived(data.conta.subscriptionStatus === 'active');
 </script>
 
-<svelte:head><title>{data.conta.name} — painel interno</title></svelte:head>
+<svelte:head><title>{data.conta.name} · Painel interno · Spokke</title></svelte:head>
 
 <div class="mb-6">
 	<h1 class="font-display text-title font-semibold tracking-[-0.022em]">{data.conta.name}</h1>

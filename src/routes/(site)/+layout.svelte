@@ -8,8 +8,8 @@
 		{ href: resolve('/(site)/planos'), label: 'Planos' },
 		{ href: resolve('/(site)/sobre'), label: 'Sobre' },
 		{ href: resolve('/(site)/ajuda'), label: 'Ajuda' },
-		{ href: resolve('/(site)/status'), label: 'Status' },
-		{ href: resolve('/(site)/contato'), label: 'Contato' }
+		{ href: resolve('/(site)/contato'), label: 'Contato' },
+		{ href: resolve('/(site)/blog'), label: 'Blog' }
 	];
 
 	let { children }: { children: import('svelte').Snippet } = $props();

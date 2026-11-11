@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "brand-copywriter": {
+      "source": "ognjengt/founder-skills",
+      "sourceType": "github",
+      "skillPath": "skills/brand-copywriter/SKILL.md",
+      "computedHash": "2d2699da05226c6f34462607af8313f3c39316e47ff916b9777653274b3bcf3b"
+    },
+    "brand-naming": {
+      "source": "arnabbagxd/brand-building-skills",
+      "sourceType": "github",
+      "skillPath": "skills/brand-naming/SKILL.md",
+      "computedHash": "74b94a6c9bda97c20aa0b6ca6a1d41f4a24690bb4d46f55696c574e3e4c98eba"
+    },
+    "domain-name-brainstormer": {
+      "source": "composiohq/awesome-claude-skills",
+      "sourceType": "github",
+      "skillPath": "domain-name-brainstormer/SKILL.md",
+      "computedHash": "52e568b37482d4606612cfe42b6cf1ccb260a1ba6936ac2b6defab5acdeea2f1"
+    },
+    "product-name": {
+      "source": "phuryn/pm-skills",
+      "sourceType": "github",
+      "skillPath": "pm-marketing-growth/skills/product-name/SKILL.md",
+      "computedHash": "3a5bad48c840519b2c775bdb5d69fed37537de77001a8822aa31676a21cf163e"
+    },
+    "robots-txt": {
+      "source": "kostja94/marketing-skills",
+      "sourceType": "github",
+      "skillPath": "skills/seo/technical/robots/SKILL.md",
+      "computedHash": "0a9e6b75c8ecb6d5dfd472734e1aaea76c60c260417dac25bd1b083776ca3cf6"
+    },
+    "seo-sitemap": {
+      "source": "agricidaniel/claude-seo",
+      "sourceType": "github",
+      "skillPath": "skills/seo-sitemap/SKILL.md",
+      "computedHash": "3aa575cf0b14e1f6df9614954ae225fec406d156eeb6cb31342fe73ef9fe3421"
+    }
+  }
+}

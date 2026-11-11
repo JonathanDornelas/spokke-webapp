@@ -19,6 +19,7 @@
 	// PENDÊNCIA: o que acontece com os links já publicados ao encerrar a conta
 	// não está definido — precisa de decisão antes de ir para produção. O aviso
 	// dentro do cartão vermelho existe para isso não passar batido.
+	import { marcarVisto } from '$lib/client/avisos';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -30,10 +31,11 @@
 	import HeaderCard from '$lib/components/HeaderCard.svelte';
 	import { IDIOMAS } from '$lib/idiomas';
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
-	import { CODIGO_PADRAO, avatarPadrao, sortearCodigo } from '$lib/avatar/montar';
+	import { CODIGO_PADRAO, avatarPadrao } from '$lib/avatar/montar';
 	import { fracaoDeUso, type ResumoDoAcesso } from '$lib/billing/resumo';
 	import { LIMITES, TRIAL } from '$lib/billing/catalogo';
 	import { gravarMeuAvatar } from '../studio.remote';
+	import LigarGoogle from '$lib/components/LigarGoogle.svelte';
 	import {
 		agendarCancelamento,
 		cancelarPedido,
@@ -56,7 +58,12 @@
 			desde: Date;
 		};
 		contagens: { turmas: number; alunos: number };
+		/** Como a conta entra: senha, Google (`server/auth/google.ts`), ou os dois. */
+		login: { googleDisponivel: boolean; google: boolean; senha: boolean };
 		acesso: ResumoDoAcesso;
+		cobranca: { provedor: 'manual' | 'mercadopago'; podeDesfazerCancelamento: boolean };
+		/** A volta do checkout do Mercado Pago, com o que ele respondeu. */
+		checkout: { status: string; plano: string } | null;
 		pedido: { plano: string; ciclo: string; quando: Date } | null;
 		historico: { id: string; texto: string; quando: Date }[];
 	}
@@ -73,6 +80,7 @@
 			desde: new Date('2026-02-12')
 		},
 		contagens: { turmas: 3, alunos: 64 },
+		login: { googleDisponivel: false, google: false, senha: true },
 		acesso: {
 			plano: 'basico',
 			rotulo: 'Período de teste',
@@ -89,6 +97,8 @@
 			pode: { publicar: true, criarAtividade: true, criarMaterial: true, usarIa: false },
 			motivo: { publicar: null, criarAtividade: null, criarMaterial: null, usarIa: 'ia' }
 		},
+		cobranca: { provedor: 'manual', podeDesfazerCancelamento: true },
+		checkout: null,
 		pedido: null,
 		historico: []
 	};
@@ -131,12 +141,6 @@
 	function abrirEditorDeAvatar() {
 		codigoDoAvatar = data.teacher.avatar ?? avatarPadrao(data.teacher.name);
 		editorDeAvatarAberto = true;
-	}
-
-	async function sortearEUsar() {
-		const sorteado = sortearCodigo();
-		codigoDoAvatar = sorteado;
-		await usarAvatar(sorteado);
 	}
 
 	// ── trocar a senha ──
@@ -195,6 +199,31 @@
 			erroSenha = 'Não deu para trocar a senha agora. Tente de novo em instantes.';
 		} finally {
 			salvandoSenha = false;
+		}
+	}
+
+	// ── criar uma senha ── Para a conta que nasceu pelo Google e só entra por ele.
+	// Não há senha atual para conferir, então o caminho é o de "esqueci a
+	// senha": o link vai para o e-mail da conta, e é ele que prova quem pede —
+	// uma sessão roubada não ganharia, assim, uma porta permanente.
+	let pedindoLink = $state(false);
+	let linkPedido = $state(false);
+	let erroLink = $state<string | null>(null);
+	async function pedirLinkDeSenha() {
+		if (pedindoLink) return;
+		pedindoLink = true;
+		erroLink = null;
+		try {
+			const { error } = await authClient.requestPasswordReset({
+				email: data.teacher.email,
+				redirectTo: resolve('/(auth)/redefinir-senha')
+			});
+			if (error) erroLink = 'Não deu para mandar o link agora. Tente de novo em instantes.';
+			else linkPedido = true;
+		} catch {
+			erroLink = 'Não deu para mandar o link agora. Tente de novo em instantes.';
+		} finally {
+			pedindoLink = false;
 		}
 	}
 
@@ -257,8 +286,10 @@
 					line: a.cancelAtPeriodEnd
 						? `Até ${fim ?? 'o fim do período'} nada muda. Depois, criar e publicar param — e os links já publicados continuam abrindo.`
 						: fim
-							? `Período atual até ${fim}. A renovação é combinada com a equipe.`
-							: 'Sem data de fim.',
+							? data.cobranca.provedor === 'mercadopago'
+								? `Período atual até ${fim}. A assinatura renova sozinha pelo Mercado Pago.`
+								: `Período atual até ${fim}. A renovação é combinada com a equipe.`
+							: 'Sem data de fim: plano concedido pela equipe.',
 					cta: 'Trocar de plano',
 					ctaPrimario: false
 				};
@@ -442,9 +473,17 @@
 			acaoPendente = null;
 		}
 	}
+
+	// A aba da assinatura conta como ver os avisos dela — o plano que a equipe
+	// mudou e o fim do teste (docs/notificacoes.md).
+	$effect(() => {
+		if (data.aba === 'assinatura') marcarVisto({ secao: 'assinatura' });
+	});
 </script>
 
-<svelte:head><title>Conta — entendo</title></svelte:head>
+<svelte:head
+	><title>{data.aba === 'assinatura' ? 'Assinatura · Conta' : 'Conta'} · Spokke</title></svelte:head
+>
 
 {#snippet icone(d: string, classe = 'size-4')}
 	<svg class="{classe} shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true"
@@ -484,7 +523,7 @@
 		>
 			<span class="[overflow-wrap:anywhere]">{data.teacher.email}</span>
 			<span class="hidden sm:inline" aria-hidden="true">·</span>
-			<span>na entendo desde {desde}</span>
+			<span>no Spokke desde {desde}</span>
 		</p>
 		{#snippet actions()}
 			<button
@@ -495,19 +534,6 @@
 			>
 				{@render icone('M5 19h3l10-10-3-3L5 16z')}
 				Montar avatar
-			</button>
-			<button
-				type="button"
-				onclick={sortearEUsar}
-				disabled={salvandoAvatar}
-				class="btn h-[42px] motion-tap gap-2 btn-plain text-[13.5px] font-semibold"
-			>
-				{#if salvandoAvatar}
-					<Loading variant="fila" size={10} tone="current" label="Salvando" />
-				{:else}
-					{@render icone('M4 4h16v16H4zM8.5 8.5h.01M15.5 15.5h.01M15.5 8.5h.01M8.5 15.5h.01')}
-				{/if}
-				Sortear outro
 			</button>
 		{/snippet}
 	</HeaderCard>
@@ -673,7 +699,33 @@
 						</span>
 						<h2 class="font-display text-[18px] font-semibold">Senha</h2>
 					</div>
-					{#if trocandoSenha}
+					{#if !data.login.senha}
+						<!-- A conta nasceu pelo Google: não há senha para trocar. -->
+						<p class="mb-4 text-[13px] leading-relaxed text-pretty text-base-content/65">
+							Você entra pelo Google. Para entrar também com e-mail e senha, mandamos um link para
+							<strong class="font-semibold text-base-content">{data.teacher.email}</strong> criar a senha.
+							Ele vale por 1 hora.
+						</p>
+						{#if linkPedido}
+							<p class="mb-3 text-[13px] font-semibold text-primary" role="status">
+								Link enviado. Confira a caixa de entrada (e o spam).
+							</p>
+						{/if}
+						{#if erroLink}
+							<p class="mb-3 text-[13px] font-semibold text-error" role="alert">{erroLink}</p>
+						{/if}
+						<button
+							type="button"
+							onclick={pedirLinkDeSenha}
+							disabled={pedindoLink}
+							class="btn min-h-11 w-full motion-tap gap-2 btn-neutral font-semibold"
+						>
+							{#if pedindoLink}
+								<Loading variant="fila" size={10} tone="current" label="Mandando o link" />
+							{/if}
+							{linkPedido ? 'Mandar de novo' : 'Mandar o link para criar a senha'}
+						</button>
+					{:else if trocandoSenha}
 						<!-- Abre NO cartão, como os formulários da turma: trocar a senha não
 						     tira o professor da conta. -->
 						<form onsubmit={trocarSenha} class="grid gap-3" novalidate>
@@ -763,6 +815,26 @@
 					{/if}
 				</section>
 
+				{#if data.login.googleDisponivel || data.login.google}
+					<section class="rounded-[14px] border border-line bg-card p-4 lg:p-6">
+						<div class="mb-3 flex items-center gap-3">
+							<span
+								class="grid size-9 shrink-0 place-items-center rounded-field bg-base-300 text-primary"
+							>
+								{@render icone('M15 7.5a3 3 0 10-6 0 3 3 0 006 0zM5.5 20a6.5 6.5 0 0113 0')}
+							</span>
+							<h2 class="font-display text-[18px] font-semibold">Entrar com o Google</h2>
+						</div>
+						<LigarGoogle
+							como="professor"
+							email={data.teacher.email}
+							ligado={data.login.google}
+							temSenha={data.login.senha}
+							aqui={resolve('/(studio)/conta')}
+						/>
+					</section>
+				{/if}
+
 				<section class="rounded-[14px] border border-error/30 bg-card p-4 lg:p-6">
 					<div class="mb-3 flex items-center gap-3">
 						<span
@@ -783,6 +855,45 @@
 			</div>
 		</div>
 	{:else}
+		{#if data.checkout}
+			<!-- A volta do checkout: o que o Mercado Pago respondeu AGORA. Voltar não
+			     é pagar (paginas.md "Cobrança não afeta o aluno") — enquanto ele não
+			     autoriza, a tela diz "confirmando", não "ativo". Nunca em verde. -->
+			<div
+				class="mb-5 flex flex-wrap items-start gap-3 rounded-[14px] border px-4 py-4 lg:px-6 {data
+					.checkout.status === 'authorized'
+					? 'border-primary/40 bg-primary/6'
+					: data.checkout.status === 'pending'
+						? 'border-warning/40 bg-warning/6'
+						: 'border-line bg-base-200'}"
+				role="status"
+			>
+				{#if data.checkout.status === 'pending'}
+					<Loading variant="traco" size={24} tone="current" label="Confirmando o pagamento" />
+				{/if}
+				<div class="min-w-[220px] flex-1">
+					{#if data.checkout.status === 'authorized'}
+						<p class="mb-1 text-[13.5px] font-bold">Pagamento confirmado</p>
+						<p class="text-[12.5px] leading-relaxed text-base-content/65">
+							O Mercado Pago autorizou a assinatura do plano {data.checkout.plano}. Ele já vale.
+						</p>
+					{:else if data.checkout.status === 'pending'}
+						<p class="mb-1 text-[13.5px] font-bold">Confirmando o pagamento com o Mercado Pago</p>
+						<p class="text-[12.5px] leading-relaxed text-base-content/65">
+							Assim que ele confirmar, o plano {data.checkout.plano} libera sozinho — costuma levar poucos
+							minutos. Até lá a conta segue como está.
+						</p>
+					{:else}
+						<p class="mb-1 text-[13.5px] font-bold">O pagamento não foi concluído</p>
+						<p class="text-[12.5px] leading-relaxed text-base-content/65">
+							O Mercado Pago não autorizou a assinatura. Nada mudou na sua conta — dá para tentar de
+							novo pelos planos.
+						</p>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
 		{#if data.pedido}
 			<!-- O pedido é o "confirmando" de quando não há gateway: escolher um plano
 			     não libera nada sozinho — a equipe combina o pagamento e ativa pelo
@@ -886,6 +997,13 @@
 							{/if}
 							Sair da escola
 						</button>
+					{:else if data.acesso.cancelAtPeriodEnd && !data.cobranca.podeDesfazerCancelamento}
+						<!-- No Mercado Pago a assinatura cancelada não volta: o caminho é assinar de novo. -->
+						<a
+							href={resolve('/(site)/planos')}
+							class="btn min-h-11 w-full motion-tap btn-plain font-semibold no-underline sm:w-auto"
+							>Assinar de novo</a
+						>
 					{:else}
 						<button
 							type="button"
@@ -1015,4 +1133,9 @@
 	{/if}
 </div>
 
-<AvatarEditor bind:codigo={codigoDoAvatar} bind:aberto={editorDeAvatarAberto} onusar={usarAvatar} />
+<AvatarEditor
+	bind:codigo={codigoDoAvatar}
+	bind:aberto={editorDeAvatarAberto}
+	nome={data.teacher.name}
+	onusar={usarAvatar}
+/>

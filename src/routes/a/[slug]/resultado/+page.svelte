@@ -291,7 +291,7 @@
 	});
 </script>
 
-<svelte:head><title>Resultado — {data.activity.title}</title></svelte:head>
+<svelte:head><title>Resultado · {data.activity.title} · Spokke</title></svelte:head>
 
 <header
 	class="flex shrink-0 items-center gap-3.5 border-b border-line px-5 py-4 lg:px-10 lg:py-[18px]"
@@ -354,9 +354,7 @@
 		<!-- ═══ sem feedback ═══ Nenhum veredito, nem por cor nem por contagem.
 		     O PERCURSO continua: os três números abaixo existem igual com
 		     resultado ligado ou desligado, e a frase final diz o que eles são. -->
-		<div
-			class="relative z-1 m-auto w-full max-w-[560px] animate-[en-fade-up_560ms_var(--ease-out-soft)_both] text-center"
-		>
+		<div class="relative z-1 m-auto w-full max-w-[560px] animate-entrada text-center">
 			<span
 				class="mb-[22px] inline-grid size-[68px] place-items-center rounded-full bg-success text-success-content"
 			>
@@ -395,9 +393,7 @@
 			</p>
 		</div>
 	{:else}
-		<div
-			class="relative z-1 mx-auto w-full max-w-[680px] animate-[en-fade-up_620ms_var(--ease-out-soft)_both]"
-		>
+		<div class="relative z-1 mx-auto w-full max-w-[680px] animate-entrada">
 			<!-- ── 1. o placar ── -->
 			<div
 				class="mb-3.5 flex flex-wrap items-center gap-x-[26px] gap-y-5 rounded-box border border-line bg-base-200 p-4 lg:px-6 lg:py-[22px]"

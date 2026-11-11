@@ -1,5 +1,7 @@
 import { prisma, type Db } from '$lib/server/db/client';
+import { notificar } from '$lib/server/notificacoes';
 import {
+	NOME_DO_PLANO,
 	TRIAL,
 	ehCiclo,
 	ehPlanoPago,
@@ -24,6 +26,35 @@ import type { Prisma } from '../../../../generated/prisma/client.ts';
  */
 
 export type Ator = 'sistema' | 'professor' | 'provedor' | `admin:${string}`;
+
+/**
+ * O sino só ouve o que OUTRA pessoa fez na assinatura dele — a equipe pelo
+ * painel, o provedor pelo webhook. O que ele mesmo fez, ele acabou de ver.
+ */
+export function avisaProfessor(ator: Ator): boolean {
+	return ator === 'provedor' || ator.startsWith('admin:');
+}
+
+export async function avisarPlano(
+	teacherId: string,
+	data: {
+		evento: 'ativado' | 'trial' | 'cancelado' | 'creditos';
+		plano?: string;
+		ate?: Date;
+		creditos?: number;
+	}
+): Promise<void> {
+	await notificar(teacherId, {
+		kind: 'plano',
+		key: `plano:${data.evento}:${crypto.randomUUID()}`,
+		data: {
+			evento: data.evento,
+			plano: data.plano ?? null,
+			ate: data.ate?.toISOString() ?? null,
+			creditos: data.creditos ?? null
+		}
+	});
+}
 
 const DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -89,7 +120,10 @@ export async function ativarPlano(
 	const ate = pedido.ate ?? fimDoPeriodo(agora, pedido.ciclo);
 	if (ate <= agora) throw new Error('O fim do período precisa estar no futuro.');
 
-	return emTransacao(opcoes.db, async (tx) => {
+	// Dentro da transação de outra função (`atenderPedido`), quem avisa é ela,
+	// DEPOIS do commit: um aviso de plano ativo para uma ativação desfeita mentiria.
+	const avisar = !opcoes.db && avisaProfessor(ator);
+	const feito = await emTransacao(opcoes.db, async (tx) => {
 		const antes = await tx.teacher.findUniqueOrThrow({
 			where: { id: teacherId },
 			select: { plan: true, cycleAnchor: true, subscriptionStatus: true }
@@ -119,6 +153,9 @@ export async function ativarPlano(
 			}
 		});
 	});
+	if (avisar)
+		await avisarPlano(teacherId, { evento: 'ativado', plano: NOME_DO_PLANO[pedido.plano], ate });
+	return feito;
 }
 
 /**
@@ -133,7 +170,8 @@ export async function estenderTrial(
 	opcoes: { db?: Db; agora?: Date } = {}
 ) {
 	const agora = opcoes.agora ?? new Date();
-	return emTransacao(opcoes.db, async (tx) => {
+	let fimDoTeste: Date | null = null;
+	const feito = await emTransacao(opcoes.db, async (tx) => {
 		const antes = await tx.teacher.findUniqueOrThrow({
 			where: { id: teacherId },
 			select: { trialEndsAt: true, subscriptionStatus: true }
@@ -151,7 +189,13 @@ export async function estenderTrial(
 			type: dias >= 0 ? 'trial_estendido' : 'trial_encerrado',
 			data: { de: antes.trialEndsAt?.toISOString() ?? null, para: fim.toISOString(), dias }
 		});
+		fimDoTeste = fim;
 	});
+	// Encerrar antes (dias negativos) é ferramenta de teste do painel: não avisa.
+	if (fimDoTeste && dias > 0 && !opcoes.db && avisaProfessor(ator)) {
+		await avisarPlano(teacherId, { evento: 'trial', ate: fimDoTeste });
+	}
+	return feito;
 }
 
 /**
@@ -166,7 +210,7 @@ export async function cancelar(
 	extra: { db?: Db; agora?: Date } = {}
 ) {
 	const agora = extra.agora ?? new Date();
-	return emTransacao(extra.db, async (tx) => {
+	const feito = await emTransacao(extra.db, async (tx) => {
 		if (opcoes.noFimDoPeriodo) {
 			await tx.teacher.update({ where: { id: teacherId }, data: { cancelAtPeriodEnd: true } });
 		} else {
@@ -181,6 +225,98 @@ export async function cancelar(
 			type: opcoes.noFimDoPeriodo ? 'cancelamento_agendado' : 'cancelado',
 			data: {}
 		});
+	});
+	// Só o cancelamento que vale AGORA: o agendado não muda nada até o fim do período.
+	if (!opcoes.noFimDoPeriodo && !extra.db && avisaProfessor(ator)) {
+		await avisarPlano(teacherId, { evento: 'cancelado' });
+	}
+	return feito;
+}
+
+/**
+ * Plano SEM VENCIMENTO: a cortesia que a equipe concede pela intranet
+ * (`spokke-intranet`), para teste ou parceria. `active` sem `currentPeriodEnd`
+ * é situação "ativa" até alguém encerrar (`entitlements.ts`) — nenhuma data
+ * corre, nenhuma renovação acontece. Encerrar é `encerrarSemVencimento`.
+ *
+ * Idempotente: conceder o mesmo plano a quem já o tem sem vencimento não grava
+ * nada nem avisa de novo. Devolve se mudou algo.
+ */
+export async function concederSemVencimento(
+	teacherId: string,
+	plano: PlanoPago,
+	ator: Ator,
+	opcoes: { motivo?: string; db?: Db; agora?: Date } = {}
+): Promise<boolean> {
+	const agora = opcoes.agora ?? new Date();
+	const mudou = await emTransacao(opcoes.db, async (tx) => {
+		const antes = await tx.teacher.findUniqueOrThrow({
+			where: { id: teacherId },
+			select: {
+				plan: true,
+				subscriptionStatus: true,
+				currentPeriodEnd: true,
+				cancelAtPeriodEnd: true,
+				cycleAnchor: true
+			}
+		});
+		const jaTem =
+			antes.plan === plano &&
+			antes.subscriptionStatus === 'active' &&
+			antes.currentPeriodEnd === null &&
+			!antes.cancelAtPeriodEnd;
+		if (jaTem) return false;
+		const trocou = antes.plan !== plano || antes.subscriptionStatus !== 'active';
+		await tx.teacher.update({
+			where: { id: teacherId },
+			data: {
+				plan: plano,
+				planCycle: 'mensal',
+				subscriptionStatus: 'active',
+				currentPeriodEnd: null,
+				gracePeriodEnd: null,
+				cancelAtPeriodEnd: false,
+				cycleAnchor: trocou || !antes.cycleAnchor ? agora : antes.cycleAnchor
+			}
+		});
+		await registrar(tx, {
+			teacherId,
+			actor: ator,
+			type: 'plano_sem_vencimento',
+			data: { de: antes.plan, para: plano, motivo: opcoes.motivo?.slice(0, 300) ?? '' }
+		});
+		return true;
+	});
+	if (mudou && !opcoes.db && avisaProfessor(ator)) {
+		await avisarPlano(teacherId, { evento: 'ativado', plano: NOME_DO_PLANO[plano] });
+	}
+	return mudou;
+}
+
+/**
+ * Encerra um plano SEM VENCIMENTO, agora. Só mexe em quem está nessa situação:
+ * uma assinatura paga (com data, ou no gateway) não se encerra por aqui —
+ * cancelar essa passa pelo provedor (billing.md). Devolve se encerrou.
+ */
+export async function encerrarSemVencimento(
+	teacherId: string,
+	ator: Ator,
+	opcoes: { motivo?: string; agora?: Date } = {}
+): Promise<boolean> {
+	const agora = opcoes.agora ?? new Date();
+	return prisma.$transaction(async (tx) => {
+		const { count } = await tx.teacher.updateMany({
+			where: { id: teacherId, subscriptionStatus: 'active', currentPeriodEnd: null },
+			data: { subscriptionStatus: 'canceled', currentPeriodEnd: agora, cancelAtPeriodEnd: false }
+		});
+		if (count === 0) return false;
+		await registrar(tx, {
+			teacherId,
+			actor: ator,
+			type: 'sem_vencimento_encerrado',
+			data: { motivo: opcoes.motivo?.slice(0, 300) ?? '' }
+		});
+		return true;
 	});
 }
 
@@ -203,7 +339,7 @@ export async function atenderPedido(
 	opcoes: { ate?: Date; agora?: Date } = {}
 ) {
 	const agora = opcoes.agora ?? new Date();
-	return prisma.$transaction(async (tx) => {
+	const ativado = await prisma.$transaction(async (tx) => {
 		const { count } = await tx.planRequest.updateMany({
 			where: { id: pedidoId, status: 'pendente' },
 			data: { status: 'atendido', resolvedAt: agora, resolvedBy: adminId }
@@ -220,5 +356,15 @@ export async function atenderPedido(
 			`admin:${adminId}`,
 			{ db: tx, agora }
 		);
+		const depois = await tx.teacher.findUniqueOrThrow({
+			where: { id: pedido.teacherId },
+			select: { currentPeriodEnd: true }
+		});
+		return { teacherId: pedido.teacherId, plano: pedido.plano, ate: depois.currentPeriodEnd };
+	});
+	await avisarPlano(ativado.teacherId, {
+		evento: 'ativado',
+		plano: NOME_DO_PLANO[ativado.plano],
+		ate: ativado.ate ?? undefined
 	});
 }

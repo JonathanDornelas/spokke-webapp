@@ -13,7 +13,24 @@ export interface GeradorDeMateriais {
 	propor(
 		pedido: PedidoDeMateriais,
 		opcoes: { schema: unknown; timeoutMs: number }
-	): Promise<unknown>;
+	): Promise<RespostaDoModelo>;
+}
+
+export interface RespostaDoModelo {
+	dados: unknown;
+	/** O que o PROVEDOR informou ter gastado; nulo quando ele não informa. */
+	uso: UsoDoModelo | null;
+}
+
+/**
+ * Tokens de uma chamada, como o provedor contou — é o que vai para `AiUsage` e
+ * substitui a estimativa por trás dos preços (docs/adr-002-billing.md "Preços").
+ */
+export interface UsoDoModelo {
+	entrada: number | null;
+	saida: number | null;
+	/** O raciocínio do modelo, cobrado como saída. */
+	raciocinio: number | null;
 }
 
 /** O provedor recusou ou caiu — a geração é estornada e a tela diz para tentar de novo. */

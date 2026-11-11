@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	// Planos e preços. Página pública de comparação E destino de quem bateu numa
 	// porta fechada (`?motivo=`) — o loader explica os dois papéis.
 	//
@@ -85,13 +86,11 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Planos e preços — entendo</title>
-	<meta
-		name="description"
-		content="Um preço por professor, sem cobrar do aluno. Compare o que muda entre os planos do entendo."
-	/>
-</svelte:head>
+<Metadados
+	titulo="Planos do Spokke"
+	descricao="Básico, Pro, Super e Scholar para escolas. Um preço por professor, o aluno nunca paga, e toda conta começa com 14 dias de teste grátis."
+	tituloDaAba="Planos e preços · Spokke"
+/>
 
 <SiteHero eyebrow="Planos e preços" title={tituloPadrao} lede={ledePadrao} />
 
@@ -140,7 +139,7 @@
 
 				{#if naoEhCobranca}
 					<p class="mt-3 text-[13px] leading-relaxed text-pretty">
-						Seu plano está em dia — este bloqueio não é de cobrança.
+						Seu plano está em dia: este bloqueio não é de cobrança.
 						<a href={resolve('/(studio)/atividades')} class="font-bold">Voltar para as atividades</a
 						>
 						ou
@@ -188,8 +187,8 @@
 			<p
 				class="mx-auto mb-3.5 max-w-[62ch] text-[13px] leading-relaxed text-pretty text-base-content/65"
 			>
-				Toda conta nova começa num período de teste, sem cartão. Você monta atividades, manda o link
-				para a turma e vê o resultado — e decide depois.
+				Toda conta nova começa com 14 dias de teste grátis. Você monta atividades, manda o link para
+				a turma, vê o resultado e decide depois.
 			</p>
 			<a
 				href={resolve('/(auth)/cadastro')}
@@ -203,6 +202,6 @@
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do assunto; a regra não enxerga a concatenação. -->
 		<a href={resolve('/(site)/contato') + '?assunto=escolas'} class="font-semibold"
 			>Fale com a gente</a
-		> — a gente responde com uma proposta pelo número de professores.
+		>, e a gente responde com uma proposta pelo número de professores.
 	</p>
 </main>

@@ -9,14 +9,8 @@ import { labelForTag } from '$lib/kernel/language/profiles';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
 import { linkDaAtividade } from '$lib/server/player/slug';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
+import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import type { Skill } from '$lib/kernel/interactions/types';
-
-const SKILL_LABEL: Record<Skill, string> = {
-	listening: 'Listening',
-	speaking: 'Speaking',
-	reading: 'Reading',
-	writing: 'Writing'
-};
 
 /**
  * Etapa 4. As habilidades aqui são DERIVADAS dos itens aceitos — o professor
@@ -78,7 +72,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const slug = publicacao?.slug ?? linkDaAtividade(activity.id);
 	// O QR sai pronto do servidor: é uma imagem estática do link, e gerar no
 	// cliente só acrescentaria JS a uma tela que não precisa dele. A origem vem
-	// do request — em dev o link é localhost, não "entendo.app".
+	// do request — em dev o link é localhost, não "spokke.com.br".
 	const linkPublico = publicacao ? `${url.origin}/a/${slug}` : null;
 	const qr = linkPublico
 		? await toDataURL(linkPublico, { margin: 1, width: 264, errorCorrectionLevel: 'M' })
@@ -101,7 +95,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			showResult: settings?.showResult ?? true
 		},
 		itemCount: items.length,
-		skills: [...counts.entries()].map(([name, count]) => ({ name: SKILL_LABEL[name], count })),
+		skills: [...counts.entries()].map(([name, count]) => ({ name: skillLabels[name], count })),
 		audio,
 		published: noAr,
 		// O snapshot imutável (regra nº 7) existe para que ninguém tenha as

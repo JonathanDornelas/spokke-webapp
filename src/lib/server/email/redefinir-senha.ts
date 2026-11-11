@@ -12,7 +12,7 @@ export function montarRedefinirSenha(dados: RedefinirSenhaJob): EmailParaEnviar 
 	const nome = primeiroNome(dados.nome);
 	const preheader = 'O link vale por 1 hora. Se não foi você, é só ignorar.';
 	const onde =
-		dados.conta === 'aluno' ? 'na sua conta de aluno do entendo' : 'na sua conta do entendo';
+		dados.conta === 'aluno' ? 'na sua conta de aluno do Spokke' : 'na sua conta do Spokke';
 
 	const html = moldura({
 		titulo: 'Criar uma senha nova',
@@ -42,5 +42,5 @@ export function montarRedefinirSenha(dados: RedefinirSenhaJob): EmailParaEnviar 
 		'O link vale por 1 hora e só funciona uma vez. Se você não pediu, ignore este e-mail: a sua senha atual continua valendo.'
 	].join('\n');
 
-	return { to: '', subject: 'Criar uma senha nova no entendo', preheader, html, text };
+	return { to: '', subject: 'Criar uma senha nova no Spokke', preheader, html, text };
 }

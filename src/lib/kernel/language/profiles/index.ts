@@ -42,7 +42,7 @@ export function getProfile(tag: string): LanguageProfile {
 
 /**
  * Rótulo em português (o que o professor vê nos `<select>` de
- * `atividades/nova` e nos chips de `turmas/nova`) → tag do profile. Único lugar
+ * `atividades/nova` e, via `$lib/idiomas`, nos de turma e material) → tag do profile. Único lugar
  * que traduz um nome de idioma legível para o identificador técnico — a tela em
  * si nunca conhece a tag.
  *

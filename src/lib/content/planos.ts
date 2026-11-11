@@ -7,12 +7,9 @@
  * decidir acesso —, então o que a tabela PROMETE e o que a conta PODE fazer não
  * têm como divergir. `catalogo.test.ts` confere isso.
  *
- * ┌──────────────────────────────────────────────────────────────────────┐
- * │ OS PREÇOS SÃO PLACEHOLDER. Valor e ciclo NÃO FORAM DECIDIDOS — são   │
- * │ pendência de produto (CLAUDE.md "Pendências", adr-002-billing.md).   │
- * │ Não há gateway de pagamento: "Assinar" registra um PEDIDO que a      │
- * │ equipe atende pelo painel interno.                                   │
- * └──────────────────────────────────────────────────────────────────────┘
+ * **Os PREÇOS também não moram aqui**: saem de `$lib/billing/precos.ts`, o mesmo
+ * número que o checkout do Mercado Pago cobra. Aqui fica só o texto em volta.
+ * O Scholar não tem preço: é orçado por escola, e o CTA leva ao contato.
  */
 import {
 	LIMITES,
@@ -21,9 +18,9 @@ import {
 	type CicloDeCobranca,
 	type PlanoId
 } from '$lib/billing/catalogo';
+import { PRECO_EM_CENTAVOS, PRECOS_SAO_PLACEHOLDER, porMes, reais } from '$lib/billing/precos';
 
-/** Marca para o desenvolvedor: nenhum PREÇO deste arquivo foi aprovado. */
-export const PRECOS_SAO_PLACEHOLDER = true;
+export { PRECOS_SAO_PLACEHOLDER };
 
 export type { CicloDeCobranca, PlanoId };
 
@@ -71,6 +68,17 @@ function limites(id: 'basico' | 'pro' | 'super'): Recurso[] {
 	];
 }
 
+/** O preço por mês nos dois ciclos, e a nota do anual com o total — tudo de `precos.ts`. */
+function preco(id: 'basico' | 'pro' | 'super') {
+	return {
+		preco: { mensal: reais(porMes(id, 'mensal')), anual: reais(porMes(id, 'anual')) },
+		anual: `${reais(PRECO_EM_CENTAVOS[id].anual)} por ano, cobrados de uma vez. Equivale a dez meses.`
+	};
+}
+
+/** O que acontece depois do clique — verdade com o gateway e sem ele. */
+const DEPOIS_DO_CLIQUE = 'O plano libera assim que o pagamento é confirmado.';
+
 const COMUM: Recurso[] = [
 	{ label: 'Escuta, fala, leitura e escrita', incluso: true },
 	{ label: 'Turmas e convites por e-mail', incluso: true }
@@ -82,32 +90,32 @@ export const planos: readonly Plano[] = [
 		nome: NOME_DO_PLANO.basico,
 		para: 'para começar a dar aula',
 		icone: 'person',
-		preco: { mensal: 'R$ 29', anual: 'R$ 24' },
+		preco: preco('basico').preco,
 		unidade: 'por mês',
 		nota: {
 			mensal: `Começa com ${TRIAL.dias} dias de teste. Tudo menos a IA.`,
-			anual: 'R$ 290 por ano, cobrados de uma vez. Equivale a dez meses.'
+			anual: preco('basico').anual
 		},
 		listaTitulo: 'O que você pode fazer',
 		recursos: [...limites('basico'), ...COMUM],
 		cta: 'Assinar o Básico',
-		ctaNota: 'A equipe confirma o pagamento e ativa o plano.'
+		ctaNota: DEPOIS_DO_CLIQUE
 	},
 	{
 		id: 'pro',
 		nome: NOME_DO_PLANO.pro,
 		para: 'para quem dá aula toda semana',
 		icone: 'spark',
-		preco: { mensal: 'R$ 49', anual: 'R$ 41' },
+		preco: preco('pro').preco,
 		unidade: 'por mês',
 		nota: {
 			mensal: 'Cobrado mensalmente. Cancela quando quiser, sem multa.',
-			anual: 'R$ 490 por ano, cobrados de uma vez. Equivale a dez meses.'
+			anual: preco('pro').anual
 		},
 		listaTitulo: 'Tudo do Básico, mais',
 		recursos: [...limites('pro'), ...COMUM],
 		cta: 'Assinar o Pro',
-		ctaNota: 'A equipe confirma o pagamento e ativa o plano.',
+		ctaNota: DEPOIS_DO_CLIQUE,
 		destaque: 'O mais escolhido'
 	},
 	{
@@ -115,16 +123,16 @@ export const planos: readonly Plano[] = [
 		nome: NOME_DO_PLANO.super,
 		para: 'para várias turmas e idiomas',
 		icone: 'bolt',
-		preco: { mensal: 'R$ 89', anual: 'R$ 74' },
+		preco: preco('super').preco,
 		unidade: 'por mês',
 		nota: {
 			mensal: 'Cobrado mensalmente. Cancela quando quiser, sem multa.',
-			anual: 'R$ 890 por ano, cobrados de uma vez. Equivale a dez meses.'
+			anual: preco('super').anual
 		},
 		listaTitulo: 'Tudo do Pro, mais',
 		recursos: [...limites('super'), ...COMUM],
 		cta: 'Assinar o Super',
-		ctaNota: 'A equipe confirma o pagamento e ativa o plano.'
+		ctaNota: DEPOIS_DO_CLIQUE
 	},
 	{
 		id: 'scholar',
@@ -170,7 +178,7 @@ export const ledePadrao =
 export const alunoNaoPaga = {
 	titulo: 'O aluno nunca paga, nem precisa de conta',
 	texto:
-		'Em qualquer plano, quem responde entra pelo link, pelo QR ou pelo código. Se o seu plano vencer, as atividades já publicadas continuam abrindo e recebendo respostas — o que pausa é criar e publicar, do seu lado.'
+		'Em qualquer plano, quem responde entra pelo link, pelo QR ou pelo código. Se o seu plano vencer, as atividades já publicadas continuam abrindo e recebendo respostas. O que pausa é criar e publicar, do seu lado.'
 };
 
 /** No anual, dois meses saem de graça — o selo ao lado do seletor de ciclo. */

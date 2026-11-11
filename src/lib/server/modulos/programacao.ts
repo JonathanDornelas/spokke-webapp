@@ -1,4 +1,5 @@
 import { prisma } from '$lib/server/db/client';
+import { notificar, resolverNotificacoes } from '$lib/server/notificacoes';
 import { programacoes } from '$lib/server/db/repos/programacoes';
 import { enqueueEnviosProgramados } from '$lib/server/queue';
 import {
@@ -11,7 +12,7 @@ import {
 import { despacharEnvio, prepararAtividades, type MotivoDeNaoSair } from './enviar';
 
 /**
- * A programação de envio de um módulo para uma turma, do lado do servidor
+ * A programação de LIBERAÇÃO de um módulo para uma turma, do lado do servidor
  * (docs/telas-modulos-professor.md 2.4). A conta das datas é `agendar`, a mesma
  * que a prévia da tela faz — aqui ela vira linhas de `ModuleSend` e jobs
  * `envio-programado` com `runAfter`.
@@ -30,13 +31,16 @@ const TENTATIVAS_DE_AUDIO = 6;
 const ESPERA_DO_AUDIO_MS = 5 * 60 * 1000;
 
 export type ResultadoDoProcessamento = {
+	/** Quantas atividades foram LIBERADAS agora (o nome é da época do e-mail). */
 	enviadas: number;
-	emails: number;
 	naoSairam: { title: string; motivo: MotivoDeNaoSair }[];
 };
-const NADA: ResultadoDoProcessamento = { enviadas: 0, emails: 0, naoSairam: [] };
+const NADA: ResultadoDoProcessamento = { enviadas: 0, naoSairam: [] };
 
-/** O endereço público para os links do e-mail quando quem envia é o worker. */
+/**
+ * O endereço público quando quem libera é o worker. O e-mail do módulo saiu, mas
+ * a assinatura de `processarEnviosDevidos` continua levando a origem.
+ */
 export function origemDoWorker(): string {
 	return process.env.ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:5173';
 }
@@ -127,7 +131,7 @@ async function enfileirarEProcessar(
 	const futuras = programadas.filter((p) => p.dueAt > agora).map((p) => p.dueAt);
 	await enqueueEnviosProgramados(allocationId, futuras);
 	return programadas.some((p) => p.dueAt <= agora)
-		? processarEnviosDevidos(allocationId, origem, agora)
+		? processarEnviosDevidos(allocationId, origem, agora, { avisar: false })
 		: NADA;
 }
 
@@ -190,7 +194,10 @@ export async function enviarAgora(
 			update: { status: 'programada', dueAt: agora, reason: null, attempts: 0 }
 		});
 	}
-	return processarEnviosDevidos(allocationId, origem, agora, { ignorarPausa: true });
+	return processarEnviosDevidos(allocationId, origem, agora, {
+		ignorarPausa: true,
+		avisar: false
+	});
 }
 
 /** "Tentar de novo" na linha que não saiu. */
@@ -250,7 +257,7 @@ export async function processarEnviosDevidos(
 	allocationId: string,
 	origem: string,
 	agora: Date = new Date(),
-	opcoes: { ignorarPausa?: boolean } = {}
+	opcoes: { ignorarPausa?: boolean; avisar?: boolean } = {}
 ): Promise<ResultadoDoProcessamento> {
 	const alocacao = await prisma.moduleClassroom.findUnique({
 		where: { id: allocationId },
@@ -313,24 +320,24 @@ export async function processarEnviosDevidos(
 		if (count === 1) minhas.push(pronta);
 	}
 
-	let emails = 0;
 	if (minhas.length > 0) {
 		try {
+			// Módulo LIBERA, não manda e-mail: `emails` fica 0 nas linhas novas.
 			const r = await despacharEnvio(
 				teacher,
-				origem,
 				{ id: alocacao.module.id, name: alocacao.module.name },
 				alocacao.classroom,
-				minhas,
-				// Sem programação salva ("enviar agora" numa turma recém-alocada), o
-				// padrão é o de sempre: e-mail.
-				(lerProgramacao(alocacao.schedule)?.canal ?? 'email') === 'email'
+				minhas
 			);
-			emails = r.emails;
 			await prisma.moduleSend.updateMany({
 				where: { allocationId, activityId: { in: minhas.map((m) => m.activityId) } },
-				data: { emails: r.emails, envioId: r.envioId }
+				data: { emails: 0, envioId: r.envioId }
 			});
+			// Saiu: o aviso de que não tinha saído perdeu o motivo de existir.
+			await resolverNotificacoes(
+				teacher.id,
+				minhas.map((m) => `liberacao:${allocationId}:${m.activityId}`)
+			);
 		} catch (err) {
 			// Devolve as linhas para a fila: o job tenta de novo com backoff.
 			await prisma.moduleSend.updateMany({
@@ -349,7 +356,24 @@ export async function processarEnviosDevidos(
 			where: { id: linha.id, updatedAt: linha.updatedAt },
 			data: { status: 'nao_saiu', reason: n.motivo, attempts: linha.attempts + 1 }
 		});
-		if (n.motivo === 'audio' && linha.attempts + 1 < TENTATIVAS_DE_AUDIO) esperaAudio = true;
+		const vaiTentarDeNovo = n.motivo === 'audio' && linha.attempts + 1 < TENTATIVAS_DE_AUDIO;
+		if (vaiTentarDeNovo) esperaAudio = true;
+		// O sino só quando é com ele: áudio ainda tem tentativas pela frente e
+		// costuma se resolver sozinho; rascunho e arquivada esperam uma ação dele.
+		if (opcoes.avisar !== false && !vaiTentarDeNovo) {
+			await notificar(teacher.id, {
+				kind: 'liberacao',
+				key: `liberacao:${allocationId}:${n.activityId}`,
+				data: {
+					moduleId: alocacao.module.id,
+					allocationId,
+					modulo: alocacao.module.name,
+					turma: alocacao.classroom.name,
+					atividade: n.title,
+					motivo: n.motivo
+				}
+			});
+		}
 	}
 	if (esperaAudio) {
 		await enqueueEnviosProgramados(allocationId, [new Date(agora.getTime() + ESPERA_DO_AUDIO_MS)]);
@@ -357,7 +381,6 @@ export async function processarEnviosDevidos(
 
 	return {
 		enviadas: minhas.length,
-		emails,
 		naoSairam: naoProntas.map((n) => ({ title: n.title, motivo: n.motivo }))
 	};
 }

@@ -4,8 +4,8 @@
  * de planos desenha os mesmos números (`$lib/content/planos.ts`), então o que a
  * tabela PROMETE e o que a conta PODE fazer nunca divergem.
  *
- * Preço NÃO mora aqui. Valor e ciclo são texto de vitrine, ainda placeholder, e
- * continuam em `$lib/content/planos.ts` — ver docs/adr-002-billing.md.
+ * Preço NÃO mora aqui: está em `./precos.ts`, que a vitrine e o checkout leem —
+ * ver docs/adr-002-billing.md "Preços".
  *
  * **Os limites são de ESTOQUE** (decisão do dono do repositório): contam o que
  * o professor TEM agora, não o que ele criou no mês. Arquivar uma atividade ou

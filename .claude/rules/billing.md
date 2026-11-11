@@ -2,7 +2,7 @@
 paths:
   - 'src/lib/server/billing/**'
   - 'src/lib/billing/**'
-  - 'src/routes/api/stripe/**'
+  - 'src/routes/api/mercadopago/**'
   - 'src/routes/(studio)/conta/**'
   - 'src/routes/(site)/planos/**'
   - 'src/routes/(admin)/**'
@@ -24,8 +24,11 @@ Decisões e histórico: `docs/adr-002-billing.md` (planos e cobrança) e `docs/a
 
 Os números moram em **`src/lib/billing/catalogo.ts`** e em nenhum outro lugar. A vitrine
 (`src/lib/content/planos.ts`) escreve os textos a partir dele; `catalogo.test.ts` falha se divergirem.
-Preço continua placeholder em `planos.ts` — trocar um valor ali muda o que a tela MOSTRA, nunca o que
-a conta PODE fazer.
+**O preço mora em `src/lib/billing/precos.ts`** (centavos) — é o que o checkout COBRA e o que a vitrine
+MOSTRA (`planos.ts` escreve o texto a partir dele; `precos.test.ts` confere): Básico R$ 29, Pro R$ 59 e
+Super R$ 99 por mês, o anual a dez mensalidades. O Scholar não tem preço publicado — é orçado por
+escola. **Os preços dependem dos créditos e do raciocínio do modelo**: mudar `creditosPorCiclo` ou
+o `thinkingConfig` do Gemini é refazer a conta (`docs/adr-002-billing.md` "Preços").
 
 **Os limites são de ESTOQUE** — contam o que existe agora. Atividade arquivada não conta; material
 reaproveitado (`findEquivalent`) não ocupa vaga nova. Créditos renovam por ciclo mensal e não
@@ -59,26 +62,70 @@ reaproveita o igual, aceita o lote até onde cabe e devolve `foraDoLimite`.
 cia. Cada operação grava um `AuditEvent` na mesma transação, com o ator. Painel e (futuro) webhook
 chamam as mesmas funções.
 
-No Better Auth esses campos são **`input: false`** (e `stripeCustomerId`, `returned: false`). Campo de
-cobrança novo nasce assim — sem isso o corpo do cadastro escolhe o plano. Teste: `auth/campos.test.ts`.
+**Plano sem vencimento** (`concederSemVencimento` / `encerrarSemVencimento`): `active` com
+`currentPeriodEnd` NULO, a cortesia para teste e parceria. Não precisa de regra nova — sem data de fim
+a situação já sai "ativa" — e encerrar só alcança essa forma (assinatura paga não é tocada). Quem
+pede é a **intranet** (`../spokke-intranet`), por um job `intranet` na fila: ela não escreve no banco
+do Spokke, o worker aplica por aqui, com o ator `admin:intranet:<email>` no histórico e o aviso no
+sino. Teste: `billing/sem-vencimento.test.ts`.
 
-## Sem gateway (por enquanto)
+No Better Auth esses campos são **`input: false`**. Campo de cobrança novo nasce assim — sem isso o
+corpo do cadastro escolhe o plano. Teste: `auth/campos.test.ts`. Os ids do gateway NÃO ficam no
+`Teacher`: moram em `ProviderSubscription`, fora da sessão.
 
-`BillingProvider` devolve resultado discriminado (`redirecionar` | `pedido`). O provedor em uso é o
-**manual**: "assinar" vira `PlanRequest` + aviso à equipe, e o plano é ativado em `/admin/pedidos`.
+## Provedores: manual e Mercado Pago
 
-Quando um gateway entrar, as três disciplinas continuam valendo:
+`BillingProvider` devolve resultado discriminado (`redirecionar` | `pedido`). `BILLING_PROVIDER` vazio
+é o **manual**: "assinar" vira `PlanRequest` + aviso à equipe, e o plano é ativado em
+`/admin/pedidos`. `mercadopago` é o gateway (adr-002, seção 8), pronto e esperando credenciais
+(`docs/operacao.md`); sem o token ele falha alto, nunca cai no manual em silêncio.
 
-1. **O webhook é a fonte da verdade, nunca o redirect.**
-2. **O endpoint precisa do corpo cru** — `+server.ts` com `await request.text()`, não form action
-   nem remote function.
-3. **Idempotência** pelo `event.id` (`StripeEvent`): insira o evento e processe na mesma transação.
+As três disciplinas:
+
+1. **O webhook é a fonte da verdade, nunca o redirect.** E nem a notificação é a verdade: ela diz
+   QUAL recurso mudou, e o worker o busca na API com o nosso token (`sincronizar.ts`). A volta do
+   checkout também só RELÊ (`sincronizarPendentes`), e a tela diz "confirmando" até o provedor
+   autorizar.
+2. **O endpoint precisa do corpo cru** — `routes/api/mercadopago/+server.ts`, não form action nem
+   remote function. Ele confere a `x-signature` (HMAC-SHA256 da linha
+   `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`, com `MERCADOPAGO_WEBHOOK_SECRET`; sem o
+   segredo, 503), enfileira o job `mercadopago` e responde 200 na hora.
+3. **Idempotência**: aplicar o mesmo estado de assinatura não muda nada (o `jaVale` compara com a
+   conta), e a fatura aprovada estende o período UMA vez — `ProviderEvent`
+   (`mercadopago:fatura:<id>`) gravado na mesma transação da extensão.
+
+## Mercado Pago — o que vale no código
+
+- `src/lib/server/billing/mercadopago/`: `cliente.ts` (`fetch` + Zod, quatro chamadas),
+  `webhook.ts` (assinatura e leitura da notificação, puro), `sincronizar.ts` (o estado do provedor
+  aplicado à conta), `provider.ts` (o `BillingProvider`). Testes com cliente FALSO — o de verdade
+  não entra em teste.
+- **Assinatura sem plano associado**, `status: 'pending'`, `external_reference` = id do professor
+  (conferido contra a `ProviderSubscription` em toda aplicação: divergiu, é ignorada).
+- **`authorized`** ativa até `next_payment_date` (ou um ciclo); **fatura aprovada** estende um ciclo
+  a partir do débito, sem dar mês de graça na primeira (que chega junto da autorização);
+  **`cancelled`/`paused`** marcam o cancelamento no fim do período — só se for a assinatura em
+  vigor: a antiga, cancelada pela troca de plano, chega depois e não pode derrubar a nova.
+- **Cancelar no fim do período** chama `cancelarRenovacao` ANTES de `cancelar`. Lá, cancelada não
+  volta (`podeDesfazerCancelamento: false`).
+- **404 do provedor** termina o job sem erro (é o "testar notificação" do painel ou outro app).
+- **A conferir no sandbox** antes de produção — a documentação não fecha: se as notificações de
+  assinatura vêm pelo painel de Webhooks, a grafia que o `PUT` de cancelar aceita (`cancelled`) e
+  o formato exato do corpo da notificação.
 
 ## Trial
 
 Cadastro novo: `trialing` com `trialEndsAt = agora + TRIAL.dias`, carimbado em
 `databaseHooks.user.create.before`. Nunca `defaultValue` em campo `input: false` (é copiado sem ser
 chamado quando o corpo traz a chave). Trial usa os limites do básico.
+
+**O teste exige cartão** (decisão do dono, 2026-11-02). Depende do gateway, porque o produto nunca
+recebe número de cartão: quem guarda o cartão é o gateway (o checkout do Mercado Pago, com o PCI
+do lado dele), e o nosso banco só fica com a referência da assinatura (`ProviderSubscription`). No
+Mercado Pago o `free_trial` só está documentado no PLANO (`preapproval_plan`), então ligar isso é
+um plano por (plano, ciclo) com teste grátis e o cadastro levando ao checkout (adr-002, seção 8). **Até lá o cadastro continua abrindo o teste sem pedir
+cartão** e nenhuma tela promete "sem cartão": a copy diz só "14 dias grátis", que é verdade antes e
+depois.
 
 ## Degradação, não desligamento
 

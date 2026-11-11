@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	// Ajuda: perguntas agrupadas pelo momento em que aparecem, uma aberta por vez.
 	import SiteHero from '$lib/components/SiteHero.svelte';
 	import { faqGrupos } from '$lib/content/institucional';
@@ -9,12 +10,16 @@
 	}
 </script>
 
-<svelte:head><title>Ajuda — entendo</title></svelte:head>
+<Metadados
+	titulo="Perguntas frequentes sobre o Spokke"
+	descricao="Como montar a primeira atividade, como o aluno recebe o link, para quais idiomas funciona e como funcionam planos, módulos e escolas."
+	tituloDaAba="Ajuda · Spokke"
+/>
 
 <SiteHero
 	eyebrow="Central de ajuda"
 	title="Perguntas frequentes"
-	lede="Se a sua pergunta não estiver aqui, escreva para suporte@entendo.app — a resposta costuma virar uma linha nesta página."
+	lede="Se a sua pergunta não estiver aqui, escreva para suporte@spokke.com.br."
 />
 
 <div class="mx-auto w-full max-w-[1100px] px-7 py-8 lg:px-10 lg:py-10">

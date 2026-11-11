@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { command, getRequestEvent } from '$app/server';
 import { requireAluno } from '$lib/server/auth/guard';
 import {
@@ -5,6 +6,7 @@ import {
 	gravarAvatarDoAluno
 } from '$lib/server/db/repos/student-accounts';
 import { codigoDeAvatarSchema } from '$lib/avatar/schema';
+import { ligarContaPeloConvite } from '$lib/server/db/repos/convites-de-conta';
 
 /**
  * Ao ENTRAR, o que este aparelho já respondeu sem conta passa a ser da conta.
@@ -25,7 +27,7 @@ export const adotarMinhasTentativas = command(async () => {
 	const { locals, cookies } = getRequestEvent();
 	const conta = requireAluno(locals);
 
-	const anonId = cookies.get('entendo_anon');
+	const anonId = cookies.get('spokke_anon');
 	if (!anonId) return { adotadas: 0 };
 
 	return { adotadas: await adotarTentativasAnonimas(conta.id, anonId) };
@@ -45,3 +47,17 @@ export const gravarMeuAvatar = command(codigoDeAvatarSchema, async (avatar) => {
 	await gravarAvatarDoAluno(conta.id, avatar);
 	return { avatar };
 });
+
+/**
+ * Aceitar o CONVITE DE CONTA: liga a conta logada à ficha da chamada que o
+ * token aponta (auth.md "A conta do aluno"). O id da conta vem da SESSÃO; o
+ * token, do link que o professor mandou — é ele que diz QUAL ficha, e só quem
+ * o recebeu o tem. Ficha já ligada a outra conta não muda de dono.
+ */
+export const entrarNaTurmaPeloConvite = command(
+	z.object({ token: z.string().min(1).max(64) }),
+	async ({ token }) => {
+		const conta = requireAluno(getRequestEvent().locals);
+		return { desfecho: await ligarContaPeloConvite(token, conta.id) };
+	}
+);

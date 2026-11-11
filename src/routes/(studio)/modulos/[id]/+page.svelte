@@ -2,7 +2,10 @@
 	// Um módulo aberto (docs/telas-modulos-professor.md 2). Responde, nesta
 	// ordem: o que é este módulo, o que tem dentro e em que ordem, para quais
 	// turmas ele vai, e quando cada coisa sai. A programação de cada turma abre
-	// num painel lateral (`ProgramacaoPainel`), para o módulo não sair de vista.
+	// numa bandeja (`ProgramacaoPainel`), para o módulo não sair de vista — e
+	// editar o módulo, acrescentar atividades e adicionar turmas também abrem em
+	// bandeja (components.md "Bandeja"), no lugar de formulários que se abriam
+	// no meio da página empurrando a lista.
 	//
 	// **Reordenar é arrastar E as setas**, como em "ordenar" do Player: arrastar
 	// é o gesto natural; as setas funcionam no teclado e no leitor de tela, e
@@ -10,21 +13,19 @@
 	//
 	// **O único vermelho da tela é o envio que não saiu** — no aviso do topo e na
 	// pílula da turma. A confirmação de envio NÃO é verde: enviado não é acertou.
+	import { tick } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
+	import Bandeja from '$lib/components/Bandeja.svelte';
+	import SeletorDeAtividades from '$lib/components/SeletorDeAtividades.svelte';
+	import ModuloBandeja from '../ModuloBandeja.svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import ProgramacaoPainel from '$lib/components/ProgramacaoPainel.svelte';
 	import SemanaDeEnvios from '$lib/components/SemanaDeEnvios.svelte';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
-	import {
-		CLASSE_DA_ETIQUETA,
-		CORES_DE_ETIQUETA,
-		etiquetaDaTurma,
-		NOME_DA_COR,
-		type CorDeEtiqueta
-	} from '$lib/etiquetas';
+	import { CLASSE_DA_ETIQUETA, etiquetaDaTurma } from '$lib/etiquetas';
 	import { resumoDaProgramacao } from '$lib/modulos/programacao';
 	import {
 		contagemDeEnvios,
@@ -39,7 +40,6 @@
 		alocarTurmas,
 		apagarModulo,
 		desalocarTurma,
-		editarModulo,
 		pausarProgramacao,
 		removerDoModulo,
 		reordenarModulo
@@ -90,11 +90,13 @@
 		void salvarOrdem(nova);
 	}
 
-	// ── acrescentar ──
+	// ── acrescentar (bandeja) ──
 	let acrescentando = $state(false);
+	/** Os ids NA ORDEM do clique: é a ordem em que entram no fim do módulo. */
 	let escolhidas = $state<string[]>([]);
-	function alternar(id: string) {
-		escolhidas = escolhidas.includes(id) ? escolhidas.filter((x) => x !== id) : [...escolhidas, id];
+	function abrirAcrescentar() {
+		escolhidas = [];
+		acrescentando = true;
 	}
 	async function acrescentar() {
 		await rodar('acrescentar', async () => {
@@ -105,29 +107,8 @@
 		});
 	}
 
-	// ── editar e apagar ──
+	// ── editar (bandeja) e apagar ──
 	let editando = $state(false);
-	let nome = $state('');
-	let descricao = $state('');
-	let cor = $state<CorDeEtiqueta>('violeta');
-	function abrirEdicao() {
-		nome = data.modulo.name;
-		descricao = data.modulo.description ?? '';
-		cor = data.modulo.color;
-		editando = true;
-	}
-	async function salvarEdicao() {
-		await rodar('editar', async () => {
-			await editarModulo({
-				moduleId: data.modulo.id,
-				name: nome,
-				description: descricao,
-				color: cor
-			});
-			editando = false;
-			await invalidateAll();
-		});
-	}
 	let confirmandoApagar = $state(false);
 	async function apagar() {
 		await rodar('apagar', async () => {
@@ -138,6 +119,11 @@
 
 	// ── turmas do módulo ──
 	let adicionando = $state(false);
+	let turmasEscolhidas = $state<string[]>([]);
+	function abrirAdicionarTurmas() {
+		turmasEscolhidas = [];
+		adicionando = true;
+	}
 	let removendo = $state<string | null>(null);
 	// O painel aberto é o id da ALOCAÇÃO. Nasce do `?turma=` (vindo da tela da
 	// turma) e muda com o clique. O derived gravável depende do VALOR do link, não
@@ -145,6 +131,19 @@
 	// voltava ao valor do loader — o painel fechava sozinho depois de salvar.
 	const painelDoLink = $derived(data.painelInicial);
 	let painel = $derived<string | null>(painelDoLink);
+	// A bandeja da programação SAI com o conteúdo da turma que estava aberta (a
+	// última), e cada abertura remonta o painel (`chaveDoPainel`) para a cópia
+	// local começar do que está gravado. Ele monta FECHADO e abre no quadro
+	// seguinte — senão a entrada não anima.
+	let ultimoPainel = $state<string | null>(null);
+	let chaveDoPainel = $state(0);
+	async function abrirPainel(id: string) {
+		ultimoPainel = id;
+		painel = null;
+		chaveDoPainel += 1;
+		await tick();
+		painel = id;
+	}
 
 	const idsDoModulo = $derived(ordem.map((a) => a.id));
 	const turmas = $derived(
@@ -157,10 +156,10 @@
 			const quando = a.programacao ? resumoDaProgramacao(a.programacao) : '';
 			const resumo =
 				estado === 'sem'
-					? 'alocada · nada enviado ainda'
+					? 'alocada · nada liberado ainda'
 					: estado === 'falha' && falha
-						? `${quando} · ${enviadas} de ${total} enviadas · ${titulo(falha.activityId)} esperando desde ${rotuloDoInstante(falha.dueAt)}`
-						: `${quando} · ${enviadas} de ${total} enviadas${prox && !a.pausedAt ? ` · próxima ${rotuloDoInstante(prox.dueAt)}` : ''}`;
+						? `${quando} · ${enviadas} de ${total} liberadas · ${titulo(falha.activityId)} esperando desde ${rotuloDoInstante(falha.dueAt)}`
+						: `${quando} · ${enviadas} de ${total} liberadas${prox && !a.pausedAt ? ` · próxima ${rotuloDoInstante(prox.dueAt)}` : ''}`;
 			return { ...a, estado, prox, resumo, falha };
 		})
 	);
@@ -169,9 +168,9 @@
 	const falhaDoTopo = $derived(turmas.find((t) => t.falha));
 	const noAr = $derived(ordem.filter((a) => a.estado === 'no-ar').length);
 
-	async function alocar(classroomId: string) {
-		await rodar(`alocar:${classroomId}`, async () => {
-			await alocarTurmas({ moduleId: data.modulo.id, classroomIds: [classroomId] });
+	async function alocarEscolhidas() {
+		await rodar('alocar', async () => {
+			await alocarTurmas({ moduleId: data.modulo.id, classroomIds: turmasEscolhidas });
 			adicionando = false;
 			await invalidateAll();
 		});
@@ -191,23 +190,15 @@
 		});
 	}
 
-	const alocacaoAberta = $derived(data.alocacoes.find((a) => a.id === painel) ?? null);
-	/** E-mails já programados nas OUTRAS alocações, por dia — o teto de 100 da prévia. */
-	const cargaOutras = $derived.by(() => {
-		const soma: Record<string, number> = {};
-		for (const [id, porDia] of Object.entries(data.carga)) {
-			if (id === painel) continue;
-			for (const [dia, n] of Object.entries(porDia)) soma[dia] = (soma[dia] ?? 0) + n;
-		}
-		return soma;
-	});
-
+	const alocacaoAberta = $derived(
+		data.alocacoes.find((a) => a.id === (painel ?? ultimoPainel)) ?? null
+	);
 	// Mesmo cuidado do painel: a escolha sobrevive à recarga dos dados.
 	const primeiraTurma = $derived(data.alocacoes[0]?.id ?? '');
 	let previaTurma = $derived(primeiraTurma);
 </script>
 
-<svelte:head><title>{data.modulo.name} — Módulos — entendo</title></svelte:head>
+<svelte:head><title>{data.modulo.name} · Módulos · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<div>
@@ -217,109 +208,46 @@
 		>
 			<AmbientShapes layout="corner" />
 			<div class="relative">
-				{#if !editando}
-					<div class="mb-4.5 flex flex-wrap items-start gap-x-4.5 gap-y-3.5">
-						<span
-							class="grid size-[46px] flex-none place-items-center rounded-[13px] text-[15px] font-bold {CLASSE_DA_ETIQUETA[
-								data.modulo.color
-							]}">{etiquetaDaTurma(data.modulo.name)}</span
+				<div class="mb-4.5 flex flex-wrap items-start gap-x-4.5 gap-y-3.5">
+					<span
+						class="grid size-[46px] flex-none place-items-center rounded-[13px] text-[15px] font-bold {CLASSE_DA_ETIQUETA[
+							data.modulo.color
+						]}">{etiquetaDaTurma(data.modulo.name)}</span
+					>
+					<div class="min-w-0 flex-1">
+						<p class="mb-1 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
+							Módulo
+						</p>
+						<h1
+							class="mb-1.5 font-display text-[22px] font-semibold tracking-[-0.024em] lg:text-[28px]"
 						>
-						<div class="min-w-0 flex-1">
+							{data.modulo.name}
+						</h1>
+						{#if data.modulo.description}
 							<p
-								class="mb-1 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
+								class="max-w-[60ch] text-[13.5px] leading-relaxed text-pretty text-base-content/65"
 							>
-								Módulo
+								{data.modulo.description}
 							</p>
-							<h1
-								class="mb-1.5 font-display text-[22px] font-semibold tracking-[-0.024em] lg:text-[28px]"
-							>
-								{data.modulo.name}
-							</h1>
-							{#if data.modulo.description}
-								<p
-									class="max-w-[60ch] text-[13.5px] leading-relaxed text-pretty text-base-content/65"
-								>
-									{data.modulo.description}
-								</p>
-							{/if}
-						</div>
-						<button
-							type="button"
-							onclick={abrirEdicao}
-							class="btn min-h-[42px] flex-[1_1_100%] motion-tap gap-2 btn-plain text-[13.5px] font-semibold lg:flex-none"
+						{/if}
+					</div>
+					<button
+						type="button"
+						onclick={() => (editando = true)}
+						aria-haspopup="dialog"
+						class="btn min-h-[42px] flex-[1_1_100%] motion-tap gap-2 btn-plain text-[13.5px] font-semibold lg:flex-none"
+					>
+						<svg class="size-[15px] flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+							><path
+								d="M5 19h3l10-10-3-3L5 16z"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linejoin="round"
+							/></svg
 						>
-							<svg class="size-[15px] flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-								><path
-									d="M5 19h3l10-10-3-3L5 16z"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linejoin="round"
-								/></svg
-							>
-							Editar módulo
-						</button>
-					</div>
-				{:else}
-					<div class="mb-4.5 grid max-w-[640px] gap-3">
-						<label class="grid gap-1.5">
-							<span class="text-[12.5px] font-bold">Nome</span>
-							<input bind:value={nome} maxlength="80" class="input w-full" />
-						</label>
-						<label class="grid gap-1.5">
-							<span class="text-[12.5px] font-bold"
-								>Descrição <span class="font-medium text-base-content/65">· opcional</span></span
-							>
-							<textarea bind:value={descricao} rows="2" maxlength="400" class="textarea w-full"
-							></textarea>
-						</label>
-						<fieldset class="grid gap-1.5 border-0 p-0">
-							<legend class="mb-1.5 text-[12.5px] font-bold">Cor da etiqueta</legend>
-							<div class="flex flex-wrap gap-1.75">
-								{#each CORES_DE_ETIQUETA as opcao (opcao)}
-									<button
-										type="button"
-										onclick={() => (cor = opcao)}
-										aria-pressed={cor === opcao}
-										aria-label={NOME_DA_COR[opcao]}
-										title={NOME_DA_COR[opcao]}
-										class="grid size-11 place-items-center rounded-[11px] border-2 p-0 transition-colors {cor ===
-										opcao
-											? 'border-primary bg-base-100'
-											: 'border-line bg-base-100/60'}"
-									>
-										<span
-											class="grid size-7.5 place-items-center rounded-[8px] text-[11px] font-bold {CLASSE_DA_ETIQUETA[
-												opcao
-											]}">{etiquetaDaTurma(nome || data.modulo.name)}</span
-										>
-									</button>
-								{/each}
-							</div>
-						</fieldset>
-						<div class="flex gap-2">
-							<button
-								type="button"
-								onclick={salvarEdicao}
-								disabled={pendente !== null || !nome.trim()}
-								class="btn min-h-[42px] motion-tap gap-2 btn-primary font-bold"
-							>
-								{#if pendente === 'editar'}<Loading
-										variant="fila"
-										size={10}
-										tone="current"
-										label="Salvando"
-									/>{/if}
-								Salvar
-							</button>
-							<button
-								type="button"
-								onclick={() => (editando = false)}
-								class="btn min-h-[42px] border border-line bg-transparent font-semibold text-base-content/70"
-								>Cancelar</button
-							>
-						</div>
-					</div>
-				{/if}
+						Editar módulo
+					</button>
+				</div>
 				<div class="flex flex-wrap gap-x-7.5 gap-y-3 border-t border-line pt-4">
 					{#each [{ v: ordem.length, l: ordem.length === 1 ? 'atividade' : 'atividades', tom: '' }, { v: noAr, l: 'no ar', tom: 'text-primary' }, { v: turmas.length, l: turmas.length === 1 ? 'turma' : 'turmas', tom: '' }] as n (n.l)}
 						<div>
@@ -357,11 +285,11 @@
 				>
 				<div class="min-w-[220px] flex-1">
 					<p class="mb-1 text-[13.5px] font-bold">
-						O envio de {rotuloDoInstante(f.dueAt)} para {falhaDoTopo.turma.name} não saiu
+						A liberação de {rotuloDoInstante(f.dueAt)} para {falhaDoTopo.turma.name} não aconteceu
 					</p>
 					<p class="text-[12.5px] leading-relaxed text-base-content/65">
 						{atividade?.title ?? 'A atividade'}
-						{f.reason ? TEXTO_DO_MOTIVO[f.reason] : 'não pôde sair'}. O envio espera: {f.reason ===
+						{f.reason ? TEXTO_DO_MOTIVO[f.reason] : 'não pôde abrir'}. A liberação espera: {f.reason ===
 						'audio'
 							? 'ele tenta de novo sozinho em alguns minutos'
 							: 'resolva e ele sai na próxima tentativa'}, sem pular para a seguinte.
@@ -421,14 +349,12 @@
 		<section class="mb-7.5">
 			<div class="mb-2 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
 				<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Atividades, na ordem</h2>
-				<span class="text-[13px] text-base-content/65">a ordem do e-mail e do mapa do aluno</span>
+				<span class="text-[13px] text-base-content/65">a ordem do mapa do aluno</span>
 				<span class="min-w-1 flex-1"></span>
 				<button
 					type="button"
-					onclick={() => {
-						acrescentando = !acrescentando;
-						escolhidas = [];
-					}}
+					onclick={abrirAcrescentar}
+					aria-haspopup="dialog"
 					class="btn min-h-10 motion-tap gap-2 btn-plain text-[13px] font-semibold"
 				>
 					<svg class="size-[15px] flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"
@@ -452,69 +378,8 @@
 							stroke-linejoin="round"
 						/></svg
 					>
-					Reordenar muda só o que ainda não saiu. O que já foi enviado fica onde está.
+					Reordenar muda só o que ainda não abriu. O que já foi liberado fica onde está.
 				</p>
-			{/if}
-
-			{#if acrescentando}
-				<div
-					class="mb-3 animate-[en-fade-up_280ms_var(--ease-out-soft)_both] rounded-[14px] border border-primary/34 px-4 py-3.5"
-				>
-					<p class="mb-0.75 text-[13.5px] font-bold">Suas atividades que não estão no módulo</p>
-					<p class="mb-2.5 text-[12.5px] text-base-content/65">
-						As arquivadas ficam fora. As escolhidas entram no fim, e no fim da fila de cada turma.
-					</p>
-					{#if data.disponiveis.length === 0}
-						<p class="text-[13px] text-base-content/65">Todas as suas atividades já estão aqui.</p>
-					{:else}
-						<div class="mb-3 grid max-h-[300px] gap-1 overflow-y-auto">
-							{#each data.disponiveis as a (a.id)}
-								<label
-									class="flex min-h-11 cursor-pointer items-center gap-3 rounded-[9px] px-2.5 py-2 hover:bg-base-200"
-								>
-									<input
-										type="checkbox"
-										class="checkbox flex-none checkbox-primary"
-										checked={escolhidas.includes(a.id)}
-										onchange={() => alternar(a.id)}
-									/>
-									<span class="min-w-0 flex-1 text-[14px] font-semibold">{a.title}</span>
-									{#if a.level}<span class="text-[12px] text-base-content/65">{a.level}</span>{/if}
-									<IdiomaTag tag={a.idioma} compacta />
-									<span
-										class="rounded-full px-2.25 py-0.75 text-[11.5px] font-bold whitespace-nowrap {a.noAr
-											? 'bg-base-300 text-primary'
-											: 'border-[1.5px] border-dashed border-line text-base-content/70'}"
-										>{a.noAr ? 'no ar' : 'rascunho'}</span
-									>
-								</label>
-							{/each}
-						</div>
-					{/if}
-					<div class="flex gap-2">
-						<button
-							type="button"
-							onclick={acrescentar}
-							disabled={pendente !== null || escolhidas.length === 0}
-							class="btn min-h-[42px] motion-tap gap-2 btn-primary font-bold"
-						>
-							{#if pendente === 'acrescentar'}<Loading
-									variant="fila"
-									size={10}
-									tone="current"
-									label="Acrescentando"
-								/>{/if}
-							{escolhidas.length
-								? `Acrescentar ${escolhidas.length} ${escolhidas.length === 1 ? 'atividade' : 'atividades'}`
-								: 'Acrescentar'}
-						</button>
-						<button
-							type="button"
-							onclick={() => (acrescentando = false)}
-							class="btn min-h-[42px] btn-plain">Cancelar</button
-						>
-					</div>
-				</div>
 			{/if}
 
 			{#if ordem.length > 0}
@@ -662,13 +527,12 @@
 		<section class="mb-7.5">
 			<div class="mb-3.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
 				<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Turmas do módulo</h2>
-				<span class="text-[13px] text-base-content/65"
-					>só uma turma daqui recebe envio do módulo</span
-				>
+				<span class="text-[13px] text-base-content/65">só uma turma daqui recebe o módulo</span>
 				<span class="min-w-1 flex-1"></span>
 				<button
 					type="button"
-					onclick={() => (adicionando = !adicionando)}
+					onclick={abrirAdicionarTurmas}
+					aria-haspopup="dialog"
 					class="btn min-h-10 motion-tap gap-2 btn-plain text-[13px] font-semibold"
 				>
 					<svg class="size-[15px] flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"
@@ -679,48 +543,15 @@
 							stroke-linecap="round"
 						/></svg
 					>
-					Adicionar turma
+					Adicionar turmas
 				</button>
 			</div>
-
-			{#if adicionando}
-				<div
-					class="mb-3 flex animate-[en-fade-up_280ms_var(--ease-out-soft)_both] flex-wrap items-center gap-2 rounded-[14px] border border-primary/34 px-3.5 py-3"
-				>
-					<span class="me-1 text-[13px] text-base-content/65">Suas turmas fora deste módulo:</span>
-					{#each data.livres as t (t.id)}
-						<button
-							type="button"
-							onclick={() => alocar(t.id)}
-							disabled={pendente !== null}
-							class="flex min-h-[42px] motion-tap items-center gap-2 rounded-[10px] border border-line bg-base-100 py-1.75 ps-1.75 pe-3 text-[13px] font-semibold hover:border-primary"
-						>
-							<span
-								class="grid size-7 place-items-center rounded-[8px] text-[11px] font-bold {CLASSE_DA_ETIQUETA[
-									t.color
-								]}">{etiquetaDaTurma(t.name)}</span
-							>
-							{t.name}
-							{#if pendente === `alocar:${t.id}`}<Loading
-									variant="fila"
-									size={9}
-									label="Adicionando"
-								/>{/if}
-						</button>
-					{:else}
-						<span class="text-[13px] text-base-content/65 italic"
-							>todas já estão aqui · <a href={resolve('/(studio)/turmas/nova')}>criar uma turma</a
-							></span
-						>
-					{/each}
-				</div>
-			{/if}
 
 			{#if turmas.length === 0}
 				<p
 					class="rounded-[14px] border border-dashed border-line px-4 py-5 text-[13.5px] leading-relaxed text-base-content/65"
 				>
-					Nenhuma turma ainda. "Adicionar turma" põe a turma aqui, e daí você programa quando cada
+					Nenhuma turma ainda. "Adicionar turmas" põe a turma aqui, e daí você programa quando cada
 					atividade sai para ela — tudo de uma vez, toda quinta ou em datas fixas.
 				</p>
 			{:else}
@@ -741,9 +572,7 @@
 										<span class="mb-0.75 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
 											<span class="text-[15px] font-semibold">{t.turma.name}</span>
 											<span class="text-[12.5px] text-base-content/65"
-												>{t.turma.alunos} alunos · {t.turma.comEmail > 0
-													? `${t.turma.comEmail} com e-mail`
-													: 'nenhum com e-mail'}</span
+												>{t.turma.alunos} {t.turma.alunos === 1 ? 'aluno' : 'alunos'}</span
 											>
 										</span>
 										<span class="block text-[12.5px] text-pretty text-base-content/65"
@@ -768,7 +597,8 @@
 								<span class="flex flex-none items-center gap-1">
 									<button
 										type="button"
-										onclick={() => (painel = t.id)}
+										onclick={() => abrirPainel(t.id)}
+										aria-haspopup="dialog"
 										class="btn min-h-10 motion-tap btn-outline text-[13px] font-bold whitespace-nowrap"
 										>Programação</button
 									>
@@ -819,8 +649,8 @@
 								<div class="border-t border-line bg-base-200 px-4.5 py-3.5">
 									<p class="mb-2 text-[13.5px] font-bold">Tirar {t.turma.name} do módulo?</p>
 									<ul class="mb-3 ps-4.5 text-[13px] leading-relaxed text-base-content/65">
-										<li>Os envios futuros desta turma são cancelados.</li>
-										<li>O que já foi enviado continua valendo: o link é da atividade.</li>
+										<li>As liberações futuras desta turma são canceladas.</li>
+										<li>O que já foi liberado continua aberto: o link é da atividade.</li>
 										<li>O módulo some do mapa dos alunos desta turma.</li>
 									</ul>
 									<div class="flex flex-wrap gap-2">
@@ -856,7 +686,7 @@
 		{#if data.historico.length > 0}
 			<section class="mb-7.5">
 				<div class="mb-3.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
-					<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Envios</h2>
+					<h2 class="font-display text-[18px] font-semibold lg:text-[20px]">Liberações</h2>
 					<span class="text-[13px] text-base-content/65"
 						>cada linha abre o resultado daquela atividade</span
 					>
@@ -878,16 +708,7 @@
 							<span class="min-w-[150px] flex-1 text-[14px] font-semibold">{h.atividade.title}</span
 							>
 							<span class="flex flex-none gap-4.5 font-mono text-[13px]">
-								{#if h.porEmail}
-									<span
-										><span class="font-sans text-[12px] text-base-content/65"
-											>e-mails
-										</span>{h.emails}</span
-									>
-								{:else}
-									<span class="font-sans text-[12px] text-base-content/65">no mapa, sem e-mail</span
-									>
-								{/if}
+								<span class="font-sans text-[12px] text-base-content/65">liberada no mapa</span>
 								<span
 									><span class="font-sans text-[12px] text-base-content/65"
 										>abriram
@@ -944,7 +765,7 @@
 			<p class="mb-4 max-w-[76ch] text-[13px] leading-relaxed text-pretty text-base-content/65">
 				As {ordem.length} atividades continuam na sua conta: só o agrupamento some.{turmas.length >
 				0
-					? ` Os envios programados que ainda não saíram são cancelados nas ${turmas.length} ${turmas.length === 1 ? 'turma' : 'turmas'}.`
+					? ` As liberações programadas que ainda não aconteceram são canceladas nas ${turmas.length} ${turmas.length === 1 ? 'turma' : 'turmas'}.`
 					: ''} Os que já saíram continuam valendo, porque o link é da atividade, não do módulo.
 			</p>
 			{#if confirmandoApagar}
@@ -981,12 +802,12 @@
 </div>
 
 {#if alocacaoAberta}
-	{#key alocacaoAberta.id}
+	{#key chaveDoPainel}
 		<ProgramacaoPainel
+			aberta={painel !== null}
 			alocacao={alocacaoAberta}
 			atividades={ordem}
 			hoje={data.hoje}
-			{cargaOutras}
 			outras={data.alocacoes
 				.filter((a) => a.id !== alocacaoAberta.id)
 				.map((a) => ({ id: a.id, nome: a.turma.name, programacao: a.programacao }))}
@@ -995,3 +816,132 @@
 		/>
 	{/key}
 {/if}
+
+<ModuloBandeja
+	aberta={editando}
+	onfechar={() => (editando = false)}
+	modulo={data.modulo}
+	onsalvo={() => invalidateAll()}
+/>
+
+<Bandeja
+	aberta={acrescentando}
+	onfechar={() => (acrescentando = false)}
+	titulo="Acrescentar atividades"
+	descricao="Entram no fim do módulo, na ordem em que você marcar — e no fim da fila de cada turma. As arquivadas ficam fora."
+	resumo={escolhidas.length
+		? `${escolhidas.length} ${escolhidas.length === 1 ? 'atividade entra' : 'atividades entram'} depois da ${ordem.length}ª.`
+		: 'Marque as que entram neste módulo.'}
+	erro={acrescentando ? erro : null}
+>
+	<SeletorDeAtividades
+		atividades={data.disponiveis}
+		bind:escolhidas
+		vazio="Todas as suas atividades já estão neste módulo."
+	/>
+	{#snippet rodape()}
+		<button
+			type="button"
+			onclick={() => (acrescentando = false)}
+			class="btn min-h-11 motion-tap btn-plain">Cancelar</button
+		>
+		<button
+			type="button"
+			onclick={acrescentar}
+			disabled={pendente !== null || escolhidas.length === 0}
+			class="btn min-h-11 motion-tap gap-2 btn-primary font-bold"
+		>
+			{#if pendente === 'acrescentar'}<Loading
+					variant="fila"
+					size={10}
+					tone="current"
+					label="Acrescentando"
+				/>{/if}
+			{escolhidas.length
+				? `Acrescentar ${escolhidas.length} ${escolhidas.length === 1 ? 'atividade' : 'atividades'}`
+				: 'Acrescentar'}
+		</button>
+	{/snippet}
+</Bandeja>
+
+<Bandeja
+	aberta={adicionando}
+	onfechar={() => (adicionando = false)}
+	titulo="Adicionar turmas"
+	descricao="Só turma daqui recebe o módulo. Cada uma ganha a sua programação de liberação — tudo de uma vez, toda quinta ou em datas fixas."
+	resumo={turmasEscolhidas.length
+		? 'Nada é liberado agora: depois, abra a Programação de cada turma para dizer quando cada atividade abre.'
+		: 'Marque as turmas que recebem este módulo.'}
+	erro={adicionando ? erro : null}
+>
+	{#if data.livres.length === 0}
+		<p
+			class="rounded-box border border-dashed border-line px-4 py-5 text-[13.5px] leading-relaxed text-base-content/65"
+		>
+			Todas as suas turmas já estão neste módulo.
+		</p>
+	{:else}
+		<fieldset class="border-0 p-0">
+			<legend class="sr-only">Turmas fora deste módulo</legend>
+			<ul class="grid list-none gap-1.5 p-0">
+				{#each data.livres as t (t.id)}
+					<li>
+						<label
+							class="flex min-h-14 cursor-pointer items-center gap-3 rounded-box border-[1.5px] border-line bg-base-100 px-3 py-2 transition-colors hover:border-primary/60 has-[:checked]:border-primary has-[:checked]:bg-primary/6"
+						>
+							<input
+								type="checkbox"
+								value={t.id}
+								bind:group={turmasEscolhidas}
+								class="checkbox flex-none checkbox-primary"
+							/>
+							<span
+								class="grid size-9 flex-none place-items-center rounded-[10px] text-[12px] font-bold {CLASSE_DA_ETIQUETA[
+									t.color
+								]}"
+								aria-hidden="true">{etiquetaDaTurma(t.name)}</span
+							>
+							<span class="min-w-0 flex-1">
+								<span class="block truncate text-[14px] font-semibold">{t.name}</span>
+								<span class="block text-[12px] text-base-content/65"
+									>{t.alunos} {t.alunos === 1 ? 'aluno' : 'alunos'}</span
+								>
+							</span>
+							<IdiomaTag tag={t.idioma} compacta />
+						</label>
+					</li>
+				{/each}
+			</ul>
+		</fieldset>
+	{/if}
+	<!-- eslint-disable svelte/no-navigation-without-resolve -- rota resolvida mais a query que abre a bandeja da turma nova. -->
+	<a
+		href={resolve('/(studio)/turmas') + '?nova=1'}
+		class="mt-3 inline-flex items-center gap-1.5 py-1 text-[13px] font-semibold text-primary no-underline"
+		>+ Criar uma turma nova</a
+	>
+	<!-- eslint-enable svelte/no-navigation-without-resolve -->
+	{#snippet rodape()}
+		<button
+			type="button"
+			onclick={() => (adicionando = false)}
+			class="btn min-h-11 motion-tap btn-plain">Cancelar</button
+		>
+		<button
+			type="button"
+			onclick={alocarEscolhidas}
+			disabled={pendente !== null || turmasEscolhidas.length === 0}
+			class="btn min-h-11 motion-tap gap-2 btn-primary font-bold"
+		>
+			{#if pendente === 'alocar'}<Loading
+					variant="fila"
+					size={10}
+					tone="current"
+					label="Adicionando"
+				/>{/if}
+			{turmasEscolhidas.length
+				? `Adicionar ${turmasEscolhidas.length} ${turmasEscolhidas.length === 1 ? 'turma' : 'turmas'}`
+				: 'Adicionar'}
+		</button>
+	{/snippet}
+</Bandeja>

@@ -14,7 +14,7 @@ describe('o e-mail de redefinir senha', () => {
 		});
 		expect(email.text).toContain(LINK);
 		expect(email.html).toContain(LINK.replace(/&/g, '&amp;'));
-		expect(email.subject).toBe('Criar uma senha nova no entendo');
+		expect(email.subject).toBe('Criar uma senha nova no Spokke');
 		expect(email.text).toContain('Olá, Ana.');
 		expect(email.text).toContain('vale por 1 hora');
 	});

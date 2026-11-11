@@ -13,13 +13,13 @@
  */
 
 export const COR = {
-	marca: '#5A3FF3',
-	marcaClara: '#DCD5FF',
-	texto: '#1A1730',
-	suave: '#6B6690',
-	linha: '#E2DEF2',
-	fundo: '#F5F4FB',
-	chip: '#E7E3F7',
+	marca: '#3659CB',
+	marcaClara: '#CCDBFF',
+	texto: '#111A31',
+	suave: '#5B6B93',
+	linha: '#D9E1F4',
+	fundo: '#F2F5FC',
+	chip: '#DEE6F9',
 	branco: '#FFFFFF'
 } as const;
 
@@ -57,7 +57,7 @@ export function primeiroNome(nome: string): string {
 }
 
 /**
- * A moldura: cabeçalho violeta com a marca, o corpo (HTML já montado e já
+ * A moldura: cabeçalho azul com a marca, o corpo (HTML já montado e já
  * escapado por quem chama) e o fundo. `titulo` e `preheader` são texto puro —
  * escapados aqui.
  */
@@ -81,7 +81,7 @@ export function moldura(opcoes: {
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;margin:0 auto;border-collapse:collapse;background:${COR.branco};border:1px solid ${COR.linha};border-radius:14px;">
   <tr><td style="padding:17px 26px;background:${COR.marca};border-radius:13px 13px 0 0;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-      <td valign="middle"><span style="font-family:${DISPLAY};font-size:19px;font-weight:800;letter-spacing:-0.02em;color:${COR.branco};">entendo</span></td>
+      <td valign="middle"><span style="font-family:${DISPLAY};font-size:19px;font-weight:800;letter-spacing:-0.02em;color:${COR.branco};">Spokke</span></td>
       ${etiqueta}
     </tr></table>
   </td></tr>

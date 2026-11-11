@@ -4,14 +4,13 @@ import { playerRepo } from '$lib/server/db/repos/player';
 import { itemAudioHashes } from '$lib/server/player/runtime';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
-import { enqueueConvitesDeModulo, type ConviteModuloJob } from '$lib/server/queue';
 import { labelForTag } from '$lib/kernel/language/profiles';
 
 /**
  * As duas metades de um envio de módulo (docs/adr-004-modulos-e-nivel.md e
  * docs/telas-modulos-professor.md 2.4): **preparar** diz o que está pronto para
- * sair e o que não está, com o motivo; **despachar** cria os convites e
- * enfileira UM e-mail por aluno. Quem decide QUANDO é a programação
+ * sair e o que não está, com o motivo; **despachar** cria os convites que
+ * abrem as fases no mapa do aluno. Quem decide QUANDO é a programação
  * (`programacao.ts`); estas duas não sabem de data nenhuma.
  *
  * Moram aqui, e não numa remote function, para o worker (envio programado) e a
@@ -99,69 +98,30 @@ export async function prepararAtividades(
 }
 
 /**
- * Cria um `Delivery` por atividade, todos com o mesmo `envioId`, e enfileira
- * **um e-mail por aluno** com os links de todas elas, na ordem recebida (a do
- * módulo). O plano grátis do Resend dá 100 e-mails por dia: um por atividade
- * seriam cinco para a mesma turma no mesmo minuto.
+ * LIBERA as atividades para a turma: um `Delivery` por atividade, todos com o
+ * mesmo `envioId`, e um convite para CADA aluno da turma — é o convite que abre a
+ * fase no mapa de quem tem conta, e o link pessoal existe do mesmo jeito.
  *
- * `porEmail: false` é o "só disponibilizar" (`Programacao.canal === 'mapa'`): os
- * convites nascem para todos os alunos — é por eles que a fase abre no mapa —,
- * e nenhum e-mail entra na fila.
+ * **Nenhum e-mail.** Módulo libera, não manda (`modulos/programacao.ts`). Houve
+ * um "por e-mail" que enfileirava um e-mail por aluno com os links; ele saiu a
+ * pedido do dono do repositório. Mandar UMA atividade por e-mail para a turma
+ * continua existindo, fora do módulo ("Enviar atividade").
  */
 export async function despacharEnvio(
 	teacher: Professor,
-	origem: string,
 	modulo: { id: string; name: string },
 	turma: { id: string; name: string },
-	prontas: AtividadePronta[],
-	porEmail = true
-): Promise<{ envioId: string; convites: number; emails: number }> {
+	prontas: AtividadePronta[]
+): Promise<{ envioId: string; convites: number }> {
 	const envioId = crypto.randomUUID();
-	const porAluno = new Map<
-		string,
-		{ email: string; name: string; inviteIds: string[]; atividades: ConviteModuloJob['atividades'] }
-	>();
 	let convites = 0;
-
 	for (const atividade of prontas) {
 		const criado = await envios(teacher).create(atividade.publicationId, turma.id, {
 			envioId,
 			moduleId: modulo.id,
-			porEmail
+			porEmail: false
 		});
-		if (!criado?.delivery) continue;
-		for (const convite of criado.invites) {
-			convites++;
-			if (!porEmail || !convite.student.email) continue;
-			const deste = porAluno.get(convite.student.id) ?? {
-				email: convite.student.email,
-				name: convite.student.name,
-				inviteIds: [],
-				atividades: []
-			};
-			deste.inviteIds.push(convite.id);
-			deste.atividades.push({
-				title: atividade.title,
-				languageLabel: atividade.languageLabel,
-				itemCount: atividade.itemCount,
-				minutes: atividade.minutes,
-				link: `${origem}/e/${convite.token}`,
-				code: atividade.code,
-				codeUrl: `${origem}/a/${atividade.slug}`
-			});
-			porAluno.set(convite.student.id, deste);
-		}
+		if (criado?.delivery) convites += criado.invites.length;
 	}
-
-	const jobs: ConviteModuloJob[] = [...porAluno.values()].map((aluno) => ({
-		inviteIds: aluno.inviteIds,
-		to: aluno.email,
-		studentName: aluno.name,
-		teacherName: teacher.name,
-		moduleName: modulo.name,
-		classroomName: turma.name,
-		atividades: aluno.atividades
-	}));
-	await enqueueConvitesDeModulo(jobs);
-	return { envioId, convites, emails: jobs.length };
+	return { envioId, convites };
 }

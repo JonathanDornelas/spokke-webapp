@@ -99,6 +99,9 @@ describe('campos de cobrança não vêm do corpo do pedido', () => {
 			headers: new Headers({ cookie: cookie.split(';')[0] })
 		});
 		expect(sessao?.user).toBeDefined();
-		expect(Object.keys(sessao!.user)).not.toContain('stripeCustomerId');
+		// Os ids do gateway moram na tabela própria (ProviderSubscription), nunca na
+		// linha do professor — e por isso nunca na sessão que vai para o navegador.
+		expect(Object.keys(sessao!.user)).not.toContain('providerSubscriptions');
+		expect(JSON.stringify(sessao!.user)).not.toContain('mercadopago');
 	});
 });

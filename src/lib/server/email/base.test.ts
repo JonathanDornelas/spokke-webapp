@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { escaparHtml } from './base';
 import { montarConviteAluno } from './convite-aluno';
 import { montarAvisoEquipe } from './aviso-equipe';
+import { montarConviteConta } from './convite-conta';
 
 describe('escaparHtml', () => {
 	it('escapa os cinco caracteres que abrem marcação ou atributo', () => {
@@ -31,6 +32,22 @@ describe('e-mails não injetam marcação vinda de pessoas', () => {
 		expect(email.html).toContain('&lt;img');
 		// O texto puro não tem marcação: lá o valor vai como foi digitado.
 		expect(email.text).toContain(ataque);
+	});
+
+	it('convite para a conta do aluno', () => {
+		const email = montarConviteConta({
+			studentName: ataque,
+			teacherName: ataque,
+			classroomName: ataque,
+			link: 'https://exemplo.dev/aluno/convite/abc'
+		});
+		expect(email.html).not.toContain('<img');
+		expect(email.html).toContain('&lt;img');
+		// O link vai no botão E em texto: cliente de e-mail engole botão.
+		expect(email.html.split('https://exemplo.dev/aluno/convite/abc').length).toBeGreaterThan(2);
+		expect(email.text).toContain('https://exemplo.dev/aluno/convite/abc');
+		// E diz que a conta é opcional: responder continua sem ela.
+		expect(email.text).toContain('opcional');
 	});
 
 	it('aviso para a equipe', () => {

@@ -70,3 +70,47 @@ describe('previewRawLines', () => {
 		expect(ok).toBe(parseRawMaterial('VocabItem', raw).length);
 	});
 });
+
+/**
+ * Com o tradutor ligado, colar a lista SÓ no idioma alvo é o caminho padrão
+ * (docs/adr-006-traducao.md): a linha sem separador entra, com a tradução em
+ * branco para o servidor preencher — e a prévia diz isso, linha por linha.
+ */
+describe('linha sem separador com o tradutor ligado', () => {
+	const raw = ['I have a cat. · Eu tenho um gato.', 'She lives in Paris.'].join('\n');
+
+	it('entra com a tradução em branco, e a que o professor escreveu fica', () => {
+		expect(parseRawMaterial('SentencePair', raw, { traduzirSemSeparador: true })).toEqual([
+			{ target: 'I have a cat.', source: 'Eu tenho um gato.' },
+			{ target: 'She lives in Paris.', source: '' }
+		]);
+		expect(parseRawMaterial('VocabItem', 'bookshop', { traduzirSemSeparador: true })).toEqual([
+			{ term: 'bookshop', translation: '' }
+		]);
+	});
+
+	it('sem a opção, continua de fora — sem tradutor não há tradução', () => {
+		expect(parseRawMaterial('SentencePair', raw)).toHaveLength(1);
+	});
+
+	it('a prévia marca a linha como automática, não como erro', () => {
+		const [comSeparador, semSeparador] = previewRawLines(raw, { traduzirSemSeparador: true });
+		expect(comSeparador).toMatchObject({ ok: true, right: 'Eu tenho um gato.' });
+		expect(comSeparador.automatica).toBeUndefined();
+		expect(semSeparador).toEqual({
+			text: 'She lives in Paris.',
+			left: 'She lives in Paris.',
+			right: '',
+			ok: true,
+			automatica: true
+		});
+		expect(previewRawLines(raw)[1].ok).toBe(false);
+	});
+
+	it('texto e diálogo não mudam: lá não existe tradução por linha', () => {
+		const bloco = 'Título\nUma frase.';
+		expect(parseRawMaterial('Passage', bloco, { traduzirSemSeparador: true })).toEqual(
+			parseRawMaterial('Passage', bloco)
+		);
+	});
+});

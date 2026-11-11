@@ -25,7 +25,7 @@ type AnswerState = 'correct' | 'partial' | 'incorrect' | 'pending';
  * o aluno ainda vai responder é gabarito adiantado.
  */
 export const load: PageServerLoad = async ({ params, cookies }) => {
-	const attemptId = cookies.get(`entendo_attempt_${params.slug}`);
+	const attemptId = cookies.get(`spokke_attempt_${params.slug}`);
 	if (!attemptId) redirect(303, resolve('/a/[slug]', { slug: params.slug }));
 
 	const attempt = await playerRepo.attemptById(attemptId);

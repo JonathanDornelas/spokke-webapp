@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { contentUnitKinds } from '$lib/kernel/content/types';
 import { campoIdioma } from '$lib/idiomas';
+import {
+	TraducaoIndisponivel,
+	completarTraducoes,
+	type ParDeIdiomas,
+	type Tradutor
+} from '$lib/server/traducao';
 
 /**
  * Os campos que um formulário de material manda, e como eles viram o
@@ -32,7 +38,12 @@ export const camposMaterial = {
 	 * A tag de idioma, só na BIBLIOTECA — no wizard o material é da atividade e
 	 * o idioma dela vale. Vazio = sem idioma.
 	 */
-	idioma: campoIdioma
+	idioma: campoIdioma,
+	/**
+	 * Para onde vai a tradução automática, só na BIBLIOTECA: a mesma língua do
+	 * aluno que a página usa para a IA. No wizard vale a da atividade.
+	 */
+	linguaDoAluno: campoIdioma
 };
 
 export type CamposMaterial = {
@@ -45,7 +56,85 @@ export type CamposMaterial = {
 	questions?: string;
 	lines?: string;
 	idioma?: string | null;
+	linguaDoAluno?: string | null;
 };
+
+/** Quem diz "não deu para traduzir" escreve isto — uma frase, a mesma nas duas telas. */
+export const AVISO_SEM_TRADUTOR =
+	'O tradutor automático não respondeu agora. Escreva a tradução ou tente de novo em instantes.';
+
+/**
+ * A tradução que veio EM BRANCO num par de frases ou num termo sai do tradutor
+ * automático (docs/adr-006-traducao.md). O que o professor escreveu nunca é
+ * tocado, e sem tradutor nada muda: `montarMaterial` continua pedindo a
+ * tradução, como sempre pediu.
+ *
+ * `par` nulo é material sem idioma na biblioteca — não há de onde traduzir.
+ */
+export async function preencherTraducao(
+	campos: CamposMaterial,
+	par: ParDeIdiomas | null,
+	tradutor: Tradutor | null
+): Promise<{ campos: CamposMaterial; traduzida: boolean } | { error: string }> {
+	const temTraducao = campos.kind === 'SentencePair' || campos.kind === 'VocabItem';
+	if (!temTraducao || !tradutor || !texto(campos.target) || texto(campos.source)) {
+		return { campos, traduzida: false };
+	}
+	if (!par) {
+		return {
+			error: 'Escolha o idioma do material para a tradução vir sozinha, ou escreva a tradução.'
+		};
+	}
+	try {
+		const { unidades, traduzidas } = await completarTraducoes(
+			[{ target: texto(campos.target), source: '' }],
+			{ texto: 'target', traducao: 'source' },
+			par,
+			tradutor
+		);
+		return { campos: { ...campos, source: unidades[0].source }, traduzida: traduzidas > 0 };
+	} catch (erro) {
+		if (erro instanceof TraducaoIndisponivel) return { error: AVISO_SEM_TRADUTOR };
+		throw erro;
+	}
+}
+
+/**
+ * O mesmo para o LOTE colado: as linhas sem separador (que o parser deixou com
+ * a tradução em branco) são traduzidas num pedido só. Falhou o tradutor, nada é
+ * gravado — metade da lista sem tradução não é a lista que o professor colou.
+ */
+export async function traduzirLote(
+	kind: 'SentencePair' | 'VocabItem',
+	unidades: unknown[],
+	par: ParDeIdiomas | null,
+	tradutor: Tradutor | null
+): Promise<{ unidades: unknown[]; traduzidas: number } | { error: string }> {
+	const registros = unidades.filter(
+		(u): u is Record<string, unknown> => typeof u === 'object' && u !== null
+	);
+	const campos =
+		kind === 'SentencePair'
+			? { texto: 'target', traducao: 'source' }
+			: { texto: 'term', traducao: 'translation' };
+	const faltando = registros.some((u) => !texto(u[campos.traducao]));
+	if (!faltando) return { unidades, traduzidas: 0 };
+	if (!tradutor || !par) {
+		// Sem tradutor o parser nem deixa a linha entrar; isto é a guarda.
+		return { unidades: registros.filter((u) => texto(u[campos.traducao])), traduzidas: 0 };
+	}
+	try {
+		return await completarTraducoes(registros, campos, par, tradutor);
+	} catch (erro) {
+		if (erro instanceof TraducaoIndisponivel) {
+			return {
+				error:
+					'O tradutor automático não respondeu agora, e as linhas sem tradução ficaram de fora. Escreva a tradução depois do separador ou tente de novo em instantes.'
+			};
+		}
+		throw erro;
+	}
+}
 
 /** Lista montada na tela; JSON quebrado aqui é bug de código, não do professor. */
 function listaDeJson(bruto: string | undefined): Record<string, unknown>[] {

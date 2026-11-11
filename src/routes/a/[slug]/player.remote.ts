@@ -5,13 +5,18 @@ import { resolve } from '$app/paths';
 import { playerRepo } from '$lib/server/db/repos/player';
 import { itemAudioHashes } from '$lib/server/player/runtime';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
-import { codigoConfere } from '$lib/server/player/access-code';
+import { atualizarCorrecao, avisarTentativaTerminada } from '$lib/server/notificacoes';
+import { COOKIE_DO_CODIGO, codigoConfere } from '$lib/server/player/access-code';
 import { convitePorToken } from '$lib/server/db/repos/deliveries';
 import { fichaDaConta } from '$lib/server/db/repos/student-accounts';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { gradingSchema, interactionSchema, localeSchema } from '$lib/kernel/item';
 import { getProfile } from '$lib/kernel/language/profiles';
 import { payloadParaCorrigir } from '$lib/server/escrita';
+import { criarLimite } from '$lib/server/limite-por-ip';
+import { registrarRelato } from '$lib/server/relatos';
+import { relatoSchema } from '$lib/server/relatos/schema';
+import { dev, version } from '$app/environment';
 import type { Prisma } from '../../../../generated/prisma/client.ts';
 
 /**
@@ -26,8 +31,7 @@ import type { Prisma } from '../../../../generated/prisma/client.ts';
  * contato.
  */
 
-const ANON_COOKIE = 'entendo_anon';
-const CODE_COOKIE_PREFIX = 'entendo_code_';
+const ANON_COOKIE = 'spokke_anon';
 
 function anonId(): string {
 	const { cookies } = getRequestEvent();
@@ -90,15 +94,17 @@ export const iniciarTentativa = form(
 		const settings = publicationSettingsSchema.parse(publication.settings);
 		await ensureAudioReady(publication);
 
+		// A entrada já manda para o código antes (`precisaDoCodigo`); isto é a
+		// conferência do SERVIDOR, para um POST que chegue sem passar por ela.
 		const { cookies } = getRequestEvent();
-		if (settings.requireCode && cookies.get(CODE_COOKIE_PREFIX + slug) !== settings.code) {
+		if (settings.requireCode && cookies.get(COOKIE_DO_CODIGO + slug) !== settings.code) {
 			redirect(303, resolve('/a/[slug]/codigo', { slug }));
 		}
 
 		// Quem chegou pelo link pessoal já está identificado e não digitou nome:
 		// o nome do cadastro é melhor do que qualquer coisa que ele escrevesse,
 		// e é isso que faz o professor ver "Juliana Pereira" e não "ju".
-		const studentId = cookies.get(`entendo_aluno_${slug}`) ?? null;
+		const studentId = cookies.get(`spokke_aluno_${slug}`) ?? null;
 		const conta = getRequestEvent().locals.aluno;
 		// Logado sem o cookie do convite (o QR da sala, outro aparelho): a ficha
 		// dele com ESTE professor ainda o identifica — senão o professor via um
@@ -135,7 +141,7 @@ export const iniciarTentativa = form(
 			guardarAudio !== undefined
 		);
 
-		cookies.set(`entendo_attempt_${slug}`, attempt.id, {
+		cookies.set(`spokke_attempt_${slug}`, attempt.id, {
 			path: '/',
 			httpOnly: true,
 			sameSite: 'lax',
@@ -159,7 +165,7 @@ export const retomarTentativa = form(z.object({ slug: z.string() }), async ({ sl
 	const anterior = await playerRepo.resumableAttempt(publication.id, anonId());
 	if (!anterior) redirect(303, resolve('/a/[slug]', { slug }));
 
-	cookies.set(`entendo_attempt_${slug}`, anterior.id, {
+	cookies.set(`spokke_attempt_${slug}`, anterior.id, {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
@@ -181,7 +187,7 @@ export const recomecarTentativa = form(z.object({ slug: z.string() }), async ({ 
 	const { cookies } = getRequestEvent();
 
 	await playerRepo.discardResumable(publication.id, anonId());
-	cookies.delete(`entendo_attempt_${slug}`, { path: '/' });
+	cookies.delete(`spokke_attempt_${slug}`, { path: '/' });
 
 	redirect(303, resolve('/a/[slug]', { slug }));
 });
@@ -192,7 +198,7 @@ export const recomecarTentativa = form(z.object({ slug: z.string() }), async ({ 
  * e responder no lugar de outro é pior do que responder sem nome.
  */
 export const naoSouEu = form(z.object({ slug: z.string() }), async ({ slug }) => {
-	getRequestEvent().cookies.delete(`entendo_aluno_${slug}`, { path: '/' });
+	getRequestEvent().cookies.delete(`spokke_aluno_${slug}`, { path: '/' });
 	redirect(303, resolve('/a/[slug]', { slug }));
 });
 
@@ -206,7 +212,9 @@ export const validarCodigo = form(
 		// servidor (paginas.md "Player").
 		if (!settings.code || !codigoConfere(settings.code, code)) return { invalid: true };
 
-		getRequestEvent().cookies.set(CODE_COOKIE_PREFIX + slug, settings.code, {
+		// Código certo: de volta à ENTRADA, que agora pede o nome (ou cumprimenta
+		// quem está logado). É a segunda tela, nunca a primeira.
+		getRequestEvent().cookies.set(COOKIE_DO_CODIGO + slug, settings.code, {
 			path: '/',
 			httpOnly: true,
 			sameSite: 'lax',
@@ -257,6 +265,10 @@ export const responderItem = command(
 		// professor (kernel.md "Correção", nível 4).
 		if (grading.mode === 'rubric') {
 			await playerRepo.recordAnswer(attemptId, itemId, paraGravar, 0, ms);
+			// O sino do professor (docs/notificacoes.md). Sem `await`: o aluno não
+			// espera o aviso de outra pessoa, e uma falha ali não custa a resposta.
+			const atividade = attempt.publication.activityVersion.activity;
+			void atualizarCorrecao(atividade.teacherId, atividade, { criar: true });
 			return { state: 'pending' as const };
 		}
 
@@ -307,6 +319,14 @@ export const finalizarTentativa = command(
 		const attempt = await attemptOr404(attemptId);
 		await playerRepo.finishAttempt(attemptId);
 
+		// O sino do professor (docs/notificacoes.md), só na PRIMEIRA vez: recarregar a
+		// tela final chama isto de novo, e não pode contar o mesmo aluno duas vezes.
+		// Sem esperar — o aluno não espera o sino de outra pessoa.
+		if (attempt.finishedAt === null) {
+			const atividade = attempt.publication.activityVersion.activity;
+			void avisarTentativaTerminada(atividade.teacherId, atividade, attempt.name);
+		}
+
 		const settings = publicationSettingsSchema.parse(attempt.publication.settings);
 		if (!settings.showResult) return { showFeedback: false as const };
 
@@ -316,3 +336,28 @@ export const finalizarTentativa = command(
 		return { showFeedback: true as const, tally: { correct, partial, incorrect } };
 	}
 );
+
+/**
+ * "Relatar problema", de dentro de uma questão. Sem sessão, como o resto do
+ * Player: a prova de onde o relato veio é a tentativa (o `attemptId` não é
+ * adivinhável) e a questão tem de ser dela. Quem monta e grava é
+ * `$lib/server/relatos` (testável sem SvelteKit); aqui ficam o teto por IP —
+ * é endpoint público, e cada relato vira um e-mail para a equipe — e a
+ * tradução da recusa em erro HTTP.
+ */
+const limiteDeRelatos = criarLimite({ maximo: 8, janelaMs: 10 * 60 * 1000 });
+
+export const relatarProblema = command(relatoSchema, async (entrada) => {
+	const evento = getRequestEvent();
+	if (!limiteDeRelatos.permitir(evento.getClientAddress())) {
+		error(429, 'Muitos relatos em pouco tempo. Espere alguns minutos e tente de novo.');
+	}
+	const desfecho = await registrarRelato(entrada, {
+		userAgent: evento.request.headers.get('user-agent'),
+		idiomaDoNavegador: evento.request.headers.get('accept-language'),
+		versao: version,
+		ambiente: dev ? 'desenvolvimento' : 'producao'
+	});
+	if (!desfecho.ok) error(desfecho.status, desfecho.mensagem);
+	return { codigo: desfecho.codigo };
+});

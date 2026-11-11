@@ -1,14 +1,19 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
 	import LegalPage from '$lib/components/LegalPage.svelte';
-	import { acessibilidade } from '$lib/content/institucional';
+	import { acessibilidade, atualizadoEm } from '$lib/content/institucional';
 </script>
 
-<svelte:head><title>O que já funciona e o que ainda não — entendo</title></svelte:head>
+<Metadados
+	titulo="Acessibilidade no Spokke"
+	descricao="O que já funciona, onde ainda existe barreira e como avisar quando algo travar."
+	tituloDaAba="Acessibilidade · Spokke"
+/>
 
 <LegalPage
 	eyebrow="Acessibilidade"
 	title="O que já funciona e o que ainda não"
-	lede="Declaração de conformidade com WCAG 2.1 AA, incluindo as barreiras que ainda existem."
-	updated="Atualizado em 12 de março de 2026"
+	lede="O que já funciona, onde ainda existe barreira e como avisar quando algo travar."
+	updated={`Atualizada em ${atualizadoEm}`}
 	sections={acessibilidade}
 />

@@ -31,8 +31,9 @@ Trocar a escala é editar `NIVEIS`; mudar um `id` pede migração dos valores gr
   no detalhe da atividade, filtro na lista.
 - **Enviar o módulo para a turma** (`src/lib/server/modulos/enviar.ts`): só atividades no ar e não
   arquivadas (as outras voltam relatadas); áudio faltando em qualquer uma barra o envio inteiro; um
-  `Delivery` por atividade com o mesmo `envioId`; e **um e-mail por aluno** com todos os links (job
-  `convite-modulo`) — o plano grátis do Resend dá 100 e-mails por dia.
+  `Delivery` por atividade com o mesmo `envioId`. **Atualização de novembro de 2026: o módulo não
+  manda mais e-mail — ele LIBERA** a atividade no mapa do aluno na data programada (o job
+  `convite-modulo` e o "por e-mail" saíram, a pedido do dono).
 - O aluno não vê "módulo" como entidade: recebe os links no e-mail, na ordem do módulo.
 - A paleta de cor é compartilhada com as turmas (`src/lib/etiquetas.ts`): nunca verde nem âmbar.
 
@@ -77,8 +78,8 @@ desfecho, que pode ser `programada`, `enviada`, `nao_saiu` ou `pulada`.
   publicação (`publicarAtividade` destrava o envio sozinho). Arquivada espera o professor. Áudio
   faltando tenta de novo a cada 5 minutos, até 6 vezes. É o único estado em vermelho: no menu, no
   cartão do módulo, no aviso do detalhe e na pílula da turma.
-- **Um e-mail por aluno por envio** (`convite-modulo`), com tudo o que sai naquela data. A prévia
-  soma os e-mails do dia com as outras programações e avisa quando passa dos 100 do Resend.
+- ~~Um e-mail por aluno por envio (`convite-modulo`)~~ — saiu em novembro de 2026: módulo só libera
+  no mapa do aluno. Mandar UMA atividade por e-mail continua existindo, fora do módulo.
 
 **O mapa do aluno** (`/aluno/modulos/[id]`, e o bloco "Seus módulos" em `/aluno`). Só para
 quem tem conta com a ficha da turma ligada; quem entra pelo link aberto não tem mapa, e isso é o

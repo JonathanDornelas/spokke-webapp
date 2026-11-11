@@ -22,7 +22,8 @@
 		hint,
 		children,
 		actions,
-		aside
+		aside,
+		rolagem = 'pagina'
 	}: {
 		step: number;
 		backHref: string;
@@ -35,7 +36,20 @@
 		children: Snippet;
 		actions: Snippet;
 		aside?: Snippet;
+		/**
+		 * `pagina` (padrão): a página rola, com o rodapé grudado embaixo.
+		 * `colunas`: a casca ocupa a altura da tela e quem rola é cada coluna, por
+		 * dentro — a etapa 2, onde o formulário fica fixo ao lado da lista. Ali o
+		 * corpo do formulário é o pedaço que rola (como na bandeja da biblioteca),
+		 * e numa coluna sem altura definida ele crescia até o fim do conteúdo:
+		 * o botão de adicionar ia para baixo da dobra e a rodinha sobre a coluna
+		 * não rolava nada, porque o `overscroll-contain` dele segurava o gesto.
+		 * Nesse modo a faixa de formas não é desenhada aqui: a tela a põe no fim da
+		 * coluna que rola, para o texto nunca passar por cima dela.
+		 */
+		rolagem?: 'pagina' | 'colunas';
 	} = $props();
+	const colunas = $derived(rolagem === 'colunas');
 
 	const rotulos = ['Detalhes', 'Materiais', 'Revisar', 'Publicar'];
 
@@ -47,7 +61,7 @@
 	const sair = resolve('/(studio)/atividades');
 </script>
 
-<div class="flex min-h-screen flex-col bg-base-100">
+<div class="flex flex-col bg-base-100" class:min-h-screen={!colunas} class:h-dvh={colunas}>
 	<header class="flex items-center gap-[22px] border-b border-line bg-base-200 px-4 py-3 lg:px-7">
 		<!-- eslint-disable svelte/no-navigation-without-resolve -- `backHref` é prop: quem chama já passou por resolve(), que exige literal no call site (mesma regra do href de Button.svelte). -->
 		<a
@@ -93,7 +107,7 @@
 		{/if}
 	</header>
 
-	<div class="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+	<div class="relative flex min-h-0 flex-1 flex-col lg:flex-row" class:overflow-hidden={colunas}>
 		<!-- A faixa decorativa das quatro etapas vive AQUI, uma vez, e não em cada
 		     tela: no wizard o conteúdo começa colado no topo, então ela ocupa o
 		     vazio de baixo — nunca o topo, onde cairia atrás do formulário. É a
@@ -101,11 +115,13 @@
 		     Ela vem ANTES do conteúdo no DOM e o conteúdo é `relative`: entre
 		     irmãos posicionados sem z-index, quem vem depois pinta por cima — sem
 		     precisar de `z-1` em cada bloco das telas filhas. -->
-		<div class="pointer-events-none absolute inset-x-0 bottom-0 h-[150px] lg:h-[190px]">
-			<AmbientShapes height="100%" edges="bottom" />
-		</div>
+		{#if !colunas}
+			<div class="pointer-events-none absolute inset-x-0 bottom-0 h-[150px] lg:h-[190px]">
+				<AmbientShapes height="100%" edges="bottom" />
+			</div>
+		{/if}
 
-		<div class="relative flex min-w-0 flex-1 flex-col">{@render children()}</div>
+		<div class="relative flex min-h-0 min-w-0 flex-1 flex-col">{@render children()}</div>
 		{#if aside}
 			<!-- O painel de apoio fica à direita no desktop e vira um bloco no fim
 			     do conteúdo no celular. -->

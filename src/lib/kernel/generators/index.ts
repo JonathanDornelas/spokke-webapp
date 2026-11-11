@@ -10,7 +10,7 @@ import { sentencePairGenerators } from './sentence-pair';
 import { vocabItemGenerators } from './vocab-item';
 import { passageGenerators } from './passage';
 import { dialogueGenerators } from './dialogue';
-import { closingMatch } from './closing-match';
+import { closingMatch, type PalavraTraduzida } from './closing-match';
 import type { ContentRef, Generator } from './types';
 
 /**
@@ -41,6 +41,12 @@ export interface GenerationOptions {
 	 * alcança continuam fora das questões de digitar, como antes.
 	 */
 	transcrever?: Transcritor;
+	/**
+	 * Palavras das frases da atividade com a tradução do tradutor, para o "ligue
+	 * os pares" do fecho (`closing-match.ts`). Quem escolhe as palavras é
+	 * `palavrasParaAssociar` (puro); quem traduz é o servidor. Sem tradutor, vazio.
+	 */
+	palavrasTraduzidas?: PalavraTraduzida[];
 }
 
 export interface GenerationGroup {
@@ -217,5 +223,8 @@ export function runGenerators(
 		};
 	});
 
-	return { groups, closing: closingMatch({ vocab, options }) };
+	return {
+		groups,
+		closing: closingMatch({ vocab, palavras: options.palavrasTraduzidas, options })
+	};
 }

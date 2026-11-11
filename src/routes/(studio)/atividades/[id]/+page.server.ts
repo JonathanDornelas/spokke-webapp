@@ -15,6 +15,7 @@ import { resumoDoItem, tipoDoItem } from '$lib/server/atividades/resumo';
 import { etiquetaDaTurma } from '$lib/server/turmas/etiqueta';
 import { interactionSchema, promptSchema } from '$lib/kernel/item';
 import { labelForTag } from '$lib/kernel/language/profiles';
+import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import type { Skill } from '$lib/kernel/interactions/types';
 
 /**
@@ -28,13 +29,6 @@ import type { Skill } from '$lib/kernel/interactions/types';
  * não o cria: quem clona a versão publicada para edição é a etapa de revisão
  * (`draftFromPublished`), e esta tela é de leitura.
  */
-const ROTULO_HABILIDADE: Record<Skill, string> = {
-	listening: 'Listening',
-	speaking: 'Speaking',
-	reading: 'Reading',
-	writing: 'Writing'
-};
-
 function haQuantoTempo(data: Date): string {
 	const min = Math.round((Date.now() - data.getTime()) / 60000);
 	if (min < 60) return 'há minutos';
@@ -73,21 +67,12 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	}
 
 	// **O estado do áudio.** Ele é a única parte da atividade que existe FORA do
-	// banco — num bucket, com 10 dias de validade (server.md "TTS") — e por isso
-	// é a única que pode estar faltando sem nada na tela dizer. O professor
-	// precisa ver isso aqui e não só na etapa de publicar: é nesta tela que ele
-	// volta dias depois para reenviar o link.
+	// banco — num bucket — e por isso a única que pode estar faltando sem nada na
+	// tela dizer (um job que falhou, uma síntese ainda na fila). Ele não vence
+	// mais (server.md "TTS"), mas o professor ainda precisa ver aqui, e não só na
+	// etapa de publicar, se algum arquivo falta antes de reenviar o link.
 	const hashesDeAudio = itens.flatMap((item) => itemAudioHashes(item, activity.targetLang));
-	const [prontos, vence] = await Promise.all([
-		playerRepo.audioReady(teacher.id, hashesDeAudio),
-		playerRepo.audioVenceEm(teacher.id, hashesDeAudio)
-	]);
-	const audio = {
-		...prontos,
-		// Quantos dias até o PRIMEIRO vencer — é o prazo real da atividade, não a
-		// média. Arredonda para cima: "vence em 0 dias" não diz nada a ninguém.
-		venceEmDias: vence ? Math.max(0, Math.ceil((vence.getTime() - Date.now()) / 86_400_000)) : null
-	};
+	const audio = await playerRepo.audioReady(teacher.id, hashesDeAudio);
 
 	const publicacao = published?.publications.at(-1);
 	const settings = publicacao ? publicationSettingsSchema.parse(publicacao.settings) : null;
@@ -168,15 +153,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 				id: item.id,
 				n: i + 1,
 				tipo: tipoDoItem(prompt.kind, interaction.type),
-				summary: resumoDoItem(item.generatedBy),
+				summary: resumoDoItem(item.generatedBy, interaction.type),
 				// Habilidade DERIVADA, nunca declarada pelo professor.
 				habilidade: itemSkills(item)
-					.map((skill) => ROTULO_HABILIDADE[skill])
+					.map((skill) => skillLabels[skill])
 					.join(' + ')
 			};
 		}),
 		skills: [...habilidades.entries()].map(([skill, count]) => ({
-			name: ROTULO_HABILIDADE[skill],
+			name: skillLabels[skill],
 			count
 		})),
 		deliveries: deliveries.map((envio) => {

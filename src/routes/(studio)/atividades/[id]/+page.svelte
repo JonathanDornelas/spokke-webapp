@@ -9,6 +9,8 @@
 	// respondeu. É uma tela de LEITURA: toda ação leva para onde ela já existe
 	// — o wizard para editar, a publicação para reenviar, os resultados para o
 	// relatório. A única escrita é gerar o áudio de novo, quando ele falta.
+	import { marcarVisto } from '$lib/client/avisos';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
 	import { invalidateAll } from '$app/navigation';
@@ -24,7 +26,7 @@
 	} from '../atividades.remote';
 	import { withMock } from '$lib/dev/with-mock';
 	import { NIVEIS, nivelOuNulo, rotuloDoNivel, type NivelId } from '$lib/atividades/nivel';
-	import { CLASSE_DA_ETIQUETA, type CorDeEtiqueta } from '$lib/etiquetas';
+	import { CLASSE_DA_ETIQUETA, corOuPadrao, type CorDeEtiqueta } from '$lib/etiquetas';
 	import { adicionarAoModulo } from '../../modulos/modulos.remote';
 
 	type Tipo = 'escuta' | 'fala' | 'escrita' | 'escolha' | 'montar';
@@ -71,12 +73,8 @@
 		/** Data URL do QR. Nasce junto com o link, na publicação. */
 		qr: string | null;
 		access: { requireCode: boolean; code: string; showResult: boolean };
-		/**
-		 * Quantos áudios da atividade já existem no bucket, de quantos ela
-		 * precisa, e em quantos dias o primeiro deles vence (`null` quando não há
-		 * nenhum).
-		 */
-		audio: { done: number; total: number; venceEmDias: number | null };
+		/** Quantos áudios da atividade já existem no bucket, e de quantos ela precisa. */
+		audio: { done: number; total: number };
 		items: Item[];
 		skills: { name: string; count: number }[];
 		deliveries: Envio[];
@@ -98,8 +96,8 @@
 		},
 		estado: 'no-ar',
 		modulos: { dela: [], outros: [] },
-		audio: { done: 6, total: 6, venceEmDias: 8 },
-		link: 'https://entendo.app/a/atv_01',
+		audio: { done: 6, total: 6 },
+		link: 'https://spokke.com.br/a/atv_01',
 		qr: '',
 		access: { requireCode: true, code: 'KQTP', showResult: true },
 		items: [
@@ -108,19 +106,19 @@
 				n: 1,
 				tipo: 'montar',
 				summary: 'Montar a frase a partir da tradução',
-				habilidade: 'Reading'
+				habilidade: 'Leitura'
 			},
 			{
 				id: 'itm_02',
 				n: 2,
 				tipo: 'escuta',
 				summary: 'Digitar a frase ao ouvir o áudio',
-				habilidade: 'Listening + Writing'
+				habilidade: 'Escuta + Escrita'
 			}
 		] as Item[],
 		skills: [
-			{ name: 'Reading', count: 14 },
-			{ name: 'Writing', count: 8 }
+			{ name: 'Leitura', count: 14 },
+			{ name: 'Escrita', count: 8 }
 		],
 		deliveries: [
 			{
@@ -128,7 +126,7 @@
 				classroomId: 'tur_01',
 				classroom: '7º B — inglês',
 				badge: '7B',
-				color: 'violeta',
+				color: 'azul',
 				when: 'há 2 dias',
 				invites: 22,
 				opened: 18,
@@ -176,22 +174,12 @@
 	};
 	const estado = $derived(estados[data.estado]);
 
-	// O áudio é a única parte da atividade que vive fora do banco e tem prazo de
-	// validade (10 dias). "Nenhum áudio" não é pendência — é uma atividade só de
-	// leitura e escrita, e mostrar "0 de 0" ali seria inventar um problema.
+	// O áudio é a única parte da atividade que vive fora do banco. Ele não vence
+	// (fica enquanto a atividade existir), mas pode estar FALTANDO: síntese na
+	// fila ou um job que falhou. "Nenhum áudio" não é pendência — é uma atividade
+	// só de leitura e escrita, e mostrar "0 de 0" ali seria inventar um problema.
 	const temAudio = $derived(data.audio.total > 0);
 	const audioPronto = $derived(data.audio.done >= data.audio.total);
-
-	// **Abaixo de 3 dias o aviso muda de tom.** Não é um número inventado: é o
-	// tempo em que ainda dá para o professor reenviar o link e a turma
-	// responder antes de o arquivo sumir. Acima disso o prazo é informação;
-	// abaixo, é uma coisa a fazer.
-	const AVISAR_A_PARTIR_DE = 3;
-	const venceEm = $derived(data.audio.venceEmDias);
-	const audioVencendo = $derived(audioPronto && venceEm !== null && venceEm <= AVISAR_A_PARTIR_DE);
-	const prazo = $derived(
-		venceEm === null ? '' : venceEm === 0 ? 'hoje' : venceEm === 1 ? 'amanhã' : `em ${venceEm} dias`
-	);
 
 	let regerando = $state(false);
 	async function regerar() {
@@ -205,17 +193,8 @@
 		}
 	}
 
-	const corDaEtiqueta: Record<string, string> = {
-		violeta: 'bg-base-300 text-primary',
-		teal: 'bg-accent/16 text-accent',
-		azul: 'bg-info/15 text-info',
-		magenta:
-			'bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-error)_10%)] text-primary',
-		ardosia: 'bg-base-300 text-base-content/70'
-	};
-
 	// A pílula de tipo: o que o aluno FAZ, numa palavra. Escuta e fala em teal
-	// porque são as de áudio; escrita em violeta; escolher e montar em neutro.
+	// porque são as de áudio; escrita em azul; escolher e montar em neutro.
 	const tipos: Record<Tipo, { label: string; classe: string; icon: string }> = {
 		escuta: {
 			label: 'Escuta',
@@ -346,9 +325,16 @@
 			copiado = false;
 		}
 	}
+
+	// Abrir a atividade conta como ver o aviso do áudio que falhou
+	// (docs/notificacoes.md): o cartão de estado mostra o problema e o conserto.
+	$effect(() => {
+		const activityId = page.params.id;
+		if (activityId) marcarVisto({ secao: 'atividades', activityId });
+	});
 </script>
 
-<svelte:head><title>{data.activity.title} — entendo</title></svelte:head>
+<svelte:head><title>{data.activity.title} · Atividades · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a
@@ -545,18 +531,14 @@
 
 		{#if temAudio}
 			<!-- Ícone e texto, nunca cor sozinha. O número é real: sai da contagem
-			     de `MediaAsset` que ainda não expirou. -->
+			     de `MediaAsset` do professor. -->
 			<div
 				class="flex flex-wrap items-center gap-x-3.5 gap-y-3 border-t border-line px-4 py-3.5 lg:px-5 lg:py-[15px]
-				       {!audioPronto ? 'bg-error/6' : audioVencendo ? 'bg-warning/6' : ''}"
+				       {!audioPronto ? 'bg-error/6' : ''}"
 			>
 				<span
 					class="grid size-[30px] shrink-0 place-items-center rounded-[9px]
-					       {!audioPronto
-						? 'bg-error/13 text-error'
-						: audioVencendo
-							? 'bg-warning/15 text-warning'
-							: 'bg-accent/13 text-accent'}"
+					       {!audioPronto ? 'bg-error/13 text-error' : 'bg-accent/13 text-accent'}"
 				>
 					<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 						<path
@@ -569,13 +551,7 @@
 					</svg>
 				</span>
 				<div class="min-w-[240px] flex-1">
-					<p
-						class="mb-1 text-[13.5px] font-bold {!audioPronto
-							? 'text-error'
-							: audioVencendo
-								? 'text-warning'
-								: ''}"
-					>
+					<p class="mb-1 text-[13.5px] font-bold {!audioPronto ? 'text-error' : ''}">
 						{#if !audioPronto}
 							{#if data.audio.done === 0}
 								Faltam os {data.audio.total}
@@ -583,25 +559,18 @@
 							{:else}
 								Faltam {data.audio.total - data.audio.done} dos {data.audio.total} áudios
 							{/if}
-						{:else if audioVencendo}
-							Áudio vence {prazo}
 						{:else}
 							Áudio pronto
 						{/if}
 					</p>
 					<p class="text-[12.5px] leading-relaxed text-pretty text-base-content/65">
 						{#if !audioPronto}
-							Os arquivos venceram, foram apagados ou ainda estão sendo gerados. Enquanto isso, quem
-							abrir não consegue responder as questões de escuta.
-						{:else if audioVencendo}
-							Quando vencer, as questões de escuta param de abrir e o link fica indisponível para
-							quem tentar responder.
+							Os arquivos ainda estão sendo gerados, ou a geração falhou. Enquanto isso, quem abrir
+							não consegue responder as questões de escuta.
 						{:else}
 							{data.audio.total}
-							{data.audio.total === 1 ? 'arquivo' : 'arquivos'} das questões de escuta{venceEm !==
-							null
-								? `, ${venceEm === 1 ? 'válidos por mais 1 dia' : `válidos por mais ${venceEm} dias`}`
-								: ''}.
+							{data.audio.total === 1 ? 'arquivo' : 'arquivos'} das questões de escuta. Ficam guardados
+							enquanto a atividade existir.
 						{/if}
 					</p>
 				</div>
@@ -933,9 +902,9 @@
 					>
 						<span class="flex min-w-0 flex-1 items-center gap-[11px]">
 							<span
-								class="grid size-8 shrink-0 place-items-center rounded-[10px] text-[11.5px] font-bold {corDaEtiqueta[
-									envio.color
-								] ?? corDaEtiqueta.violeta}">{envio.badge}</span
+								class="grid size-8 shrink-0 place-items-center rounded-[10px] text-[11.5px] font-bold {CLASSE_DA_ETIQUETA[
+									corOuPadrao(envio.color)
+								]}">{envio.badge}</span
 							>
 							<span class="min-w-0">
 								<span class="mb-0.5 block text-sm font-semibold">{envio.classroom}</span>

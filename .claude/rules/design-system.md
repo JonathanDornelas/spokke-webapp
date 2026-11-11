@@ -39,26 +39,31 @@ componentes, os estados de correção, as seis interações do Player e as telas
 Catálogo vivo, testável em cada estado, com toggle de tema: `/dev/components` (só em `pnpm dev`,
 ver `src/routes/dev/components/`).
 
-**Violeta é a marca. Verde, âmbar e vermelho são reservados para a semântica de correção** —
+**Azul (#3659CB) é a marca. Verde, âmbar e vermelho são reservados para a semântica de correção** —
 nunca aparecem como decoração, gradiente ou destaque de marca.
 
 | Papel              | Token              | Claro                       | Escuro                      |
 | ------------------ | ------------------ | --------------------------- | --------------------------- |
-| Marca, ação, foco  | `primary`          | #5A3FF3                     | #8B7BFF                     |
+| Marca, ação, foco  | `primary`          | #3659CB                     | #608AFF                     |
 | Áudio, mídia, ASR  | `accent`           | #0EA5B7                     | #35C4D4                     |
 | Correto            | `success`          | #12855F                     | #3ECF98                     |
 | Parcial            | `warning`          | #B26A00                     | #F2B23A                     |
 | Incorreto          | `error`            | #C8324A                     | #FF7183                     |
-| Texto              | `base-content`     | #1A1730                     | #ECEAF7                     |
-| Superfícies        | `base-100/200/300` | #FFFFFF / #F5F4FB / #E7E3F7 | #14121F / #1D1A2C / #292540 |
-| Borda de cartão    | `line`             | #E2DEF2                     | #332E4D                     |
-| Superfície de card | `card`             | #FFFFFF                     | #1A1729                     |
+| Texto              | `base-content`     | #111A31                     | #E7ECF8                     |
+| Superfícies        | `base-100/200/300` | #FFFFFF / #F2F5FC / #DEE6F9 | #0F1420 / #161C2D / #1E2842 |
+| Borda de cartão    | `line`             | #D9E1F4                     | #26324F                     |
+| Superfície de card | `card`             | #FFFFFF                     | #13192A                     |
 | Véu de modal       | `overlay`          | preto a 55%                 | preto a 55%                 |
+| Só etiqueta        | `violeta`          | #5A3FF3                     | #8B7BFF                     |
 
 `line` é a borda de cartão, campo e divisor — **não** `base-300`, que é preenchimento (trilha de
 progresso, chip). `card` é a superfície de um cartão — no claro é igual a `base-100`, no escuro
-fica um degrau acima do fundo da página (`card` #1A1729 vs `base-100` #14121F). Confundir os dois
+fica um degrau acima do fundo da página (`card` #13192A vs `base-100` #0F1420). Confundir os dois
 pares é o erro mais comum ao portar um componente.
+
+`violeta` foi a marca até a troca para #3659CB (novembro de 2026) e ficou só como uma das cinco
+cores de etiqueta de turma e módulo (`$lib/etiquetas.ts`). Nunca use em botão, foco ou destaque:
+ali é `primary`.
 
 Raios: `--radius-field: 0.625rem`, `--radius-box: 0.875rem`, seletores em pill
 (`--radius-selector`). Como são tokens `@theme`, viram `rounded-field`/`rounded-box`/
@@ -73,7 +78,8 @@ e-mail que voltou, gerar o áudio de novo, confirmar um apagar), `.btn-outline-e
 destrutiva ainda não confirmada), `.btn-sm`/`.btn-lg`/`.btn-circle`, `.btn-disabled`
 (para um link que precisa parecer desabilitado — `<a>` não aceita o atributo `disabled`),
 `.input`, `.input-error`, `.select`, `.textarea`, `.toggle`/`.toggle-primary`/`.toggle-xs`,
-`.checkbox`/`.checkbox-primary`, `.fieldset`, `.fieldset-legend` e `.fieldset-label` são
+`.checkbox`/`.checkbox-primary`, `.radio` (redondo, com ponto — escolha única precisa parecer
+diferente da múltipla), `.fieldset`, `.fieldset-legend` e `.fieldset-label` são
 `@utility` próprias, definidas em
 `app.css` logo depois do tema. A API de classes existe para manter os componentes legíveis
 (`class="btn btn-primary"` em vez de uma pilha de utilities soltas), mas o CSS por trás é nosso
@@ -102,12 +108,15 @@ próprio. Ver as seis composições em `/dev/components#player`.
   (`[data-content-lang]` no `app.css`).
 - `font-mono` **JetBrains Mono** — slugs, IPA, código.
 
-**A exceção, e a única: `font-pixel` (Silkscreen), decorativa.** Existe só no mapa do módulo do
-aluno (`MapaDoModulo.svelte`, tema de jogo em 8 bits), nos rótulos "MUNDO 1" e "FASE 3" — sempre
-`aria-hidden` e ao lado do texto de verdade em Plus Jakarta Sans. Nunca corpo de texto, nunca
-título, nunca conteúdo do idioma alvo (esse é sempre Noto Sans). O mesmo tema traz pixel art como
-DADO (`$lib/modulos/pixel.ts`, grade de letras virando `path` com `crispEdges` e cor por token), e
-os movimentos dele usam `steps()` em vez de curva — rodando uma vez só, como manda "Movimento".
+**A exceção, e a única: `font-pixel` (Silkscreen), decorativa.** Existe só nas duas telas de tema
+de jogo em 8 bits: o mapa do módulo do aluno (`MapaDoModulo.svelte`, nos rótulos "MUNDO 1" e
+"FASE 3") e o editor de avatar (`AvatarEditor.svelte`, no contador "03/16" do seletor) — sempre
+`aria-hidden` e ao lado do texto de verdade em Plus Jakarta Sans (no editor, um `sr-only` diz
+"3 de 16"). Nunca corpo de texto, nunca título, nunca conteúdo do idioma alvo (esse é sempre Noto
+Sans). O mesmo tema traz pixel art como DADO (`$lib/modulos/pixel.ts`, grade de letras virando
+`path` com `crispEdges` e cor por token — os ícones do editor de avatar são o mesmo molde, em
+`$lib/avatar/icones.ts`, e são a única exceção ao traço de 2px de "Ícones"), e os movimentos dele
+usam `steps()` em vez de curva — rodando uma vez só, como manda "Movimento".
 
 Escala: display 56 / title 32 / content 22 (mínimo 20 no Player) / body 16 / label 12 caixa alta.
 
@@ -154,8 +163,10 @@ COLUNAS — na Conta, o formulário ao lado das ações, e campos curtos lado a 
 estreitando a página. Blocos que se repetem (o uso da assinatura) dividem a linha com
 `grid-cols-[repeat(auto-fit,minmax(13rem,1fr))]`: três cabem lado a lado, nenhum fica sozinho pela
 metade. Telas de cabeçalho próprio (Resultados) alinham o cabeçalho pelo mesmo respiro
-(`px-4 lg:px-7`). As telas de TAREFA ÚNICA fora do painel (wizard, nova turma, prévia) continuam
-com a coluna focada delas: ali o estreitamento é a intenção.
+(`px-4 lg:px-7`). As telas de TAREFA ÚNICA fora do painel (wizard, prévia) continuam
+com a coluna focada delas: ali o estreitamento é a intenção. **Formulário de criar e editar que
+não é atividade não é tela: é a `Bandeja`** (components.md), a ~40% da largura, sobre a lista de
+onde veio — "nova turma" foi uma página e deixou de ser.
 
 ## Dois contextos, dois orçamentos
 
@@ -180,19 +191,46 @@ pergunta padrão é "dá para fazer com CSS e o que já temos?".
 
 ## Movimento
 
-Só `transform` e `opacity`. Nenhuma biblioteca de animação — os keyframes `en-*` estão no
-`app.css`.
+Só `transform` e `opacity` (e as propriedades individuais `translate`/`scale`, que o Tailwind 4
+usa). Nenhuma biblioteca de animação — os keyframes `en-*` estão no `app.css`. **Nada de
+`transition-all`**: ele anima qualquer propriedade que mudar, inclusive as de layout.
 
-| Intenção           | Duração   | Curva                                                               |
-| ------------------ | --------- | ------------------------------------------------------------------- |
-| Toque              | 120ms     | ease-out (`motion-tap`, escala 0.97)                                |
-| Correção do item   | 220ms     | `--ease-out-soft` (`feedback-in`)                                   |
-| Troca de questão   | 190/260ms | `--ease-out-soft` (`q-out` sai, `q-in` entra)                       |
-| Progresso          | 1s        | `--ease-out-soft` (via `scaleX`, sem reflow)                        |
-| Gravação, skeleton | infinito  | ease-in-out                                                         |
-| Entrada em scroll  | 560ms     | `--ease-out-soft` (`reveal-row`, stagger de 70ms em até 4 itens)    |
-| Teclado virtual    | 300/190ms | `--ease-out-soft` entra, `ease-in` sai (`teclado-in`/`teclado-out`) |
-| Modal, painel      | 300/200ms | desacelera entra, acelera sai (`$lib/client/transicoes.ts`)         |
+**Os números são TOKENS, e duas fontes os espelham**: o `app.css` (`--duration-*`, `--ease-*`,
+`--stagger`, as `animate-*`) e `$lib/movimento.ts` (para as transições do Svelte e as esperas em
+JS). `movimento.test.ts` lê o CSS e falha se os dois divergirem. Duração escrita à mão numa tela é
+bug: a mesma `en-fade-up` chegou a existir com treze durações. As regras saíram de um levantamento
+do catálogo Motion Reference (takayustudio.jp), filtrado pelo que este produto pede:
+
+- **A duração vai pelo TAMANHO do que se move.** Toque 120 (`--duration-tap`), micro 200 (`curta`:
+  cor, hover, a saída), painel e modal 300 (`media`), tela e cartão grande 500 (`longa`), gráfico
+  que cresce 800 (`grafico`), progresso 1 s. A mesma duração para tudo faz o grande parecer leve e o
+  pequeno, lento.
+- **A curva vai pelo PAPEL.** Entrada desacelera (`--ease-out-soft`, easeOutQuint); saída acelera
+  (`--ease-in-soft`); movimento de A para B na tela é suave nas duas pontas (`--ease-in-out-soft`, a
+  pílula do `Alternador`); o retorno com sobra é `--ease-out-back`.
+- **Sair leva ~2/3 de entrar** (200 contra 300): o que vai embora não pode prender o olho.
+- **Orçamento de sobra**: 0% em erro, ~4% em feedback (soltar o botão); mais que isso só em festa.
+  Nada de mola elástica nem quique em interface — enquanto balança, o valor não se lê.
+- **Lista em sequência: 60 ms entre itens, com teto no 6º** (`em-sequencia`, `reveal-row`). Com
+  intervalo fixo, uma lista longa demora demais para terminar de aparecer.
+- **Transição sem duração explícita cai no token**: `--default-transition-duration` e
+  `--default-transition-timing-function` são 200 ms na curva de entrada, não os 150 ms do Tailwind.
+
+| Intenção            | Token                                                 | Curva                              |
+| ------------------- | ----------------------------------------------------- | ---------------------------------- |
+| Toque               | `motion-tap`: afunda em `tap`, volta em `curta`       | entrada / `ease-out-back` (~4%)    |
+| Hover de cartão     | `cartao-interativo`: sobe 3 px em `curta`             | entrada                            |
+| Correção do item    | `feedback-in` (`--duration-feedback`, 220 ms)         | entrada                            |
+| Troca de questão    | `q-out` em `curta` / `q-in` em `media`                | saída / entrada                    |
+| Modal, painel       | `transicoes.ts`, `animate-veu*`: `media` / `curta`    | entrada / saída                    |
+| Teclado virtual     | `teclado-in` em `media` / `teclado-out` em `curta`    | entrada / saída                    |
+| Bloco que abre      | `animate-entrada-curta` (`media`)                     | entrada                            |
+| Tela, cartão grande | `animate-entrada` (`longa`), `reveal-row`             | entrada                            |
+| Barra que cresce    | `animate-crescer-x` / `animate-crescer-y` (`grafico`) | entrada                            |
+| Progresso           | `animate-progresso` (1 s), `ProgressBar`              | entrada (por `scaleX`, sem reflow) |
+| Seletor em pílula   | `Alternador`: a pílula desliza em `media`             | `ease-in-out-soft`                 |
+| Peça do avatar      | `animate-salto` (`media`), por `{#key}`               | `steps(3, end)` (tema 8 bits)      |
+| Gravação, skeleton  | infinito                                              | ease-in-out / linear               |
 
 **Troca de questão**: a questão SAI antes de a próxima entrar — sem esse intervalo a troca era um
 corte seco, porque `/q/1` e `/q/2` são a mesma rota e o componente só re-renderizava com outro
@@ -203,8 +241,8 @@ Três detalhes que separam uma troca natural de uma travada:
 
 - **A busca do dado corre JUNTO com a saída** (`preloadData` antes de animar). Buscar depois
   deixava o cartão vazio pelo tempo do request, e era isso que fazia a transição parecer presa.
-- **Saída e entrada não têm a mesma curva.** Sai em 170ms acelerando (`ease-in`), entra em 280ms
-  desacelerando: quem está saindo some rápido e não arrasta o olho; quem entra é onde a atenção
+- **Saída e entrada não têm a mesma curva.** Sai em `curta` (200 ms) acelerando, entra em `media`
+  (300 ms) desacelerando — e a espera do JS é `DURACAO.curta`, o mesmo número: quem está saindo some rápido e não arrasta o olho; quem entra é onde a atenção
   pousa. Mesma duração nos dois sentidos lê como pisca-pisca.
 - **O avanço NÃO tem cronômetro: quem decide quando a leitura acabou é o aluno.** Corrigido o
   item, a tela PARA no feedback e a ação principal vira "Próxima questão". Havia uma pausa
@@ -232,12 +270,16 @@ A animação nasce **rodando** no CSS; a action só marca `animation-play-state:
 elemento e volta a `running` quando ele entra na viewport via `IntersectionObserver`. Nunca
 prenda um bloco em `opacity: 0` esperando JS — se o script falhar (ou o observer não existir no
 browser), o conteúdo aparece normalmente. Dispara uma vez, nunca em loop, nunca ao sair. Dentro
-de uma grade, escalone os cartões em 90ms via `use:reveal={{ delay: i * 90 }}`; o bloco da seção
-em si entra sem delay. Estado selecionado usa `en-pulse-primary` (halo, sem escala) — só um por
+de uma grade, passe a ORDEM do cartão (`use:reveal={{ ordem: i }}`): o atraso sai do `--stagger`, com
+o mesmo teto de toda lista; o bloco da seção em si entra sem atraso. Estado selecionado usa `en-pulse-primary` (halo, sem escala) — só um por
 tela.
 
-Hover no Studio: linha de tabela troca para `base-200`, cartão sobe 3–4px com a borda virando
-`primary`. Botão responde ao press com `motion-tap`.
+Hover: linha de tabela troca para `base-200`; o CARTÃO clicável inteiro usa `cartao-interativo` (sobe
+3 px, borda puxando para a cor da marca, sombra na cor da marca); controle pequeno — chip, opção — sobe 2 px
+com `hover:-translate-y-0.5`. **No Tailwind 4, `-translate-y-*` e `scale-*` mexem em `translate` e
+`scale`, não em `transform`**: uma `transition-[transform]` não os anima e o hover PULA — a lista
+precisa dizer `translate` e `scale` (estava errada em dezoito lugares). Botão responde ao toque com
+`motion-tap`.
 
 Repetição infinita só para gravação e carregamento. Nada mais fica em loop.
 

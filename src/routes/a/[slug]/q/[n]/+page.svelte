@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
+	import { DURACAO } from '$lib/movimento';
 	import Avatar from '$lib/components/Avatar.svelte';
 	// Uma questão. A correção acontece NO SERVIDOR (regra inviolável 2) — o estado
 	// "Verificando…" existe de verdade, nada de veredito otimista no cliente.
@@ -13,6 +14,8 @@
 	import { goto, preloadData } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { version } from '$app/environment';
+	import { anotar, aparelhoAgora, lerDiario } from '$lib/client/diario';
 	import { withMock } from '$lib/dev/with-mock';
 	import { viewport } from '$lib/client/viewport.svelte';
 	import { som } from '$lib/client/sons.svelte';
@@ -108,10 +111,10 @@
 			sourceDir: 'ltr',
 			interaction: 'cloze',
 			skill: 'writing',
-			skillLabel: 'Writing',
+			skillLabel: 'Escrita',
 			sourceLabel: 'Português',
 			targetLabel: 'Inglês',
-			gradingLabel: 'Tolerant',
+			gradingLabel: 'tolerante',
 			prompt: 'Complete a frase',
 			hint: 'Acento e caixa são ignorados nesta questão.',
 			masked: 'She ___ ___ working here since 2019.'
@@ -314,6 +317,9 @@
 		gravacao.descartar();
 		plays = 0;
 		startedAt = Date.now();
+		// Um passo no diário da tela (o rastro do relato de problema): o TIPO da
+		// questão, nunca o conteúdo dela nem o que o aluno escreve.
+		anotar('questao', `abriu a questão ${data.index} (${data.item.interaction})`);
 
 		// `order` começa na ordem em que o servidor mandou as linhas — ela já
 		// vem embaralhada pela seed da tentativa e não reembaralha a cada
@@ -395,8 +401,12 @@
 		saindoDe = page.url.pathname;
 		// A busca do dado e a animação de saída correm JUNTAS. `preloadData`
 		// pode falhar (offline, 404) — o `goto` abaixo trata isso do jeito
-		// normal, então aqui o erro é ignorado de propósito.
-		await Promise.all([preloadData(href).catch(() => {}), new Promise((r) => setTimeout(r, 170))]);
+		// normal, então aqui o erro é ignorado de propósito. A espera é a duração
+		// do `q-out` — o mesmo token, `$lib/movimento.ts` ↔ `app.css`.
+		await Promise.all([
+			preloadData(href).catch(() => {}),
+			new Promise((r) => setTimeout(r, DURACAO.curta))
+		]);
 		await goto(href);
 	}
 	/* eslint-enable svelte/no-navigation-without-resolve */
@@ -422,6 +432,7 @@
 		// montagem seriam 160 kB adiantados numa tela de 4G.
 		som.preparar('correct', 'partial', 'incorrect');
 		if (ultima) som.preparar('finish');
+		anotar('verificar', `enviou a resposta da questão ${data.index}`);
 		try {
 			// A fala é o único caminho que sobe BINÁRIO, e por isso não passa por
 			// remote function: áudio em base64 dentro de JSON infla 33%. Quem
@@ -436,6 +447,7 @@
 							ms: Date.now() - startedAt
 						});
 
+			anotar('veredito', `questão ${data.index}: ${result.state}`);
 			if (
 				result.state === 'correct' ||
 				result.state === 'partial' ||
@@ -525,7 +537,52 @@
 
 	async function pular() {
 		if (ocupado) return;
+		anotar('pular', `pulou a questão ${data.index}`);
 		await avancar();
+	}
+
+	// ── Relatar problema ──
+	// O diálogo só é baixado no primeiro clique: o Player tem orçamento de peso,
+	// e quase ninguém vai abrir isto. Ele fica montado depois, para a saída animar.
+	let relatoAberto = $state(false);
+	let Relato = $state<typeof import('./RelatarProblema.svelte').default | null>(null);
+	let abrindoRelato = $state(false);
+
+	async function abrirRelato() {
+		if (abrindoRelato) return;
+		abrindoRelato = true;
+		try {
+			Relato ??= (await import('./RelatarProblema.svelte')).default;
+			relatoAberto = true;
+		} finally {
+			abrindoRelato = false;
+		}
+	}
+
+	/**
+	 * Tudo o que vai com o relato além do motivo, lido NA HORA de enviar: a
+	 * resposta que está na tela (pode não ter sido enviada), o veredito que a
+	 * tela mostra, o estado do microfone e do teclado, o aparelho e o diário.
+	 * O resto — a questão, o gabarito, a correção refeita — o servidor acrescenta.
+	 */
+	function montarRelato() {
+		return {
+			attemptId: data.attemptId,
+			itemId: data.itemId,
+			tela: {
+				respostaNaTela: answerPayload(),
+				feedbackNaTela: feedback ?? undefined,
+				jaRespondida,
+				verificando: checking,
+				tecladoAberto,
+				audioTocado: plays,
+				gravacao: interaction === 'speak' ? gravacao.estado : undefined,
+				ouvido: interaction === 'speak' ? ouvido : undefined,
+				msNaQuestao: Math.max(0, Date.now() - startedAt)
+			},
+			aparelho: aparelhoAgora({ versao: version, volume: som.volume }),
+			diario: lerDiario()
+		};
 	}
 
 	/**
@@ -621,7 +678,7 @@
 	}
 </script>
 
-<svelte:head><title>Questão {data.index} — {data.activity.title}</title></svelte:head>
+<svelte:head><title>Questão {data.index} · {data.activity.title} · Spokke</title></svelte:head>
 <svelte:window onkeydown={onKey} />
 
 <header
@@ -637,7 +694,7 @@
 			onclick={voltar}
 			disabled={ocupado}
 			class="grid size-10 shrink-0 place-items-center rounded-full bg-base-200 text-base-content no-underline
-			       transition-[background,transform] duration-150 hover:-translate-x-0.5 hover:bg-base-300 active:scale-90
+			       transition-[background,transform,translate,scale] duration-150 hover:-translate-x-0.5 hover:bg-base-300 active:scale-90
 			       lg:size-auto lg:gap-2 lg:rounded-field lg:px-3 lg:py-2.5 lg:text-[13.5px] lg:font-semibold"
 			aria-label="Questão anterior"
 		>
@@ -658,7 +715,7 @@
 
 	<div class="h-[9px] flex-1 overflow-hidden rounded-full bg-base-300 lg:max-w-[480px]">
 		<div
-			class="h-full origin-left animate-[en-grow-x_1s_var(--ease-out-soft)_both] rounded-full bg-primary"
+			class="h-full origin-left animate-progresso rounded-full bg-primary"
 			style="width: {(data.index / data.activity.itemCount) * 100}%"
 		></div>
 	</div>
@@ -668,6 +725,36 @@
 	</span>
 
 	<VolumeControl class="lg:order-last" />
+
+	<!-- Relatar um problema NESTA questão. No cabeçalho e não no rodapé: o
+	     rodapé é da ação principal, e o relato vale antes e depois de responder.
+	     No celular é só a bandeira (o nome está no `aria-label` e no `title`). -->
+	<button
+		type="button"
+		onclick={abrirRelato}
+		disabled={abrindoRelato}
+		aria-haspopup="dialog"
+		aria-label="Relatar um problema nesta questão"
+		title="Relatar um problema"
+		class="inline-flex size-10 shrink-0 items-center justify-center gap-2 rounded-full text-base-content/65
+		       transition-colors hover:bg-base-200 hover:text-base-content
+		       lg:order-last lg:size-auto lg:rounded-field lg:px-3 lg:py-2 lg:text-[12.5px] lg:font-semibold"
+	>
+		{#if abrindoRelato}
+			<Loading variant="fila" size={10} tone="current" label="Abrindo" />
+		{:else}
+			<svg class="size-[18px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<path
+					d="M5.5 21V4.5M5.5 4.5h12l-2.5 4.25 2.5 4.25h-12"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+			</svg>
+		{/if}
+		<span class="hidden lg:inline">Relatar problema</span>
+	</button>
 
 	<div class="hidden flex-1 lg:block"></div>
 	<span class="hidden min-w-0 truncate text-[12.5px] text-base-content/65 lg:inline"
@@ -796,7 +883,7 @@
 							maxLength: 600
 						} satisfies WritingRuntimeItem}
 						bind:value={text}
-						storageKey="entendo:draft:{data.attemptId}:{data.index}"
+						storageKey="spokke:draft:{data.attemptId}:{data.index}"
 						{campo}
 						bind:tecladoAberto
 						tecladoNaTela
@@ -991,3 +1078,14 @@
 		</button>
 	</footer>
 </form>
+
+{#if Relato}
+	<Relato
+		bind:aberto={relatoAberto}
+		questao={data.index}
+		total={data.activity.itemCount}
+		temAudio={!!data.item.audio}
+		fala={data.item.interaction === 'speak'}
+		montar={montarRelato}
+	/>
+{/if}

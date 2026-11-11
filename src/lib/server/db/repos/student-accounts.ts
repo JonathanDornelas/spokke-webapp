@@ -1,4 +1,5 @@
 import { prisma } from '$lib/server/db/client';
+import { CHAVE, notificar } from '$lib/server/notificacoes';
 
 /** Só o id importa para escopar — mesma nota de `activities.ts`. */
 type ContaAluno = { id: string };
@@ -14,6 +15,22 @@ type ContaAluno = { id: string };
  */
 export function contaAluno(conta: ContaAluno) {
 	return {
+		/**
+		 * Por onde esta conta entra: senha (`credential`), Google, ou os dois. Só
+		 * o nome do provedor — a linha inteira carrega o hash da senha (auth.md
+		 * "Serialização").
+		 */
+		async formasDeEntrar(): Promise<{ google: boolean; senha: boolean }> {
+			const linhas = await prisma.studentCredential.findMany({
+				where: { userId: conta.id },
+				select: { providerId: true }
+			});
+			return {
+				google: linhas.some((l) => l.providerId === 'google'),
+				senha: linhas.some((l) => l.providerId === 'credential')
+			};
+		},
+
 		/**
 		 * As fichas de chamada desta pessoa, com a turma e o professor. É o que
 		 * responde "de quais turmas eu faço parte" na área do aluno.
@@ -96,12 +113,32 @@ export function contaAluno(conta: ContaAluno) {
  * Idempotente, e nunca rouba: ficha já ligada a OUTRA conta fica como está.
  */
 export async function vincularFichaAConta(studentId: string, accountId: string): Promise<boolean> {
-	const { count } = await prisma.student.updateMany({
-		where: { id: studentId, OR: [{ accountId: null }, { accountId }] },
+	// Primeiro só a ficha SEM conta: é o que distingue ligar agora de já estar
+	// ligada — e só ligar agora vira aviso no sino do professor.
+	const nova = await prisma.student.updateMany({
+		where: { id: studentId, accountId: null },
 		data: { accountId }
 	});
-	if (count > 0) await adotarTentativasDaConta(studentId, accountId);
-	return count > 0;
+	const ligada =
+		nova.count > 0 || (await prisma.student.count({ where: { id: studentId, accountId } })) > 0;
+	if (!ligada) return false;
+	await adotarTentativasDaConta(studentId, accountId);
+	if (nova.count > 0) await avisarAlunoEntrou(studentId);
+	return true;
+}
+
+/** "Juliana entrou em 7º B" — agrupado por turma enquanto o professor não lê. */
+async function avisarAlunoEntrou(studentId: string): Promise<void> {
+	const ficha = await prisma.student.findUnique({
+		where: { id: studentId },
+		select: { name: true, teacherId: true, classroom: { select: { id: true, name: true } } }
+	});
+	if (!ficha) return;
+	await notificar(ficha.teacherId, {
+		kind: 'aluno-entrou',
+		key: CHAVE.alunoEntrou(ficha.classroom.id),
+		data: { classroomId: ficha.classroom.id, turma: ficha.classroom.name, nomes: [ficha.name] }
+	});
 }
 
 /**

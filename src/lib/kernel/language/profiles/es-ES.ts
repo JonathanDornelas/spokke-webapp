@@ -51,5 +51,11 @@ export const esES: LanguageProfile = {
 			['29', 'veintinueve'],
 			['100', 'cien', 'ciento']
 		]
-	)
+	),
+	// "Estoy cansado" e "Yo estoy cansado". O "tú" fica fora: sem acento ele é
+	// "tu", o possessivo. Ver `LanguageProfile.sujeitoOmitivel`.
+	sujeitoOmitivel: {
+		pronomes: ['yo', 'nosotros', 'nosotras'],
+		conjuncoes: ['y', 'e', 'o', 'u', 'ni']
+	}
 };

@@ -2,22 +2,37 @@ import 'dotenv/config';
 import { prisma } from '../src/lib/server/db/client.ts';
 import {
 	avisoEquipeJobSchema,
-	conviteModuloJobSchema,
+	conviteContaJobSchema,
 	conviteEscolaJobSchema,
 	conviteJobSchema,
 	envioProgramadoJobSchema,
+	intranetJobSchema,
+	mercadoPagoJobSchema,
 	redefinirSenhaJobSchema,
 	ttsJobSchema
 } from '../src/lib/server/queue/index.ts';
 import { getEmailProvider } from '../src/lib/server/email/index.ts';
 import { montarConviteAluno } from '../src/lib/server/email/convite-aluno.ts';
 import { montarAvisoEquipe } from '../src/lib/server/email/aviso-equipe.ts';
-import { montarConviteModulo } from '../src/lib/server/email/convite-modulo.ts';
 import { montarConviteEscola } from '../src/lib/server/email/convite-escola.ts';
+import { montarConviteConta } from '../src/lib/server/email/convite-conta.ts';
+import {
+	conviteAindaVale,
+	conviteDeContaParaEnviar,
+	marcarConviteDeContaEnviado
+} from '../src/lib/server/db/repos/convites-de-conta.ts';
 import { montarRedefinirSenha } from '../src/lib/server/email/redefinir-senha.ts';
-import { getTtsProvider, ttsExpiraEm, ttsObjectKey } from '../src/lib/server/tts/index.ts';
+import { getTtsProvider, ttsObjectKey } from '../src/lib/server/tts/index.ts';
 import { putObject } from '../src/lib/server/storage/index.ts';
+import { avisarAudioQueFalhou } from '../src/lib/server/tts/falha.ts';
+import { processarNotificacao } from '../src/lib/server/billing/mercadopago/sincronizar.ts';
+import {
+	concederSemVencimento,
+	encerrarSemVencimento
+} from '../src/lib/server/billing/assinaturas.ts';
 import { origemDoWorker, processarEnviosDevidos } from '../src/lib/server/modulos/programacao.ts';
+import { relatosRepo } from '../src/lib/server/db/repos/relatos.ts';
+import { purgarRelatosVencidos } from '../src/lib/server/relatos/retencao.ts';
 
 // Fila em tabela Postgres, sem Redis — ver .claude/rules/server.md "Fila". O
 // `SELECT ... FOR UPDATE SKIP LOCKED` é a primitiva de exclusão mútua entre
@@ -81,9 +96,9 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
  * `tts/<teacherId>/<hash>`, então rodar o mesmo job duas vezes reescreve o
  * mesmo arquivo e atualiza a mesma linha.
  *
- * Job de áudio EXPIRADO é retrabalho legítimo, não duplicata: o objeto some do
- * bucket em 10 dias e a publicação reenfileira. Por isso a saída antecipada
- * olha `expiresAt`, não a mera existência da linha.
+ * O áudio de atividade não vence (`server/tts/limpeza.ts`): linha existente é
+ * áudio pronto, e o job termina sem sintetizar. Quem quer o arquivo de novo
+ * ("Gerar áudio de novo") apaga a linha antes de enfileirar.
  */
 async function processTts(payload: unknown): Promise<void> {
 	const job = ttsJobSchema.parse(payload);
@@ -91,18 +106,17 @@ async function processTts(payload: unknown): Promise<void> {
 	const chave = { teacherId_hash: { teacherId: job.teacherId, hash: job.hash } };
 
 	const existente = await prisma.mediaAsset.findUnique({ where: chave });
-	if (existente && existente.expiresAt > new Date()) return;
+	if (existente) return;
 
 	const { audio, contentType } = await getTtsProvider().synthesize(job.text, job.voice, job.speed);
 	const url = await putObject(ttsObjectKey(job.teacherId, job.hash), audio, contentType);
-	const expiresAt = ttsExpiraEm();
 
 	await prisma.mediaAsset.upsert({
 		where: chave,
-		// O `update` REESCREVE o prazo: sem isso, regerar um áudio expirado
-		// deixaria a linha velha e o Player continuaria achando que não existe.
-		update: { url, expiresAt },
-		create: { hash: job.hash, url, kind: 'audio', expiresAt, teacherId: job.teacherId }
+		// `upsert` e não `create`: dois jobs do mesmo hash podem chegar juntos (o
+		// professor regerou enquanto a fila andava), e o segundo só reescreve a URL.
+		update: { url },
+		create: { hash: job.hash, url, kind: 'audio', teacherId: job.teacherId }
 	});
 }
 
@@ -124,27 +138,6 @@ async function processConvite(payload: unknown): Promise<void> {
 }
 
 /**
- * O convite de módulo: um e-mail com todas as atividades. Idempotente pelos
- * `sentAt` dos convites que ele entrega — se nenhum está pendente, já saiu.
- * Marca TODOS depois de enviar, numa escrita só.
- */
-async function processConviteModulo(payload: unknown): Promise<void> {
-	const job = conviteModuloJobSchema.parse(payload);
-	const pendentes = await prisma.invite.count({
-		where: { id: { in: job.inviteIds }, sentAt: null }
-	});
-	if (pendentes === 0) return;
-
-	const email = montarConviteModulo(job);
-	await getEmailProvider().send({ ...email, to: job.to });
-
-	await prisma.invite.updateMany({
-		where: { id: { in: job.inviteIds }, sentAt: null },
-		data: { sentAt: new Date() }
-	});
-}
-
-/**
  * O convite de escola. Idempotente por `sentAt`, e não manda convite que já foi
  * aceito, revogado (apagado) ou vencido — chegaria um link que não abre.
  */
@@ -158,12 +151,26 @@ async function processConviteEscola(payload: unknown): Promise<void> {
 }
 
 /**
- * O aviso para a equipe. Sem `CONTATO_PARA` ele vai para o log — o mesmo
- * comportamento de e-mail sem provedor —, porque o pedido já está gravado no
- * banco e o painel o mostra de qualquer jeito. Não é idempotente por marca (não
- * há linha de envio): repetir manda de novo, e um aviso duplicado para a
- * equipe é inofensivo.
+ * O convite de CONTA do aluno da chamada. A ficha é lida AGORA, não no pedido:
+ * quem já criou a conta, o link que foi trocado por outro e o e-mail que saiu
+ * do cadastro não recebem nada (`conviteAindaVale`). Idempotente por
+ * `pedidoEm` contra `accountInviteSentAt`.
  */
+async function processConviteConta(payload: unknown): Promise<void> {
+	const job = conviteContaJobSchema.parse(payload);
+	const ficha = await conviteDeContaParaEnviar(job.studentId);
+	if (!conviteAindaVale(ficha, job)) return;
+
+	const email = montarConviteConta({
+		studentName: ficha.name,
+		teacherName: job.teacherName,
+		classroomName: ficha.classroom.name,
+		link: job.link
+	});
+	await getEmailProvider().send({ ...email, to: ficha.email });
+	await marcarConviteDeContaEnviado(job.studentId, job.token);
+}
+
 /**
  * O envio programado de um módulo (docs/telas-modulos-professor.md 2.4). O job
  * só diz QUAL alocação acordar; o que sai é decidido pelo banco na hora, então
@@ -174,6 +181,13 @@ async function processEnvioProgramado(payload: unknown): Promise<void> {
 	await processarEnviosDevidos(job.allocationId, origemDoWorker());
 }
 
+/**
+ * O aviso para a equipe. Sem `CONTATO_PARA` ele vai para o log — o mesmo
+ * comportamento de e-mail sem provedor —, porque o pedido já está gravado no
+ * banco e o painel o mostra de qualquer jeito. Não é idempotente por marca (não
+ * há linha de envio): repetir manda de novo, e um aviso duplicado para a
+ * equipe é inofensivo.
+ */
 async function processAvisoEquipe(payload: unknown): Promise<void> {
 	const job = avisoEquipeJobSchema.parse(payload);
 	const para = process.env.CONTATO_PARA;
@@ -198,6 +212,46 @@ async function processRedefinirSenha(payload: unknown): Promise<void> {
 	await getEmailProvider().send({ ...montarRedefinirSenha(job), to: job.to });
 }
 
+/**
+ * A notificação do Mercado Pago: busca o recurso na API e aplica (`sincronizar.ts`).
+ * Idempotente — aplicar o mesmo estado duas vezes não muda nada, e a fatura
+ * aprovada estende o período uma vez só (`ProviderEvent`).
+ */
+async function processMercadoPago(payload: unknown): Promise<void> {
+	const job = mercadoPagoJobSchema.parse(payload);
+	const desfecho = await processarNotificacao(job);
+	console.info(`[mercadopago] ${job.topico} ${job.id}: ${desfecho}`);
+}
+
+/**
+ * Uma ação pedida pela intranet. O worker aplica pelo `assinaturas.ts` (o único
+ * escritor da cobrança), com o e-mail de quem pediu no histórico. Encerrar só
+ * vale para plano sem vencimento: se a conta não está assim, o job FALHA com o
+ * motivo, e a intranet mostra.
+ */
+async function processIntranet(payload: unknown): Promise<void> {
+	const job = intranetJobSchema.parse(payload);
+	const ator = `admin:intranet:${job.admin}` as const;
+	if (job.acao === 'marcar-relato') {
+		const achou = await relatosRepo.marcar(job.relatoId, job.status, ator);
+		if (!achou) throw new Error('O relato não existe mais (venceu ou a tentativa foi apagada).');
+		console.info(`[intranet] relato ${job.relatoId} marcado como ${job.status}`);
+		return;
+	}
+	if (job.acao === 'plano-sem-vencimento') {
+		const mudou = await concederSemVencimento(job.teacherId, job.plano, ator, {
+			motivo: job.motivo
+		});
+		console.info(
+			`[intranet] plano ${job.plano} sem vencimento para ${job.teacherId}: ${mudou ? 'concedido' : 'já tinha'}`
+		);
+		return;
+	}
+	const encerrou = await encerrarSemVencimento(job.teacherId, ator, { motivo: job.motivo });
+	if (!encerrou) throw new Error('A conta não tem plano sem vencimento para encerrar.');
+	console.info(`[intranet] plano sem vencimento encerrado para ${job.teacherId}`);
+}
+
 async function processJob(job: ClaimedJob): Promise<void> {
 	// Todo handler precisa ser idempotente: o mesmo job pode rodar mais de uma
 	// vez se o worker cair entre concluir o trabalho e marcar `done`.
@@ -208,14 +262,18 @@ async function processJob(job: ClaimedJob): Promise<void> {
 			return processConvite(job.payload);
 		case 'convite-escola':
 			return processConviteEscola(job.payload);
-		case 'convite-modulo':
-			return processConviteModulo(job.payload);
+		case 'convite-conta':
+			return processConviteConta(job.payload);
 		case 'aviso-equipe':
 			return processAvisoEquipe(job.payload);
 		case 'redefinir-senha':
 			return processRedefinirSenha(job.payload);
 		case 'envio-programado':
 			return processEnvioProgramado(job.payload);
+		case 'mercadopago':
+			return processMercadoPago(job.payload);
+		case 'intranet':
+			return processIntranet(job.payload);
 		default:
 			throw new Error(`Nenhum handler registrado para o tipo de job "${job.type}"`);
 	}
@@ -239,6 +297,12 @@ async function executar(job: ClaimedJob): Promise<void> {
 				runAfter: exhausted ? undefined : new Date(Date.now() + 2 ** attempts * 1000)
 			}
 		});
+		// O áudio que a fila não conseguiu gerar trava o link da atividade: o
+		// professor precisa saber sem esperar a turma reclamar (docs/notificacoes.md).
+		if (exhausted && job.type === 'tts') {
+			const tts = ttsJobSchema.safeParse(job.payload);
+			if (tts.success) await avisarAudioQueFalhou(tts.data.teacherId, tts.data.hash);
+		}
 	}
 }
 
@@ -266,8 +330,30 @@ async function drenar(): Promise<number> {
 	return lote.length;
 }
 
+/**
+ * A manutenção de hora em hora, sem cron (a mesma decisão da fila): hoje, a
+ * retenção dos relatos de problema (`server/relatos/retencao.ts`, 180 dias —
+ * auth.md "Dados do aluno e LGPD" pede prazo aplicado por job). Falhar aqui
+ * não derruba a fila: tenta de novo na hora seguinte.
+ */
+const MANUTENCAO_A_CADA_MS = 60 * 60 * 1000;
+let proximaManutencao = 0;
+
+async function manutencao(): Promise<void> {
+	if (Date.now() < proximaManutencao) return;
+	proximaManutencao = Date.now() + MANUTENCAO_A_CADA_MS;
+	try {
+		const apagados = await purgarRelatosVencidos();
+		if (apagados > 0)
+			console.info(`[manutenção] ${apagados} relato(s) de problema vencido(s) apagado(s)`);
+	} catch (err) {
+		console.error('[manutenção] não deu para apagar os relatos vencidos', err);
+	}
+}
+
 async function main(): Promise<void> {
 	for (;;) {
+		await manutencao();
 		// **Só dorme quando não há o que fazer.** Antes o `setTimeout` rodava
 		// depois de CADA job, então publicar dez áudios custava vinte segundos de
 		// sono puro — mais do que a síntese inteira levava. Medido nos mesmos dez

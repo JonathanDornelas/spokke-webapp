@@ -12,7 +12,10 @@
 	let { data }: PageProps = $props();
 </script>
 
-<svelte:head><title>{data.mapa.nome} — entendo</title></svelte:head>
+<svelte:head>
+	<title>{data.mapa.nome} · Spokke</title>
+	<meta name="robots" content="noindex" />
+</svelte:head>
 
 <div data-surface="player" class="flex h-dvh flex-col bg-base-100 lg:h-auto lg:min-h-dvh">
 	<header

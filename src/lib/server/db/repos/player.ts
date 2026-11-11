@@ -231,16 +231,14 @@ export const playerRepo = {
 	},
 
 	/**
-	 * Quais destes hashes já existem e ainda VALEM, para este professor.
-	 *
-	 * `expiresAt` no filtro não é detalhe: o MinIO apaga o objeto pela regra de
-	 * ciclo de vida, mas não apaga a linha. Sem este corte, a publicação
-	 * pareceria pronta e o Player serviria uma URL morta.
+	 * Quais destes hashes já existem, para este professor. O áudio de atividade
+	 * não vence: linha que existe é arquivo que existe (`server/tts/limpeza.ts`
+	 * apaga os dois juntos).
 	 */
 	async audiosExistentes(teacherId: string, hashes: string[]): Promise<Set<string>> {
 		if (hashes.length === 0) return new Set();
 		const linhas = await prisma.mediaAsset.findMany({
-			where: { teacherId, hash: { in: hashes }, expiresAt: { gt: new Date() } },
+			where: { teacherId, hash: { in: hashes } },
 			select: { hash: true }
 		});
 		return new Set(linhas.map((linha) => linha.hash));
@@ -254,27 +252,11 @@ export const playerRepo = {
 	},
 
 	/**
-	 * Quando o PRIMEIRO destes áudios vence. É o número que a tela mostra: de
-	 * nada adianta dizer que um deles dura oito dias se outro morre amanhã e
-	 * leva a atividade junto.
-	 */
-	async audioVenceEm(teacherId: string, hashes: string[]): Promise<Date | null> {
-		if (hashes.length === 0) return null;
-		const linha = await prisma.mediaAsset.findFirst({
-			where: { teacherId, hash: { in: hashes }, expiresAt: { gt: new Date() } },
-			orderBy: { expiresAt: 'asc' },
-			select: { expiresAt: true }
-		});
-		return linha?.expiresAt ?? null;
-	},
-
-	/**
 	 * Apaga estas linhas para que os áudios sejam sintetizados de novo.
 	 *
 	 * É o que o botão "Gerar de novo" faz. Não basta enfileirar: o worker pula o
-	 * que já existe e não expirou, e a regra de ciclo de vida do bucket conta a
-	 * partir da ÚLTIMA gravação do objeto — só reescrevendo o arquivo o relógio
-	 * dos 10 dias recomeça.
+	 * que já existe. O objeto no bucket não precisa sair antes — a síntese nova
+	 * grava na MESMA chave (`tts/<teacherId>/<hash>.mp3`).
 	 */
 	async esquecerAudios(teacherId: string, hashes: string[]): Promise<number> {
 		if (hashes.length === 0) return 0;
@@ -288,7 +270,7 @@ export const playerRepo = {
 	mediaUrls(teacherId: string, hashes: string[]) {
 		if (hashes.length === 0) return Promise.resolve([] as { hash: string; url: string }[]);
 		return prisma.mediaAsset.findMany({
-			where: { teacherId, hash: { in: [...new Set(hashes)] }, expiresAt: { gt: new Date() } },
+			where: { teacherId, hash: { in: [...new Set(hashes)] } },
 			select: { hash: true, url: true }
 		});
 	}

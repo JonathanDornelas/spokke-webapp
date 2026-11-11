@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Metadados from '$lib/components/Metadados.svelte';
+	import Alternador from '$lib/components/Alternador.svelte';
 	import { caminhoInterno } from '$lib/caminho-interno';
 	import { goto } from '$app/navigation';
 	import Loading from '$lib/components/Loading.svelte';
@@ -6,6 +8,8 @@
 	import { resolve } from '$app/paths';
 	import { authClient } from '$lib/client/auth';
 	import { authAlunoClient } from '$lib/client/auth-aluno';
+	import BotaoGoogle from '../BotaoGoogle.svelte';
+	import { mensagemDoGoogle } from '../erro-do-google';
 
 	// Entrar — professor OU aluno, numa tela só, com um seletor no topo. São
 	// duas contas diferentes por baixo (auth.md: duas instâncias de Better Auth,
@@ -43,6 +47,21 @@
 				...(voltar ? { voltar } : {}),
 				// Quem chegou aqui por um link protegido (o convite de escola, por
 				// exemplo) e ainda não tem conta volta para ele depois do cadastro.
+				...(redirectTo ? { redirectTo } : {})
+			}).toString()
+	);
+
+	// ── Google ── (só com as chaves no servidor: `(auth)/+layout.server.ts`)
+	const google = $derived(page.data.google === true);
+	/** A volta do Google com problema (`?error=…`, código do Better Auth). */
+	const erroGoogle = $derived(mensagemDoGoogle(page.url.searchParams.get('error'), como));
+	/** Esta mesma tela, no mesmo modo — é para onde a volta com erro aponta. */
+	const estaTela = $derived(
+		resolve('/(auth)/entrar') +
+			'?' +
+			new URLSearchParams({
+				...(como === 'aluno' ? { como: 'aluno' } : {}),
+				...(voltar ? { voltar } : {}),
 				...(redirectTo ? { redirectTo } : {})
 			}).toString()
 	);
@@ -95,45 +114,48 @@
 	}
 </script>
 
-<svelte:head><title>Entrar — entendo</title></svelte:head>
+<Metadados
+	titulo="Entrar no Spokke"
+	descricao="Entre como professor, para montar as atividades, ou como aluno, para ver o que já respondeu."
+	tituloDaAba="Entrar · Spokke"
+	indexar={false}
+/>
 
 <div
-	class="w-full max-w-[400px] animate-[en-fade-up_600ms_var(--ease-out-soft)_both] rounded-box
+	class="w-full max-w-[400px] animate-entrada rounded-box
 	       border border-line bg-base-100 p-8 shadow-[0_24px_56px_-34px_rgb(var(--shadow)/0.35)]"
 >
 	<!-- O seletor vem ANTES do título: é ele que decide o que a tela promete. -->
-	<div
-		class="mb-6 grid grid-cols-2 gap-1 rounded-full bg-base-200 p-1"
-		role="tablist"
-		aria-label="Entrar como"
-	>
-		{#each [{ id: 'professor' as const, label: 'Professor' }, { id: 'aluno' as const, label: 'Aluno' }] as opcao (opcao.id)}
-			<button
-				type="button"
-				role="tab"
-				aria-selected={como === opcao.id}
-				onclick={() => trocar(opcao.id)}
-				class="rounded-full px-4 py-2 text-[0.84rem] transition-colors
-				       {como === opcao.id
-					? 'bg-primary font-bold text-primary-content'
-					: 'font-semibold text-base-content/65 hover:text-base-content'}">{opcao.label}</button
-			>
-		{/each}
-	</div>
+	<Alternador
+		opcoes={[
+			{ id: 'professor' as const, label: 'Professor' },
+			{ id: 'aluno' as const, label: 'Aluno' }
+		]}
+		bind:valor={como}
+		rotulo="Entrar como"
+		largura="cheia"
+		onmudar={trocar}
+		class="mb-6"
+	/>
 
 	{#if como === 'professor'}
 		<h1 class="mb-1.5 font-display text-[27px] font-semibold tracking-[-0.02em]">
 			Bom te ver de novo
 		</h1>
-		<p class="mb-6 text-sm text-base-content/65">Entre para continuar de onde parou.</p>
+		<p class="mb-6 text-sm text-base-content/65">
+			Suas atividades e turmas estão onde você deixou.
+		</p>
 	{:else}
-		<h1 class="mb-1.5 font-display text-[27px] font-semibold tracking-[-0.02em]">Entrar</h1>
+		<h1 class="mb-1.5 font-display text-[27px] font-semibold tracking-[-0.02em]">
+			Entre na sua conta
+		</h1>
 		<!-- A conta do aluno é opcional e a tela diz isso: ela guarda o histórico,
 		     nunca destrava a atividade (auth.md "A conta do aluno"). -->
 		<p class="mb-6 text-sm leading-relaxed text-base-content/65">
-			A conta guarda o que você já respondeu e te reencontra em outro aparelho.
-			<strong class="font-semibold text-base-content">Você não precisa dela para responder</strong>
-			— é só se quiser.
+			Sua conta guarda o que você já respondeu, em qualquer aparelho.
+			<strong class="font-semibold text-base-content"
+				>Para responder uma atividade, você não precisa dela.</strong
+			>
 		</p>
 	{/if}
 
@@ -146,7 +168,7 @@
 		</p>
 	{/if}
 
-	{#if error}
+	{#if error || erroGoogle}
 		<div
 			class="mb-4 flex gap-2.5 rounded-field border-s-[3px] border-error bg-base-200 px-4 py-3"
 			role="alert"
@@ -165,7 +187,34 @@
 					stroke-linecap="round"
 				/>
 			</svg>
-			<p class="text-[13px] leading-snug">E-mail ou senha incorretos.</p>
+			<p class="text-[13px] leading-snug">
+				{error ? 'E-mail ou senha incorretos.' : erroGoogle}
+			</p>
+		</div>
+	{/if}
+
+	{#if google}
+		<!-- O Google vem antes do e-mail: é o caminho de um toque. Quem não tem
+		     conta sai daqui com ela criada — por isso a linha dos Termos. -->
+		<BotaoGoogle
+			{como}
+			destino={como === 'professor'
+				? (redirectTo ?? resolve('/(studio)/inicio'))
+				: (voltar ?? resolve('/aluno'))}
+			destinoDeQuemChega={como === 'professor'
+				? (redirectTo ?? resolve('/(studio)/atividades'))
+				: (voltar ?? resolve('/aluno'))}
+			voltaComErro={estaTela}
+		/>
+		<p class="mt-2 text-center text-[12px] leading-relaxed text-base-content/60">
+			Primeira vez? A conta é criada na hora, e valem os
+			<a href={resolve('/(site)/termos')}>Termos de uso</a> e a
+			<a href={resolve('/(site)/privacidade')}>Política de privacidade</a>.
+		</p>
+		<div class="my-5 flex items-center gap-3 text-[12.5px] text-base-content/60" aria-hidden="true">
+			<span class="h-px flex-1 bg-line"></span>
+			ou com o seu e-mail
+			<span class="h-px flex-1 bg-line"></span>
 		</div>
 	{/if}
 
@@ -222,7 +271,9 @@
 	<!-- eslint-disable svelte/no-navigation-without-resolve -- é a rota resolvida mais a query do modo; a regra não enxerga a concatenação. -->
 	<p class="mt-[22px] text-center text-[13.5px] text-base-content/65">
 		Ainda não tem conta?
-		<a href={resolve('/(auth)/cadastro') + queryDoCadastro} class="font-bold">Criar conta</a>
+		<a href={resolve('/(auth)/cadastro') + queryDoCadastro} class="font-bold"
+			>{como === 'professor' ? 'Teste grátis por 14 dias' : 'Criar conta'}</a
+		>
 	</p>
 	{#if como === 'aluno' && voltar}
 		<p class="mt-2 text-center text-[13px]">

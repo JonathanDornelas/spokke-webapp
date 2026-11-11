@@ -90,7 +90,7 @@
 	});
 </script>
 
-<svelte:head><title>{data.escola.name} — painel interno</title></svelte:head>
+<svelte:head><title>{data.escola.name} · Painel interno · Spokke</title></svelte:head>
 
 <h1 class="mb-1 font-display text-title font-semibold tracking-[-0.022em]">{data.escola.name}</h1>
 <p class="mb-6 text-[13.5px] text-base-content/65">

@@ -15,6 +15,7 @@ import type { BillingProvider } from './provider';
  */
 export const manualBillingProvider: BillingProvider = {
 	nome: 'manual',
+	podeDesfazerCancelamento: true,
 
 	async iniciarAssinatura(teacher, plano, ciclo) {
 		const pedido = await prisma.$transaction(async (tx) => {
@@ -52,5 +53,8 @@ export const manualBillingProvider: BillingProvider = {
 
 	async abrirPortal() {
 		return { tipo: 'indisponivel' };
-	}
+	},
+
+	// Sem gateway não há cobrança automática a parar: a equipe só não renova.
+	async cancelarRenovacao() {}
 };

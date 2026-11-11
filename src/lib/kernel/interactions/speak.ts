@@ -69,9 +69,10 @@ export const speak: InteractionType<
 			ok: true,
 			value: {
 				value: Math.max(FLOOR, score),
-				feedback: missed
-					? `Quase — repare em "${missed}".`
-					: 'Quase — tente falar um pouco mais pausadamente.'
+				// Sem "Quase" na frase: o veredito é da tela (`AnswerFeedback`), e a
+				// mensagem repetindo saía "Quase. Quase — repare em…" (kernel.md
+				// "Correção" — a mesma regra que o `compare.ts` já segue).
+				feedback: missed ? `Repare em "${missed}".` : 'Tente falar um pouco mais pausadamente.'
 			}
 		};
 	},

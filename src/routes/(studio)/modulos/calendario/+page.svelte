@@ -123,21 +123,19 @@
 	};
 	const PILULA: Record<EventoDeEnvio['estado'], { texto: string; classe: string }> = {
 		programada: { texto: 'Programada', classe: 'bg-base-300 text-primary' },
-		enviada: { texto: 'Enviada', classe: 'border border-line bg-base-100 text-base-content/65' },
-		nao_saiu: { texto: 'Não saiu', classe: 'bg-error text-error-content' },
+		enviada: { texto: 'Liberada', classe: 'border border-line bg-base-100 text-base-content/65' },
+		nao_saiu: { texto: 'Não liberada', classe: 'bg-error text-error-content' },
 		rascunho: {
 			texto: 'Ainda é rascunho',
 			classe: 'border-[1.5px] border-dashed border-base-content/55 bg-base-100 text-base-content'
 		}
 	};
 	function detalhe(e: EventoDeEnvio): string {
-		if (e.estado === 'nao_saiu') return e.motivo ? TEXTO_DO_MOTIVO[e.motivo] : 'não pôde sair';
+		if (e.estado === 'nao_saiu') return e.motivo ? TEXTO_DO_MOTIVO[e.motivo] : 'não pôde abrir';
 		if (e.estado === 'rascunho')
 			return e.motivo === 'arquivada' ? 'está arquivada' : 'publique até a véspera';
-		if (!e.porEmail)
-			return e.estado === 'enviada' ? 'liberada no mapa' : 'abre no mapa, sem e-mail';
-		if (e.emails === 0) return 'nenhum aluno com e-mail';
-		return `${e.emails} ${e.emails === 1 ? 'e-mail' : 'e-mails'}`;
+		// Módulo LIBERA no mapa do aluno; não há e-mail para contar.
+		return e.estado === 'enviada' ? 'liberada no mapa' : 'abre no mapa';
 	}
 	const linha = (e: EventoDeEnvio) => `${e.modulo.nome} · ${e.turma.nome} · ${e.hora}`;
 	const hrefDe = (e: EventoDeEnvio) =>
@@ -149,13 +147,13 @@
 			classe: 'bg-base-300 ring-[1.5px] ring-base-content/55 ring-inset',
 			texto: 'programado, mas ainda é rascunho'
 		},
-		{ classe: 'bg-base-200 ring-1 ring-line ring-inset', texto: 'já enviado' },
-		{ classe: 'bg-error', texto: 'não saiu' }
+		{ classe: 'bg-base-200 ring-1 ring-line ring-inset', texto: 'já liberado' },
+		{ classe: 'bg-error', texto: 'não liberada' }
 	];
 	const CABECALHO = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
 </script>
 
-<svelte:head><title>Calendário de envios — Módulos — entendo</title></svelte:head>
+<svelte:head><title>Calendário · Módulos · Spokke</title></svelte:head>
 
 {#snippet icone(d: string, classe = 'size-3')}
 	<svg class="{classe} flex-none" viewBox="0 0 24 24" fill="none" aria-hidden="true"
@@ -391,8 +389,8 @@
 								disabled={c.fora}
 								aria-pressed={!c.fora && c.dia === selecionado}
 								aria-label="{diaPorExtenso(c.dia)}, {c.eventos.length === 0
-									? 'nada sai'
-									: `${c.eventos.length} ${c.eventos.length === 1 ? 'envio' : 'envios'}`}"
+									? 'nada abre'
+									: `${c.eventos.length} ${c.eventos.length === 1 ? 'liberação' : 'liberações'}`}"
 								class="flex min-h-[116px] min-w-0 flex-col items-stretch gap-1 border-e border-b border-line p-1.75 text-start transition-colors duration-150 [&:nth-child(7n)]:border-e-0 {c.fora
 									? 'cursor-default bg-base-200 opacity-55'
 									: c.dia === selecionado
@@ -442,7 +440,7 @@
 							<span class="font-medium text-base-content/65"
 								>{g.dia === data.hoje
 									? 'hoje'
-									: `${g.itens.length} ${g.itens.length === 1 ? 'envio' : 'envios'}`}</span
+									: `${g.itens.length} ${g.itens.length === 1 ? 'liberação' : 'liberações'}`}</span
 							>
 						</h2>
 						<div class="grid gap-2">
@@ -466,7 +464,7 @@
 				<aside class="hidden min-w-0 content-start gap-4 lg:grid">
 					{#key selecionado}
 						<div
-							class="animate-[en-fade-up_240ms_var(--ease-out-soft)_both] rounded-[14px] border border-line p-4"
+							class="animate-entrada-curta rounded-[14px] border border-line p-4"
 							aria-live="polite"
 						>
 							<p

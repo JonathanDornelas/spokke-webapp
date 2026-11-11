@@ -4,10 +4,11 @@ import type { MotivoDoBloqueio } from '$lib/billing/motivos';
 import type { ContentUnitKind } from '$lib/kernel/content/types';
 import { materiais } from '$lib/server/db/repos/content-units';
 import { debitar, estornar } from '$lib/server/billing/creditos';
+import { usoDeIa } from '$lib/server/db/repos/uso-de-ia';
 import { getGerador } from './index';
 import { jsonSchemaDaResposta, validarProposta } from './schemas';
 import type { PedidoDeMateriais } from './prompt';
-import type { GeradorDeMateriais } from './provider';
+import type { GeradorDeMateriais, RespostaDoModelo } from './provider';
 
 type TeacherScope = { id: string };
 
@@ -57,12 +58,41 @@ function chaveDe(dados: Record<string, unknown>): string {
 }
 
 /**
+ * Grava os tokens da chamada (`AiUsage`), a medição por trás dos preços
+ * (docs/adr-002-billing.md "Preços"). Medir nunca custa ao professor a geração
+ * que ele pediu: falhou, fica no log e a resposta segue.
+ */
+async function registrarUso(
+	teacher: TeacherScope,
+	gerador: GeradorDeMateriais,
+	entrada: PedidoDeMateriais & { requestId: string },
+	aceitas: number,
+	resposta: RespostaDoModelo
+): Promise<void> {
+	try {
+		await usoDeIa(teacher).registrar({
+			requestId: entrada.requestId,
+			model: gerador.nome,
+			kind: entrada.kind,
+			requested: entrada.quantos,
+			accepted: aceitas,
+			inputTokens: resposta.uso?.entrada ?? null,
+			outputTokens: resposta.uso?.saida ?? null,
+			thoughtsTokens: resposta.uso?.raciocinio ?? null
+		});
+	} catch (e) {
+		console.warn('[ia] o uso da geração não foi gravado:', e);
+	}
+}
+
+/**
  * Pede propostas de material à IA (docs/adr-003-ia-gemini.md):
  *
  * 1. Debita `quantos × CUSTO_IA` créditos, idempotente pelo `requestId`.
  * 2. Chama o provedor FORA de qualquer transação, com teto de tempo.
  * 3. Valida cada proposta contra o schema do kernel e descarta repetidas.
  * 4. Estorna o que não veio ou não serviu — o professor paga só pelo que pode usar.
+ * 5. Grava os tokens que o provedor informou (`registrarUso`).
  *
  * **Nada é gravado na biblioteca aqui.** A IA propõe; o professor marca e
  * confirma (`aceitarPropostasIa`), e só aí o material entra — pela mesma porta
@@ -93,9 +123,9 @@ export async function gerarPropostas(
 		return { ok: false, error: 'Este pedido já foi feito — gere de novo para um novo pedido.' };
 	}
 
-	let bruto: unknown;
+	let resposta: RespostaDoModelo;
 	try {
-		bruto = await gerador.propor(entrada, {
+		resposta = await gerador.propor(entrada, {
 			schema: jsonSchemaDaResposta(entrada.kind, entrada.quantos),
 			timeoutMs: TIMEOUT_MS
 		});
@@ -107,7 +137,7 @@ export async function gerarPropostas(
 		};
 	}
 
-	const envelope = z.object({ propostas: z.array(z.unknown()) }).safeParse(bruto);
+	const envelope = z.object({ propostas: z.array(z.unknown()) }).safeParse(resposta.dados);
 	const vistos = new Set<string>();
 	const validas: Record<string, unknown>[] = [];
 	for (const candidata of envelope.success ? envelope.data.propostas : []) {
@@ -122,6 +152,7 @@ export async function gerarPropostas(
 
 	const estornados = (entrada.quantos - validas.length) * CUSTO_IA.porProposta;
 	await estornar(teacher, estornados, entrada.requestId, debito.cicloInicio);
+	await registrarUso(teacher, gerador, entrada, validas.length, resposta);
 
 	const repo = materiais(teacher);
 	const propostas: PropostaDaIa[] = [];

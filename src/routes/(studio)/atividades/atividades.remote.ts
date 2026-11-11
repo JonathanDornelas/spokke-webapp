@@ -3,6 +3,7 @@ import { command, form, getRequestEvent, query } from '$app/server';
 import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { requireTeacher } from '$lib/server/auth/guard';
+import { CHAVE, resolverNotificacoes } from '$lib/server/notificacoes';
 import { motivoDoBloqueio } from '$lib/server/billing/entitlements';
 import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { comCota, motivoDeCriar } from '$lib/server/billing/cota';
@@ -16,8 +17,10 @@ import { atividades } from '$lib/server/db/repos/activities';
 import { materiais } from '$lib/server/db/repos/content-units';
 import { isTtsConfigured } from '$lib/server/tts';
 import { playerRepo } from '$lib/server/db/repos/player';
-import { itemAudioHashes } from '$lib/server/player/runtime';
+import { buildRuntimeItem, itemAudioHashes } from '$lib/server/player/runtime';
+import { edicaoDoItemSchema, montarItemEditado } from '$lib/server/atividades/item-editado';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
+import { limparAudioSemUso } from '$lib/server/tts/limpeza';
 import { isAsrConfigured } from '$lib/server/asr';
 import { gerarCodigoAcesso, normalizarCodigoAcesso } from '$lib/server/player/access-code';
 import { linkDaAtividade } from '$lib/server/player/slug';
@@ -26,9 +29,17 @@ import { MAX_ITENS, selectItems } from '$lib/kernel/generators/select';
 import { skillSchema } from '$lib/kernel/interactions/skill-schema';
 import { parseContentUnit } from '$lib/kernel/content/parse';
 import { parseRawMaterial } from '$lib/kernel/content/parse-raw';
-import { camposMaterial, montarMaterial } from '$lib/server/atividades/material-form';
+import {
+	camposMaterial,
+	montarMaterial,
+	preencherTraducao,
+	traduzirLote
+} from '$lib/server/atividades/material-form';
+import { getTradutor } from '$lib/server/traducao';
+import { paresDasFrases } from '$lib/server/atividades/pares-de-palavras';
+import { comVariantesDaTraducao } from '$lib/server/atividades/variantes-aceitas';
 import { getProfile, tagForLabel } from '$lib/kernel/language/profiles';
-import { interactionKindSchema, interactionSchema, promptSchema } from '$lib/kernel/item';
+import { interactionSchema } from '$lib/kernel/item';
 import type { Skill } from '$lib/kernel/interactions/types';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { transcritorPara } from '$lib/server/escrita';
@@ -108,7 +119,12 @@ export const apagarAtividade = command(
 		if (confirmacao.trim() !== activity.title.trim()) {
 			return { ok: false as const, error: 'Digite o título exatamente como está para apagar.' };
 		}
-		return { ok: await atividades(teacher).apagarDeVez(activityId) };
+		const apagada = await atividades(teacher).apagarDeVez(activityId);
+		// O áudio de atividade não vence: o que só ela usava sai AGORA, e o que
+		// outra atividade do professor também usa fica (server/tts/limpeza.ts).
+		// Falhar aqui não desfaz o apagar — o que sobrar sai na próxima limpeza.
+		if (apagada) await limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
+		return { ok: apagada };
 	}
 );
 
@@ -204,8 +220,16 @@ export const criarAtividade = form(
 export const adicionarMaterial = form(
 	z.object({ activityId: z.string(), ...camposMaterial }),
 	async ({ activityId, ...campos }) => {
-		const { teacher } = await activityOr404(activityId);
-		const montado = montarMaterial(campos);
+		const { teacher, activity } = await activityOr404(activityId);
+		// Tradução em branco sai do tradutor, do idioma da atividade para a
+		// língua do aluno dela (docs/adr-006-traducao.md).
+		const comTraducao = await preencherTraducao(
+			campos,
+			{ de: activity.targetLang, para: activity.sourceLang },
+			getTradutor()
+		);
+		if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
+		const montado = montarMaterial(comTraducao.campos);
 		if ('error' in montado) return { ok: false as const, error: montado.error };
 
 		// Material igual a um que o professor já tem é REAPROVEITADO, não
@@ -241,23 +265,34 @@ export const adicionarMateriaisEmLote = form(
 		raw: z.string()
 	}),
 	async ({ activityId, kind, raw }) => {
-		const { teacher } = await activityOr404(activityId);
+		const { teacher, activity } = await activityOr404(activityId);
+		const tradutor = getTradutor();
 
 		const linhas = raw.split('\n').filter((linha) => linha.trim()).length;
-		const unidades = parseRawMaterial(kind, raw);
-		if (unidades.length === 0) {
+		// Com tradutor, a linha sem separador ENTRA e a tradução vem dele.
+		const lidas = parseRawMaterial(kind, raw, { traduzirSemSeparador: !!tradutor });
+		if (lidas.length === 0) {
 			return {
 				ok: false as const,
 				error: 'Nenhuma linha tem o separador. Use "alvo · tradução", um por linha.'
 			};
 		}
 
-		if (unidades.length > MAX_LINHAS_POR_LOTE) {
+		if (lidas.length > MAX_LINHAS_POR_LOTE) {
 			return {
 				ok: false as const,
 				error: `Cole até ${MAX_LINHAS_POR_LOTE} linhas por vez.`
 			};
 		}
+
+		const traduzido = await traduzirLote(
+			kind,
+			lidas,
+			{ de: activity.targetLang, para: activity.sourceLang },
+			tradutor
+		);
+		if ('error' in traduzido) return { ok: false as const, error: traduzido.error };
+		const unidades = traduzido.unidades;
 
 		const r = await gravarMateriais(teacher, { kind, unidades, activityId });
 		if (r.criados === 0 && r.reaproveitados === 0) {
@@ -271,6 +306,8 @@ export const adicionarMateriaisEmLote = form(
 			ok: true as const,
 			added: r.criados + r.reaproveitados,
 			ignored: linhas - unidades.length,
+			// Quantas traduções vieram do tradutor — é o que o professor confere.
+			traduzidas: traduzido.traduzidas,
 			// Colar a lista da aula passada de novo é comum — dizer quantas linhas
 			// já existiam evita o professor achar que duplicou tudo.
 			reused: r.reaproveitados,
@@ -285,8 +322,14 @@ export const adicionarMateriaisEmLote = form(
 export const editarMaterial = form(
 	z.object({ activityId: z.string(), contentId: z.string(), ...camposMaterial }),
 	async ({ activityId, contentId, ...campos }) => {
-		const { teacher } = await activityOr404(activityId);
-		const montado = montarMaterial(campos);
+		const { teacher, activity } = await activityOr404(activityId);
+		const comTraducao = await preencherTraducao(
+			campos,
+			{ de: activity.targetLang, para: activity.sourceLang },
+			getTradutor()
+		);
+		if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
+		const montado = montarMaterial(comTraducao.campos);
 		if ('error' in montado) return { ok: false as const, error: montado.error };
 
 		const atualizado = await materiais(teacher).update(contentId, campos.kind, montado.dados);
@@ -390,14 +433,22 @@ export const gerarItens = command(z.object({ activityId: z.string() }), async ({
 	if (units.length === 0) error(400, 'Adicione ao menos um material antes de gerar itens.');
 
 	const targetProfile = getProfile(activity.targetLang);
+	const sourceProfile = getProfile(activity.sourceLang);
 	const { groups, closing } = runGenerators(units, {
 		targetProfile,
-		sourceProfile: getProfile(activity.sourceLang),
+		sourceProfile,
 		seed: activity.id,
 		capabilities: { asr: isAsrConfigured(), tts: isTtsConfigured() },
 		// A leitura da frase (kana, pinyin) entra no gabarito das questões de
 		// digitar — e fica visível e editável no editor de item.
-		transcrever: await transcritorPara(targetProfile)
+		transcrever: await transcritorPara(targetProfile),
+		// Palavras das frases, traduzidas, para o "ligue os pares" do fecho quando
+		// o vocabulário cadastrado não o enche (vazio sem tradutor).
+		palavrasTraduzidas: await paresDasFrases(
+			units,
+			{ alvo: targetProfile, origem: sourceProfile },
+			getTradutor()
+		)
 	});
 
 	// O que os geradores produziram é a matéria-prima; o que vira rascunho é o
@@ -405,7 +456,7 @@ export const gerarItens = command(z.object({ activityId: z.string() }), async ({
 	// Sem este corte, 20 frases viravam cem exercícios e ele descartava 88 na
 	// mão.
 	const disponiveis = groups.reduce((total, group) => total + group.items.length, 0);
-	const items = selectItems(
+	const selecionados = selectItems(
 		groups,
 		{
 			target: activity.itemTarget,
@@ -414,6 +465,15 @@ export const gerarItens = command(z.object({ activityId: z.string() }), async ({
 			)
 		},
 		closing
+	);
+	// As outras traduções certas de cada "traduza para o português", propostas
+	// pelo tradutor e conferidas por ida e volta — só nos itens que ENTRARAM, que
+	// são poucos. Viram "Também aceitas" no editor de item, onde o professor
+	// remove a que não quiser. Sem tradutor, nada muda.
+	const items = await comVariantesDaTraducao(
+		selecionados,
+		{ alvo: targetProfile, origem: sourceProfile },
+		getTradutor()
 	);
 	await atividades(teacher).replaceDraftItems(activityId, items);
 
@@ -456,13 +516,12 @@ export const aceitarTodosItens = command(
 /**
  * Sintetiza os áudios da atividade de novo, do zero.
  *
- * O caso de uso é o prazo: o áudio vive 10 dias, e o professor que vai reenviar
- * o link de uma atividade de duas semanas atrás precisa de um caminho de UM
- * clique — não de descobrir que precisa republicar.
+ * O caso de uso é o áudio que FALTA — um job que esgotou as tentativas, um
+ * arquivo que não chegou ao bucket. O áudio de atividade não vence mais, então
+ * isto é conserto, não rotina: a tela só oferece o botão quando falta algo.
  *
- * Apaga as linhas antes de enfileirar porque o worker pula o que já existe, e
- * porque a regra de ciclo de vida do bucket conta a partir da última gravação
- * do objeto: sem reescrever o arquivo, o relógio não recomeça.
+ * Apaga as linhas antes de enfileirar porque o worker pula o que já existe; a
+ * síntese nova grava na mesma chave do bucket.
  *
  * Enquanto a fila não drena a atividade fica com áudio pendente — ou seja, o
  * link não responde. É honesto: por alguns minutos ela realmente não tem o
@@ -488,6 +547,7 @@ export const regerarAudio = command(
 		if (hashes.length === 0) return { ok: true, enfileirados: 0 };
 
 		await playerRepo.esquecerAudios(teacher.id, hashes);
+		await resolverNotificacoes(teacher.id, [CHAVE.audio(activityId)]);
 		const enfileirados = await enfileirarAudioFaltante({
 			teacherId: teacher.id,
 			targetTag: activity.targetLang,
@@ -512,66 +572,86 @@ export const criarItemManual = command(
 );
 
 /**
- * Nível 3: edição manual de um item. O payload é validado contra o
- * `authoringSchema` da interação escolhida — é isso que permite trocar a
- * interação e o formulário mudar sozinho, sem UI escrita à mão.
+ * Nível 3: edição manual de um item — o editor de questão. Quem decide o que
+ * vale é `montarItemEditado` (`$lib/server/atividades/item-editado.ts`), o
+ * MESMO que a prévia usa: a tela não oferece o que o servidor recusaria, e o
+ * que o formulário não edita (a língua da resposta, por exemplo) é mantido.
  *
- * `payload` é OPCIONAL de propósito: o editor ainda não monta campo a campo
- * o gabarito de toda interação (kernel.md "Nível 3" segue pendente). Sem ele,
- * o payload atual do item é mantido e o professor edita só enunciado, prompt
- * e modo de correção — melhor do que travar a tela inteira ou, pior, gravar
- * um gabarito incompleto por cima do que o gerador produziu.
+ * Mudou o texto de um prompt de áudio, o arquivo antigo não serve mais: o TTS
+ * novo é pedido AQUI, para a síntese acontecer enquanto o professor revisa (a
+ * etapa 4 também repõe, mas aí ele já está esperando).
  */
 export const salvarItem = form(
-	z.object({
-		activityId: z.string(),
-		itemId: z.string(),
-		interaction: interactionKindSchema,
-		instructionKey: z.string().optional(),
-		/** Enunciado escrito pelo professor; vazio volta para a copy padrão. */
-		instruction: z.string().optional(),
-		promptText: z.string().optional(),
-		promptKind: z.enum(['text', 'audio', 'image', 'composite']),
-		payload: z.string().optional(), // JSON do formulário derivado do authoringSchema
-		gradingMode: z.enum(['exact', 'tolerant', 'sequence', 'set', 'asr', 'rubric'])
-	}),
-	async (input) => {
-		const { teacher } = await activityOr404(input.activityId);
+	edicaoDoItemSchema.extend({ activityId: z.string(), itemId: z.string() }),
+	async ({ activityId, itemId, ...edicao }) => {
+		const { teacher, activity } = await activityOr404(activityId);
 
-		const atual = await atividades(teacher).draftItem(input.activityId, input.itemId);
+		const atual = await atividades(teacher).draftItem(activityId, itemId);
 		if (!atual) error(404, 'Item não encontrado neste rascunho');
-		const atualInteraction = interactionSchema.parse(atual.interaction);
 
-		if (!input.payload && atualInteraction.type !== input.interaction) {
-			return {
-				ok: false,
-				error: 'Trocar a interação exige preencher os campos dela — ainda não dá por aqui.'
-			};
-		}
+		const editado = montarItemEditado(atual, edicao);
+		if (!editado.ok) return { ok: false as const, error: editado.error };
 
-		const parsedPayload: unknown = input.payload
-			? JSON.parse(input.payload)
-			: atualInteraction.payload;
-		const validated = getInteraction(input.interaction).authoringSchema.safeParse(parsedPayload);
-		if (!validated.success) {
-			return { ok: false, error: 'Os campos deste tipo de interação não estão completos.' };
-		}
-
-		const prompt = promptSchema.parse({
-			kind: input.promptKind,
-			text: input.promptText || undefined,
-			instructionKey: input.instructionKey || undefined,
-			instruction: input.instruction?.trim() || undefined
-		});
-
-		const updated = await atividades(teacher).updateDraftItem(input.activityId, input.itemId, {
-			prompt,
-			interaction: { type: input.interaction, payload: validated.data } as Prisma.InputJsonValue,
-			grading: { mode: input.gradingMode }
+		const updated = await atividades(teacher).updateDraftItem(activityId, itemId, {
+			// Os três já passaram pelos schemas do kernel em `montarItemEditado`; o
+			// `unknown` só atravessa o tipo de JSON do Prisma, que não aceita interface.
+			prompt: editado.prompt as unknown as Prisma.InputJsonValue,
+			interaction: editado.interaction as unknown as Prisma.InputJsonValue,
+			grading: editado.grading as unknown as Prisma.InputJsonValue
 		});
 		if (!updated) error(404, 'Item não encontrado neste rascunho');
 
-		return { ok: true };
+		if (editado.audioMudou) {
+			await enfileirarAudioFaltante({
+				teacherId: teacher.id,
+				targetTag: activity.targetLang,
+				items: [updated]
+			});
+		}
+		return { ok: true as const };
+	}
+);
+
+/**
+ * A prévia do editor de questão: o item COMO FICARIA com o que está no
+ * formulário, passado pela mesma porta do Player (`buildRuntimeItem` →
+ * `toRuntime()`). Nada é gravado. O gabarito chega aqui (é a tela do
+ * professor, atrás do guard) e não volta: o que sai é o payload do aluno.
+ */
+export const previaDoItem = query(
+	edicaoDoItemSchema.extend({ activityId: z.string(), itemId: z.string() }),
+	async ({ activityId, itemId, ...edicao }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		const atual = await atividades(teacher).draftItem(activityId, itemId);
+		if (!atual) error(404, 'Item não encontrado neste rascunho');
+
+		const editado = montarItemEditado(atual, edicao);
+		if (!editado.ok) return { ok: false as const, error: editado.error };
+
+		const row = {
+			id: atual.id,
+			prompt: editado.prompt,
+			interaction: editado.interaction,
+			grading: editado.grading,
+			locale: atual.locale
+		};
+		const hashes = itemAudioHashes(row, activity.targetLang);
+		const assets = await playerRepo.mediaUrls(teacher.id, hashes);
+		const urlByHash = new Map(assets.map((asset) => [asset.hash, asset.url]));
+		try {
+			return {
+				ok: true as const,
+				runtime: buildRuntimeItem(row, `previa:${itemId}`, urlByHash),
+				// Texto de áudio novo ainda não tem arquivo: a tela diz isso em vez
+				// de mostrar um player que não toca.
+				audioPendente: hashes.length > 0 && assets.length < hashes.length
+			};
+		} catch {
+			return {
+				ok: false as const,
+				error: 'Os campos desta questão não formam um exercício ainda.'
+			};
+		}
 	}
 );
 

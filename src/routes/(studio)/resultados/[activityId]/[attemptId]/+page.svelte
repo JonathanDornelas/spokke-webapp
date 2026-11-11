@@ -78,7 +78,7 @@
 				id: 'ans_01',
 				answerId: 'ans_01',
 				index: 1,
-				itemLabel: 'Montar a frase a partir da tradução · assemble',
+				itemLabel: 'Montar a frase a partir da tradução',
 				instruction: 'Monte a frase',
 				given: 'She has been working here since 2019.',
 				expected: 'She has been working here since 2019.',
@@ -94,7 +94,7 @@
 				id: 'ans_05',
 				answerId: 'ans_05',
 				index: 2,
-				itemLabel: 'Item manual · type',
+				itemLabel: 'Digitar a resposta · criada por você',
 				instruction: 'Escreva 3 frases sobre o que você já fez hoje.',
 				given: 'I have already had breakfast. I have cleaned my room.',
 				expected: '',
@@ -202,7 +202,9 @@
 	}
 </script>
 
-<svelte:head><title>{data.attempt.name} — tentativa</title></svelte:head>
+<svelte:head
+	><title>Tentativa de {data.attempt.name} · {data.activity.title} · Spokke</title></svelte:head
+>
 
 <div>
 	<div

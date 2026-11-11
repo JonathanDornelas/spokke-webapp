@@ -1,8 +1,11 @@
 <script lang="ts">
+	import { marcarVisto } from '$lib/client/avisos';
+	import { page } from '$app/state';
+	import Alternador from '$lib/components/Alternador.svelte';
 	// A turma. Três blocos numa rolagem: o cabeçalho com os quatro números que
 	// importam, a chamada com o estado no último envio, e o histórico de envios.
 	//
-	// "22 com e-mail" fica em violeta porque é o número que vai RECEBER convite;
+	// "22 com e-mail" fica em azul porque é o número que vai RECEBER convite;
 	// o total de 24 não é. Cada estado de aluno tem ícone e texto — verde e
 	// âmbar não entram (são a semântica de correção) e vermelho aparece só no
 	// e-mail que voltou, o único que pede ação.
@@ -13,40 +16,22 @@
 	import HeaderCard from '$lib/components/HeaderCard.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { withMock } from '$lib/dev/with-mock';
-	import {
-		CLASSE_DA_ETIQUETA,
-		CORES_DE_ETIQUETA,
-		corOuPadrao,
-		NOME_DA_COR,
-		type CorDeEtiqueta
-	} from '$lib/etiquetas';
+	import { CLASSE_DA_ETIQUETA, corOuPadrao, type CorDeEtiqueta } from '$lib/etiquetas';
 	import { PILULA_DO_ESTADO } from '$lib/modulos/estado';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
-	import FiltroIdioma from '$lib/components/FiltroIdioma.svelte';
-	import { casaComFiltro, IDIOMAS } from '$lib/idiomas';
 	import { baixarCsv, montarCsv, nomeDeArquivo } from '$lib/csv';
+	import EditarTurma from './EditarTurma.svelte';
+	import EnviarAtividade from './EnviarAtividade.svelte';
+	import AdicionarAluno from './AdicionarAluno.svelte';
+	import EditarAluno from '../EditarAluno.svelte';
+	import ConviteDeConta from '../ConviteDeConta.svelte';
 
-	/**
-	 * O filtro do "Enviar atividade" NASCE no idioma da turma — quando ela tem um
-	 * e há atividade publicada nele. `'auto'` é esse estado inicial; o clique do
-	 * professor troca por uma escolha explícita (inclusive "todas").
-	 */
-	let filtroEnvio = $state('auto');
-	function filtroDoEnvio(lista: { idioma: string | null }[]): string {
-		if (filtroEnvio !== 'auto') return filtroEnvio;
-		const daTurma = data.classroom.idioma;
-		return daTurma && lista.some((a) => a.idioma === daTurma) ? daTurma : '';
-	}
 	import {
-		adicionarAluno,
 		apagarTurma,
-		editarTurma,
-		atividadesPublicadas,
-		enviarParaTurmas,
+		enviarConvitesDeContaDaTurma,
 		removerAluno,
 		reenviarConvite,
-		reenviarNaoAbertos,
-		salvarAluno
+		reenviarNaoAbertos
 	} from '../turmas.remote';
 
 	type EstadoAluno =
@@ -62,6 +47,8 @@
 		inviteId: string | null;
 		/** Já ligou a chamada a uma conta dele, abrindo o convite logado. */
 		temConta: boolean;
+		/** Sem conta, e o convite para a conta já saiu por e-mail. */
+		convidadoParaConta: boolean;
 	}
 	interface Envio {
 		id: string;
@@ -116,7 +103,7 @@
 			id: 'tur_01',
 			name: '7º B — inglês',
 			badge: '7B',
-			color: 'violeta',
+			color: 'azul',
 			languageLabel: 'Inglês',
 			idioma: 'en-US',
 			createdAt: '12 de fevereiro'
@@ -132,7 +119,8 @@
 				email: 'juliana.p@escola.com.br',
 				state: 'enviado',
 				inviteId: 'cnv_01',
-				temConta: true
+				temConta: true,
+				convidadoParaConta: false
 			},
 			{
 				id: 'alu_02',
@@ -142,7 +130,8 @@
 				email: null,
 				state: 'sem-email',
 				inviteId: null,
-				temConta: false
+				temConta: false,
+				convidadoParaConta: false
 			}
 		] as Aluno[],
 		tally: {
@@ -173,47 +162,20 @@
 	// mesma rolagem; numa tela de telefone empilhar as duas listas vira uma
 	// rolagem infinita, então um seletor escolhe qual aparece.
 	let bloco = $state<'alunos' | 'envios'>('alunos');
-	let mostrarNovoAluno = $state(false);
+	// **Criar e editar abrem em BANDEJA** (components.md "Bandeja"): a chamada e
+	// os envios continuam à vista atrás do véu, em vez de um formulário abrir no
+	// meio da página empurrando a lista para baixo.
+	let editarAberta = $state(false);
+	let envioAberto = $state(false);
+	let novoAlunoAberto = $state(false);
 	let confirmandoApagar = $state(false);
 	let reenviando = $state(false);
 
-	/**
-	 * Escolher a atividade acontece AQUI: "Enviar atividade" mandava o professor
-	 * para a lista de atividades e o deixava sozinho — ele voltava à turma sem
-	 * ter enviado nada. Só atividade publicada aparece.
-	 */
-	let mostrarEnvio = $state(false);
-	let enviando = $state<string | null>(null);
+	/** Quantos convites o último envio pôs na fila — a confirmação com o número real. */
 	let enviados = $state<number | null>(null);
-	/** A recusa do servidor (áudio não pronto, arquivada), dita na linha da atividade. */
-	let erroEnvio = $state<{ id: string; texto: string } | null>(null);
-
-	async function enviarAtividade(activityId: string) {
-		enviando = activityId;
-		erroEnvio = null;
-		try {
-			const r = await enviarParaTurmas({
-				activityId,
-				classroomIds: [data.classroom.id]
-			});
-			// O número é o de convites ENFILEIRADOS: quem não tem e-mail não
-			// entra na conta, e a fila é assíncrona.
-			if (r.ok) {
-				enviados = r.enfileirados ?? 0;
-				mostrarEnvio = false;
-				await invalidateAll();
-			} else {
-				// Antes a recusa era ignorada e o clique parecia não fazer nada.
-				erroEnvio = { id: activityId, texto: r.error ?? 'Não deu para enviar agora.' };
-			}
-		} catch {
-			erroEnvio = {
-				id: activityId,
-				texto: 'Não deu para enviar agora. Tente de novo em instantes.'
-			};
-		} finally {
-			enviando = null;
-		}
+	async function aoEnviar(n: number) {
+		enviados = n;
+		await invalidateAll();
 	}
 
 	// Ícone + texto por estado. Nenhum verde, nenhum âmbar: essas duas cores
@@ -341,9 +303,36 @@
 		}
 	}
 
-	/** "Adicionar aluno" fica aberto para o próximo: cadastrar a turma é um depois do outro. */
-	let adicionado = $state<string | null>(null);
-	let erroEdicao = $state<string | null>(null);
+	/**
+	 * O CONVITE DE CONTA (auth.md "A conta do aluno"): por aluno, a bandeja com o
+	 * link e o e-mail; para a turma, um botão com a contagem — quem tem e-mail e
+	 * ainda não tem conta. É a conta que faz o módulo aparecer no mapa do aluno.
+	 */
+	let alunoDoConvite = $state<Aluno | null>(null);
+	let conviteAberto = $state(false);
+	function abrirConvite(aluno: Aluno) {
+		alunoDoConvite = aluno;
+		confirmandoAluno = null;
+		conviteAberto = true;
+	}
+	const semContaComEmail = $derived(data.students.filter((a) => !a.temConta && a.email).length);
+	let convidandoTurma = $state(false);
+	async function convidarTurma() {
+		convidandoTurma = true;
+		try {
+			const r = await enviarConvitesDeContaDaTurma({ classroomId: data.classroom.id });
+			aviso = !r.ok
+				? (r.error ?? 'Não deu para mandar agora.')
+				: r.enviados === 0
+					? 'Ninguém para convidar: quem tem e-mail já tem conta.'
+					: `${r.enviados} ${r.enviados === 1 ? 'convite para a conta na fila' : 'convites para a conta na fila'} · a fila está andando`;
+			await invalidateAll();
+		} catch {
+			aviso = 'Não deu para mandar agora. Tente de novo em instantes.';
+		} finally {
+			convidandoTurma = false;
+		}
+	}
 
 	/**
 	 * "Exportar antes de apagar": a chamada com o estado de cada aluno, montada no
@@ -364,21 +353,20 @@
 		);
 	}
 
-	let mostrarEditar = $state(false);
+	/**
+	 * O aluno na bandeja de edição. Fica guardado depois de fechar, para a bandeja
+	 * sair com o conteúdo dela em vez de esvaziar no meio do deslize.
+	 */
+	let alunoEmEdicao = $state<Aluno | null>(null);
+	let edicaoAberta = $state(false);
+	/** "Corrigir e-mail e reenviar": o e-mail voltou e a caixa de reenviar nasce marcada. */
+	let corrigindo = $state(false);
 
-	/** Qual aluno está com o formulário de edição aberto. Um id, não um booleano. */
-	let editandoAluno = $state<string | null>(null);
-	/** "Corrigir e-mail e reenviar": salvo o cadastro, o convite sai de novo. */
-	let reenviarAoSalvar = $state(false);
-
-	function abrirEdicao(aluno: Aluno, reenviarDepois = false) {
-		if (editandoAluno === aluno.id && reenviarAoSalvar === reenviarDepois) {
-			editandoAluno = null;
-			return;
-		}
-		editandoAluno = aluno.id;
+	function abrirEdicao(aluno: Aluno, corrigir = false) {
+		alunoEmEdicao = aluno;
+		corrigindo = corrigir;
 		confirmandoAluno = null;
-		reenviarAoSalvar = reenviarDepois;
+		edicaoAberta = true;
 	}
 
 	// **Quem teve o convite recusado.** É o único estado que pede ação, e ele
@@ -402,9 +390,15 @@
 			apagandoTurma = false;
 		}
 	}
+
+	// Abrir a turma conta como ver quem entrou nela com a conta (docs/notificacoes.md).
+	$effect(() => {
+		const classroomId = page.params.id;
+		if (classroomId) marcarVisto({ secao: 'turmas', classroomId });
+	});
 </script>
 
-<svelte:head><title>{data.classroom.name} — entendo</title></svelte:head>
+<svelte:head><title>{data.classroom.name} · Turmas · Spokke</title></svelte:head>
 
 <div class="pagina-studio">
 	<a
@@ -427,7 +421,7 @@
 	<HeaderCard
 		numbers={[
 			{ value: data.totals.students, label: 'alunos na turma' },
-			// É este número que recebe convite, e por isso é o único em violeta —
+			// É este número que recebe convite, e por isso é o único em azul —
 			// o total de alunos não recebe.
 			{ value: data.totals.withEmail, label: 'com e-mail · recebem convite', tone: 'primary' },
 			{ value: data.totals.deliveries, label: 'atividades enviadas' },
@@ -455,11 +449,8 @@
 		{#snippet actions()}
 			<button
 				type="button"
-				onclick={() => {
-					mostrarEditar = !mostrarEditar;
-					if (mostrarEditar) mostrarEnvio = false;
-				}}
-				aria-expanded={mostrarEditar}
+				onclick={() => (editarAberta = true)}
+				aria-haspopup="dialog"
 				class="btn h-[42px] motion-tap gap-2 btn-plain text-[13.5px]"
 			>
 				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -474,11 +465,8 @@
 			</button>
 			<button
 				type="button"
-				onclick={() => {
-					mostrarEnvio = !mostrarEnvio;
-					if (mostrarEnvio) mostrarEditar = false;
-				}}
-				aria-expanded={mostrarEnvio}
+				onclick={() => (envioAberto = true)}
+				aria-haspopup="dialog"
 				class="btn h-[42px] motion-tap gap-2 btn-primary text-[13.5px] font-bold"
 			>
 				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -495,108 +483,6 @@
 		{/snippet}
 	</HeaderCard>
 
-	{#if mostrarEditar}
-		<!-- `editarTurma` já existia e nenhuma tela chamava: renomear uma turma
-		     ou corrigir a cor exigia apagar e recriar, levando os alunos junto.
-		     O idioma é um SELETOR das tags do produto — foi um campo de texto livre,
-		     e qualquer rótulo diferente do cadastrado derrubava o salvar. -->
-		<form
-			{...editarTurma.enhance(async ({ submit }) => {
-				erroEdicao = null;
-				try {
-					await submit();
-					if (editarTurma.result?.ok) mostrarEditar = false;
-				} catch {
-					erroEdicao = 'Não deu para salvar agora. Tente de novo em instantes.';
-				}
-			})}
-			class="mb-[26px] animate-[en-fade-up_280ms_var(--ease-out-soft)_both] rounded-[14px] border border-primary/34 px-4 py-4 lg:px-5"
-		>
-			<p class="mb-1 text-[14px] font-bold">Editar turma</p>
-			<p class="mb-3.5 text-[12.5px] text-base-content/65">
-				O idioma filtra as atividades que você manda para ela. Os alunos e os envios não mudam.
-			</p>
-			<input type="hidden" name="classroomId" value={data.classroom.id} />
-			<div class="flex flex-wrap items-end gap-x-4 gap-y-3">
-				<label class="grid min-w-[12rem] flex-[2] gap-1.5">
-					<span class="text-[12.5px] font-bold">Nome da turma</span>
-					<input
-						name="name"
-						value={data.classroom.name}
-						required
-						maxlength="80"
-						class="input w-full"
-					/>
-				</label>
-				<label class="grid min-w-[10rem] flex-1 gap-1.5">
-					<span class="text-[12.5px] font-bold">Idioma</span>
-					<select name="idioma" class="select w-full">
-						<option value="" selected={!data.classroom.idioma}>Sem idioma</option>
-						{#each IDIOMAS as idioma (idioma.tag)}
-							<option value={idioma.tag} selected={idioma.tag === data.classroom.idioma}
-								>{idioma.rotulo}</option
-							>
-						{/each}
-					</select>
-				</label>
-			</div>
-			<fieldset class="mt-3.5 grid gap-1.5 border-0 p-0">
-				<legend class="mb-1.5 text-[12.5px] font-bold">Cor da etiqueta</legend>
-				<div class="flex flex-wrap gap-1.75">
-					{#each CORES_DE_ETIQUETA as cor (cor)}
-						<label class="cursor-pointer" title={NOME_DA_COR[cor]}>
-							<input
-								type="radio"
-								name="color"
-								value={cor}
-								checked={corOuPadrao(data.classroom.color) === cor}
-								class="peer sr-only"
-							/>
-							<span class="sr-only">{NOME_DA_COR[cor]}</span>
-							<span
-								class="grid size-11 place-items-center rounded-[11px] border-2 border-line bg-base-100 transition-colors peer-checked:border-primary peer-checked:bg-base-200 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary"
-								aria-hidden="true"
-							>
-								<span
-									class="grid size-7.5 place-items-center rounded-[8px] text-[11px] font-bold {CLASSE_DA_ETIQUETA[
-										cor
-									]}">{data.classroom.badge}</span
-								>
-							</span>
-						</label>
-					{/each}
-				</div>
-			</fieldset>
-			{#each editarTurma.fields.name.issues() ?? [] as issue (issue.message)}
-				<p class="mt-2.5 text-[13px] font-semibold text-error" role="alert">{issue.message}</p>
-			{/each}
-			{#if erroEdicao}
-				<p class="mt-2.5 text-[13px] font-semibold text-error" role="alert">{erroEdicao}</p>
-			{/if}
-			<div class="mt-4 flex flex-wrap gap-2">
-				<button
-					type="submit"
-					disabled={editarTurma.pending > 0}
-					class="btn min-h-[42px] motion-tap gap-2 btn-primary text-[13.5px] font-bold"
-				>
-					{#if editarTurma.pending > 0}<Loading
-							variant="fila"
-							size={10}
-							tone="current"
-							label="Salvando"
-						/>{/if}
-					Salvar
-				</button>
-				<button
-					type="button"
-					onclick={() => (mostrarEditar = false)}
-					class="btn min-h-[42px] border border-line bg-transparent text-[13.5px] font-semibold text-base-content/70"
-					>Cancelar</button
-				>
-			</div>
-		</form>
-	{/if}
-
 	{#if enviados !== null}
 		<p
 			class="mb-[26px] flex items-center gap-2 rounded-[13px] border border-s-[3px] border-line border-s-primary bg-base-200 px-4 py-3 text-[0.86rem]"
@@ -606,104 +492,6 @@
 			{enviados === 1 ? 'convite saindo' : 'convites saindo'} · a fila está andando. Quem não tem e-mail
 			segue na turma e entra pelo link aberto.
 		</p>
-	{/if}
-
-	{#if mostrarEnvio}
-		<section
-			class="mb-[26px] animate-[en-fade-up_280ms_var(--ease-out-soft)_both] rounded-[14px] border border-primary/34 px-4 py-4 lg:px-5"
-		>
-			<p class="mb-1 text-[14px] font-bold">Qual atividade enviar</p>
-			<p class="mb-3.5 text-[12.5px] leading-relaxed text-base-content/65">
-				Cada aluno com e-mail recebe um link pessoal. O link aberto, o QR e o código continuam
-				valendo em paralelo — enviar não tranca ninguém de fora.
-			</p>
-			{#await atividadesPublicadas()}
-				<div class="h-[3rem] skeleton"></div>
-			{:then atividades}
-				{#if atividades.length === 0}
-					<p class="text-[0.82rem] leading-snug text-base-content/65">
-						Nenhuma atividade publicada ainda. Publique uma para poder enviar.
-					</p>
-				{:else}
-					{@const filtro = filtroDoEnvio(atividades)}
-					<div class="mb-3">
-						<FiltroIdioma
-							tags={atividades.map((a) => a.idioma)}
-							valor={filtro}
-							formato="chips"
-							onmudou={(v) => (filtroEnvio = v)}
-						/>
-					</div>
-					<ul class="grid max-h-[45vh] list-none gap-2 overflow-y-auto p-0">
-						{#each atividades.filter( (a) => casaComFiltro(a.idioma, filtro) ) as atividade (atividade.id)}
-							<li
-								class="flex min-w-0 flex-wrap items-center gap-3 rounded-field border border-line bg-base-100 px-3.5 py-2.5 {erroEnvio?.id ===
-								atividade.id
-									? 'border-error/40'
-									: ''}"
-							>
-								<span class="min-w-0 flex-1">
-									<span class="block truncate text-[0.88rem] font-semibold">{atividade.title}</span>
-									<span class="block truncate text-[0.75rem] text-base-content/65">
-										{atividade.level ? `${atividade.level} · ` : ''}{atividade.itemCount} itens
-									</span>
-								</span>
-								<IdiomaTag tag={atividade.idioma} />
-								<button
-									type="button"
-									onclick={() => enviarAtividade(atividade.id)}
-									disabled={enviando !== null || data.totals.withEmail === 0}
-									class="btn btn-sm motion-tap btn-primary font-bold"
-								>
-									{#if enviando === atividade.id}
-										<Loading variant="fila" size={11} tone="current" label="Enviando" />
-										Enviando…
-									{:else}
-										Enviar para {data.totals.withEmail}
-									{/if}
-								</button>
-								{#if erroEnvio?.id === atividade.id}
-									<p
-										class="flex w-full items-start gap-2 text-[12.5px] leading-snug font-semibold text-error"
-										role="alert"
-									>
-										<svg
-											class="mt-px size-3.5 flex-none"
-											viewBox="0 0 24 24"
-											fill="none"
-											aria-hidden="true"
-											><path
-												d="M12 7.5v6M12 16.5h.01M12 3l9.5 17H2.5z"
-												stroke="currentColor"
-												stroke-width="2.2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-											/></svg
-										>
-										{erroEnvio.texto}
-									</p>
-								{/if}
-							</li>
-						{/each}
-					</ul>
-					{#if data.totals.withEmail === 0}
-						<p class="mt-3 text-[0.8rem] leading-snug text-base-content/65">
-							Nenhum aluno desta turma tem e-mail cadastrado, então não há para quem enviar.
-							Adicione o e-mail deles ou passe o link aberto.
-						</p>
-					{/if}
-				{/if}
-			{/await}
-			<button
-				type="button"
-				onclick={() => {
-					mostrarEnvio = false;
-					erroEnvio = null;
-				}}
-				class="mt-3.5 btn min-h-10 border border-line bg-transparent text-[13px] font-semibold text-base-content/70"
-				>Fechar</button
-			>
-		</section>
 	{/if}
 
 	<!-- ═══ 1.5 módulos desta turma ═══ A programação de envio de cada módulo
@@ -762,18 +550,15 @@
 	{/if}
 
 	<!-- Seletor só do celular: no desktop os dois blocos ficam na mesma rolagem. -->
-	<div class="mb-4 inline-flex gap-1 rounded-full bg-base-200 p-1 lg:hidden">
-		{#each [{ id: 'alunos' as const, label: 'Alunos' }, { id: 'envios' as const, label: 'Envios' }] as opcao (opcao.id)}
-			<button
-				type="button"
-				onclick={() => (bloco = opcao.id)}
-				class="rounded-full px-4 py-2 text-[0.84rem] transition-colors
-				       {bloco === opcao.id
-					? 'bg-primary font-bold text-primary-content'
-					: 'font-semibold text-base-content/65'}">{opcao.label}</button
-			>
-		{/each}
-	</div>
+	<Alternador
+		opcoes={[
+			{ id: 'alunos' as const, label: 'Alunos' },
+			{ id: 'envios' as const, label: 'Envios' }
+		]}
+		bind:valor={bloco}
+		rotulo="O que mostrar"
+		class="mb-4 lg:hidden"
+	/>
 
 	<!-- ═══ 2. alunos ═══ -->
 	<section class="mb-[30px] lg:block {bloco === 'alunos' ? '' : 'hidden'}">
@@ -790,8 +575,8 @@
 			<div class="flex flex-wrap gap-2">
 				<button
 					type="button"
-					onclick={() => (mostrarNovoAluno = !mostrarNovoAluno)}
-					aria-expanded={mostrarNovoAluno}
+					onclick={() => (novoAlunoAberto = true)}
+					aria-haspopup="dialog"
 					class="btn h-10 motion-tap gap-2 btn-neutral text-[13px]"
 				>
 					<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -804,6 +589,33 @@
 					</svg>
 					Adicionar aluno
 				</button>
+				{#if semContaComEmail > 0}
+					<!-- Sempre com a contagem, como o reenvio: ninguém manda "para todos" no escuro. -->
+					<button
+						type="button"
+						onclick={convidarTurma}
+						disabled={convidandoTurma}
+						title="Manda o convite para criar a conta a quem tem e-mail e ainda não tem conta"
+						class="btn h-10 motion-tap gap-2 btn-outline text-[13px] font-bold"
+					>
+						{#if convidandoTurma}
+							<Loading variant="fila" size={11} tone="current" label="Convidando" />
+							Convidando…
+						{:else}
+							<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<path
+									d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1 1M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1-1"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+								/>
+							</svg>
+							{semContaComEmail === 1
+								? 'Convidar para a conta quem não tem'
+								: `Convidar os ${semContaComEmail} sem conta`}
+						{/if}
+					</button>
+				{/if}
 				{#if data.lastDelivery && data.lastDelivery.porEmail && data.lastDelivery.unopened > 0}
 					<!-- Reenvio é ação separada e SEMPRE com contagem. -->
 					<button
@@ -841,77 +653,6 @@
 			>
 				{aviso}
 			</p>
-		{/if}
-
-		{#if mostrarNovoAluno}
-			<!-- Fica aberto depois de adicionar: cadastrar a turma é um aluno depois
-			     do outro, e fechar a cada nome obrigava a reabrir 24 vezes. -->
-			<form
-				{...adicionarAluno.enhance(async ({ element, submit }) => {
-					adicionado = null;
-					erroEdicao = null;
-					const nome = String(new FormData(element).get('name') ?? '').trim();
-					try {
-						if ((await submit()) && adicionarAluno.result?.ok) {
-							adicionado = nome;
-							// Pelo protótipo: um campo chamado "reset" sombrearia o método.
-							HTMLFormElement.prototype.reset.call(element);
-							element.querySelector<HTMLInputElement>('input[name="name"]')?.focus();
-						}
-					} catch {
-						erroEdicao = 'Não deu para adicionar agora. Tente de novo em instantes.';
-					}
-				})}
-				class="mb-3 animate-[en-fade-up_280ms_var(--ease-out-soft)_both] rounded-[14px] border border-primary/34 px-4 py-3.5"
-			>
-				<p class="mb-0.75 text-[13.5px] font-bold">Adicionar aluno</p>
-				<p class="mb-3 text-[12.5px] text-base-content/65">
-					Sem e-mail ele entra na chamada e nos resultados, só não recebe convite.
-				</p>
-				<input type="hidden" name="classroomId" value={data.classroom.id} />
-				<div class="flex flex-wrap items-end gap-2">
-					<label class="grid min-w-[10rem] flex-1 gap-1.5">
-						<span class="text-[12.5px] font-bold">Nome</span>
-						<input name="name" required maxlength="120" class="input w-full" />
-					</label>
-					<label class="grid min-w-[10rem] flex-1 gap-1.5">
-						<span class="flex items-baseline gap-2 text-[12.5px] font-bold">
-							E-mail <span class="font-medium text-base-content/65">· opcional</span>
-						</span>
-						<input name="email" type="email" class="input w-full" />
-					</label>
-					<button
-						type="submit"
-						disabled={adicionarAluno.pending > 0}
-						class="btn min-h-11 motion-tap gap-2 btn-primary text-[13.5px] font-bold"
-					>
-						{#if adicionarAluno.pending > 0}<Loading
-								variant="fila"
-								size={10}
-								tone="current"
-								label="Adicionando"
-							/>{/if}
-						Adicionar
-					</button>
-					<button
-						type="button"
-						onclick={() => {
-							mostrarNovoAluno = false;
-							adicionado = null;
-						}}
-						class="btn min-h-11 border border-line bg-transparent text-[13.5px] font-semibold text-base-content/70"
-						>Fechar</button
-					>
-				</div>
-				{#if adicionado}
-					<p class="mt-2.5 text-[13px] font-semibold text-primary" role="status">
-						{adicionado} entrou na turma. Pode adicionar o próximo.
-					</p>
-				{/if}
-				{#if erroEdicao}
-					<p class="mt-2.5 text-[13px] font-semibold text-error" role="alert">{erroEdicao}</p>
-				{/if}
-			</form>
 		{/if}
 
 		<!-- O e-mail que voltou pede ação, então não fica escondido na lista. -->
@@ -986,6 +727,12 @@
 									<span
 										class="shrink-0 rounded-full bg-base-300 px-1.5 py-0.5 text-[0.68rem] font-bold text-base-content/70"
 										title="Este aluno ligou a chamada a uma conta dele">com conta</span
+									>
+								{:else if aluno.convidadoParaConta}
+									<span
+										class="shrink-0 rounded-full border border-line px-1.5 py-0.5 text-[0.68rem] font-bold text-base-content/65"
+										title="O convite para criar a conta saiu por e-mail; ele ainda não entrou"
+										>convidado</span
 									>
 								{/if}
 							</a>
@@ -1082,6 +829,25 @@
 										{/if}
 									</button>
 								{/if}
+								{#if !aluno.temConta}
+									<button
+										type="button"
+										onclick={() => abrirConvite(aluno)}
+										title="Convite para criar a conta (link ou e-mail)"
+										aria-label="Convite para a conta de {aluno.name}"
+										aria-haspopup="dialog"
+										class="grid size-[34px] place-items-center rounded-[9px] text-base-content/65 transition-colors hover:bg-base-300 hover:text-primary"
+									>
+										<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+											<path
+												d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1 1M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1-1"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+											/>
+										</svg>
+									</button>
+								{/if}
 								<button
 									type="button"
 									onclick={() => abrirEdicao(aluno)}
@@ -1100,10 +866,8 @@
 								</button>
 								<button
 									type="button"
-									onclick={() => {
-										editandoAluno = null;
-										confirmandoAluno = confirmandoAluno === aluno.id ? null : aluno.id;
-									}}
+									onclick={() =>
+										(confirmandoAluno = confirmandoAluno === aluno.id ? null : aluno.id)}
 									disabled={apagandoId !== null}
 									aria-expanded={confirmandoAluno === aluno.id}
 									title="Apagar aluno e as respostas dele"
@@ -1158,70 +922,6 @@
 								</div>
 							</div>
 						{/if}
-
-						{#if editandoAluno === aluno.id}
-							<!-- `salvarAluno` já existia e nenhuma tela chamava: corrigir um
-							     e-mail digitado errado exigia apagar o aluno e cadastrar de
-							     novo — levando as respostas dele junto. -->
-							<form
-								{...salvarAluno.enhance(async ({ submit }) => {
-									erroEdicao = null;
-									try {
-										await submit();
-										if (!salvarAluno.result?.ok) return;
-										if (reenviarAoSalvar && aluno.inviteId) {
-											const r = await reenviarConvite({ inviteId: aluno.inviteId });
-											aviso = r.ok ? `Convite reenviado para ${aluno.name}` : (r.error ?? null);
-										}
-										editandoAluno = null;
-										reenviarAoSalvar = false;
-										await invalidateAll();
-									} catch {
-										erroEdicao = 'Não deu para salvar agora. Tente de novo em instantes.';
-									}
-								})}
-								class="flex flex-wrap items-end gap-2 border-t border-line bg-base-200 px-4 py-3 lg:px-5"
-							>
-								<input type="hidden" name="studentId" value={aluno.id} />
-								<label class="min-w-[9rem] flex-1">
-									<span class="mb-1.5 block text-[0.75rem] font-semibold">Nome</span>
-									<input name="name" value={aluno.name} required class="input-sm input w-full" />
-								</label>
-								<label class="min-w-[11rem] flex-[1.4]">
-									<span class="mb-1.5 block text-[0.75rem] font-semibold">E-mail</span>
-									<input
-										name="email"
-										type="email"
-										value={aluno.email ?? ''}
-										placeholder="sem e-mail"
-										class="input-sm input w-full"
-									/>
-								</label>
-								<button
-									type="submit"
-									disabled={salvarAluno.pending > 0}
-									class="btn btn-sm motion-tap gap-2 btn-primary font-bold"
-								>
-									{#if salvarAluno.pending > 0}<Loading
-											variant="fila"
-											size={9}
-											tone="current"
-											label="Salvando"
-										/>{/if}
-									{reenviarAoSalvar ? 'Salvar e reenviar' : 'Salvar'}
-								</button>
-								<button
-									type="button"
-									onclick={() => (editandoAluno = null)}
-									class="btn btn-sm motion-tap btn-ghost font-semibold">Cancelar</button
-								>
-								{#if erroEdicao}
-									<p class="w-full text-[12.5px] font-semibold text-error" role="alert">
-										{erroEdicao}
-									</p>
-								{/if}
-							</form>
-						{/if}
 					</div>
 				{/each}
 			</div>
@@ -1273,7 +973,7 @@
 					)}
 					<a
 						href={resolve('/(studio)/resultados/[activityId]', { activityId: envio.activityId })}
-						class="block rounded-[14px] border border-line px-4 py-[15px] text-base-content no-underline transition-[border-color,transform,background-color] hover:-translate-y-0.5 hover:border-primary hover:bg-base-200 lg:flex lg:items-center lg:gap-6 lg:px-5 lg:py-[17px]"
+						class="block cartao-interativo rounded-[14px] border border-line px-4 py-[15px] text-base-content no-underline hover:bg-base-200 lg:flex lg:items-center lg:gap-6 lg:px-5 lg:py-[17px]"
 					>
 						<div class="min-w-0 flex-1">
 							<div class="mb-[5px] flex flex-wrap items-center gap-x-2.5 gap-y-2">
@@ -1285,10 +985,10 @@
 									>
 								{/if}
 								{#if !envio.porEmail}
-									<!-- Envio sem e-mail: "não abriram" falaria de um e-mail que não existiu. -->
+									<!-- Liberação de módulo, sem e-mail: "não abriram" falaria de um e-mail que não existiu. -->
 									<span
 										class="rounded-full border border-line bg-base-200 px-[9px] py-1 text-[11.5px] font-bold whitespace-nowrap text-base-content/65"
-										>no mapa, sem e-mail</span
+										>liberada no mapa</span
 									>
 								{:else if envio.unopened > 0}
 									<span
@@ -1395,3 +1095,32 @@
 		</div>
 	</div>
 </div>
+
+<EditarTurma aberta={editarAberta} onfechar={() => (editarAberta = false)} turma={data.classroom} />
+<EnviarAtividade
+	aberta={envioAberto}
+	onfechar={() => (envioAberto = false)}
+	turma={data.classroom}
+	comEmail={data.totals.withEmail}
+	onenviado={aoEnviar}
+/>
+<AdicionarAluno
+	aberta={novoAlunoAberto}
+	onfechar={() => (novoAlunoAberto = false)}
+	turma={data.classroom}
+/>
+<ConviteDeConta
+	aberta={conviteAberto}
+	onfechar={() => (conviteAberto = false)}
+	aluno={alunoDoConvite}
+	onenviado={() => invalidateAll()}
+/>
+{#if alunoEmEdicao}
+	<EditarAluno
+		aberta={edicaoAberta}
+		onfechar={() => (edicaoAberta = false)}
+		aluno={alunoEmEdicao}
+		{corrigindo}
+		onsalvo={(texto) => (aviso = texto)}
+	/>
+{/if}

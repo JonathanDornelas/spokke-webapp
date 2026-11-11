@@ -11,6 +11,7 @@
 	// **Adotar tentativas é a única escrita desta área**, e aparece como convite
 	// pontual no topo: some quando não há nada solto neste aparelho. Nada é
 	// adotado sozinho — o aluno decide se aquelas respostas eram dele.
+	import { CLASSE_DA_ETIQUETA, corOuPadrao } from '$lib/etiquetas';
 	import { goto, invalidateAll } from '$app/navigation';
 	import Loading from '$lib/components/Loading.svelte';
 	import { resolve } from '$app/paths';
@@ -24,6 +25,7 @@
 	import { adotarMinhasTentativas, gravarMeuAvatar } from './aluno.remote';
 	import { resumoDoMapa, type EstadoDaFase, type MapaDoModulo } from '$lib/modulos/mapa';
 	import { ICONE_PIXEL } from '$lib/modulos/pixel';
+	import LigarGoogle from '$lib/components/LigarGoogle.svelte';
 
 	/** A trilha curta do cartão de módulo: ícone por estado, nunca só cor. */
 	const TRILHA: Record<EstadoDaFase, { classe: string; icone: string }> = {
@@ -83,18 +85,12 @@
 		habilidades: Habilidade[];
 		/** Os mapas de módulo das turmas desta conta (docs/telas-modulos-aluno.md). */
 		modulos: MapaDoModulo[];
+		/** Como a conta entra (senha, Google) e se o Google está ligado no servidor. */
+		login: { googleDisponivel: boolean; google: boolean; senha: boolean };
 	}
 
 	let { data }: { data: PageData } = $props();
 
-	const corDaEtiqueta: Record<string, string> = {
-		violeta: 'bg-base-300 text-primary',
-		teal: 'bg-accent/16 text-accent',
-		azul: 'bg-info/15 text-info',
-		magenta:
-			'bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-error)_10%)] text-primary',
-		ardosia: 'bg-base-300 text-base-content/70'
-	};
 	const tagTone: Record<Habilidade['tag'], string> = {
 		firme: 'bg-success/13 text-success',
 		'quase lá': 'bg-warning/15 text-warning',
@@ -210,7 +206,10 @@
 	});
 </script>
 
-<svelte:head><title>Minhas atividades — entendo</title></svelte:head>
+<svelte:head>
+	<title>Minhas atividades · Spokke</title>
+	<meta name="robots" content="noindex" />
+</svelte:head>
 
 <div class="min-h-dvh bg-base-100">
 	<header class="flex items-center gap-3 border-b border-line px-gutter py-3">
@@ -385,6 +384,27 @@
 			</div>
 		</section>
 
+		<!-- Entrar com o Google: só com o Google ligado no servidor (ou já ligado
+		     nesta conta). É daqui que sai quem criou a conta com senha e quer
+		     entrar pelo Google — a tela de entrar manda para cá. -->
+		{#if data.login.googleDisponivel || data.login.google}
+			<section class="mb-[26px]">
+				<div class="mb-3.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
+					<h2 class="font-display text-lg font-semibold lg:text-xl">Entrar com o Google</h2>
+					<span class="text-[13px] text-base-content/65">opcional, no lugar da senha</span>
+				</div>
+				<div class="rounded-box border border-line bg-card p-4 lg:px-5 lg:py-[18px]">
+					<LigarGoogle
+						como="aluno"
+						email={data.account.email}
+						ligado={data.login.google}
+						temSenha={data.login.senha}
+						aqui={resolve('/aluno')}
+					/>
+				</div>
+			</section>
+		{/if}
+
 		<!-- ═══ 4. turmas ═══ -->
 		<section class="mb-[26px]">
 			<div class="mb-3.5 flex flex-wrap items-baseline gap-x-3.5 gap-y-2.5">
@@ -402,9 +422,9 @@
 							class="flex min-w-[230px] flex-1 items-center gap-3 rounded-[14px] border border-line px-4 py-3.5"
 						>
 							<span
-								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {corDaEtiqueta[
-									ficha.color
-								] ?? corDaEtiqueta.violeta}">{ficha.badge}</span
+								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {CLASSE_DA_ETIQUETA[
+									corOuPadrao(ficha.color)
+								]}">{ficha.badge}</span
 							>
 							<span class="min-w-0">
 								<span class="mb-[3px] block truncate text-sm font-semibold">{ficha.classroom}</span>
@@ -437,7 +457,7 @@
 						<li class="min-w-0">
 							<a
 								href={resolve('/aluno/modulos/[id]', { id: m.id })}
-								class="block min-w-0 rounded-[14px] border border-line px-[17px] py-4 text-base-content no-underline transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-primary hover:bg-base-200"
+								class="block min-w-0 cartao-interativo rounded-[14px] border border-line px-[17px] py-4 text-base-content no-underline hover:bg-base-200"
 							>
 								<span class="mb-0.75 flex items-baseline gap-2.5">
 									<span class="min-w-0 flex-1 text-[15px] font-bold">{m.nome}</span>
@@ -775,4 +795,4 @@
 	</main>
 </div>
 
-<AvatarEditor bind:codigo bind:aberto={editorAberto} onusar={usarAvatar} />
+<AvatarEditor bind:codigo bind:aberto={editorAberto} nome={data.account.name} onusar={usarAvatar} />

@@ -20,15 +20,25 @@ import { criarLimite } from '$lib/server/limite-por-ip';
 const ASSUNTOS = [
 	'Dúvida sobre a plataforma',
 	'Problema técnico',
-	'Urgente — turma em aula',
+	'Problema com uma turma em aula agora',
 	'Escolas e redes',
-	'Privacidade e dados',
-	'Imprensa'
+	'Privacidade e dados'
 ] as const;
 
 const ATALHOS: Record<string, (typeof ASSUNTOS)[number]> = { escolas: 'Escolas e redes' };
 
 const limite = criarLimite({ maximo: 5, janelaMs: 60 * 60 * 1000 });
+
+/**
+ * De onde a pessoa veio, quando veio de um artigo do blog (`?origem=blog-<slug>`,
+ * docs/blog.md "Conversão"). Lista fechada por formato: o valor vira texto no
+ * aviso para a equipe, e texto que qualquer um escolhe não entra cru.
+ */
+const ORIGEM = /^blog(?:-[a-z0-9]+(?:-[a-z0-9]+){0,12})?$/;
+
+function origemValida(valor: unknown): string | null {
+	return typeof valor === 'string' && ORIGEM.test(valor) ? valor : null;
+}
 
 const contatoSchema = z.object({
 	nome: z.string().trim().min(1, 'Preencha nome, e-mail e mensagem.').max(120),
@@ -39,7 +49,11 @@ const contatoSchema = z.object({
 
 export const load: PageServerLoad = ({ url }) => {
 	const atalho = url.searchParams.get('assunto');
-	return { assunto: (atalho && ATALHOS[atalho]) || ASSUNTOS[0], assuntos: [...ASSUNTOS] };
+	return {
+		assunto: (atalho && ATALHOS[atalho]) || ASSUNTOS[0],
+		assuntos: [...ASSUNTOS],
+		origem: origemValida(url.searchParams.get('origem'))
+	};
 };
 
 export const actions: Actions = {
@@ -67,10 +81,17 @@ export const actions: Actions = {
 			return fail(400, { ok: false, error: lido.error.issues[0]?.message ?? 'Confira os campos.' });
 		}
 		const { nome, email, assunto, mensagem } = lido.data;
+		const origem = origemValida(data.get('origem'));
 
 		await enqueueAvisoEquipe({
 			assunto: `[contato] ${assunto} — ${nome}`,
-			texto: [`De: ${nome} <${email}>`, `Assunto: ${assunto}`, '', mensagem].join('\n'),
+			texto: [
+				`De: ${nome} <${email}>`,
+				`Assunto: ${assunto}`,
+				...(origem ? [`Origem: ${origem}`] : []),
+				'',
+				mensagem
+			].join('\n'),
 			replyTo: email
 		});
 		return { ok: true };

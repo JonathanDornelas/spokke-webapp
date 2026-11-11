@@ -11,7 +11,7 @@ import {
 	tentarDeNovo as tentarDeNovoNoServidor
 } from '$lib/server/modulos/programacao';
 import { programacaoSchema } from '$lib/modulos/programacao';
-import { CORES_DE_ETIQUETA } from '$lib/etiquetas';
+import { CORES_DE_ETIQUETA, COR_PADRAO } from '$lib/etiquetas';
 
 /**
  * Os módulos — coleções ordenadas de atividades (docs/adr-004-modulos-e-nivel.md).
@@ -26,7 +26,7 @@ function teacherOf() {
 const camposDoModulo = z.object({
 	name: z.string().trim().min(1, 'Dê um nome ao módulo.').max(80),
 	description: z.string().trim().max(400).optional(),
-	color: z.enum(CORES_DE_ETIQUETA).default('violeta')
+	color: z.enum(CORES_DE_ETIQUETA).default(COR_PADRAO)
 });
 
 export const criarModulo = command(

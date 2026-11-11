@@ -17,13 +17,16 @@
 #
 # Migrations não sobem sozinhas: continuam sendo aplicadas à mão
 # (`pnpm db:migrate`), como o projeto já faz.
+#
+# **Em produção (Linux) este arquivo vai junto de `deploy/compose/app.yml`**, que
+# põe os dois serviços na rede `spokke` em vez das portas do host — docs/deploy.md.
 
-name: entendo
+name: spokke
 
 x-app: &app
   build:
     context: .
-  image: entendo-service:local
+  image: spokke-service:local
   restart: unless-stopped
   # O banco, o MinIO e o serviço de áudio estão em OUTROS composes, ou seja em
   # outras redes. Falar com eles pela porta que cada um publica no host é o que
@@ -38,7 +41,7 @@ x-app: &app
     # Estes três SOBRESCREVEM o `.env`, e têm de sobrescrever: lá os endereços
     # são os de quem roda no host (`pnpm dev`), e `localhost` dentro de um
     # container é o próprio container.
-    DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql://user:password@host.docker.internal:5432/entendo}
+    DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql://user:password@host.docker.internal:5432/spokke}
     STORAGE_ENDPOINT: ${STORAGE_ENDPOINT_DOCKER:-http://host.docker.internal:9000}
     AUDIOTEXT_URL: ${AUDIOTEXT_URL_DOCKER:-http://host.docker.internal:8080}
     # `STORAGE_PUBLIC_URL` NÃO entra nesta lista: ela é o endereço que vai no
@@ -53,7 +56,7 @@ x-app: &app
 services:
   web:
     <<: *app
-    container_name: entendo-web
+    container_name: spokke-web
     environment:
       <<: *app-env
       # `adapter-node` recusa POST sem `ORIGIN` — as form actions e o login
@@ -84,7 +87,7 @@ services:
 
   worker:
     <<: *app
-    container_name: entendo-worker
+    container_name: spokke-worker
     # O binário direto, e não `pnpm exec`: sem um `packageManager` fixado no
     # package.json, o corepack sai BAIXANDO o pnpm toda vez que o container
     # sobe — rede em runtime para chamar um executável que já está na imagem.

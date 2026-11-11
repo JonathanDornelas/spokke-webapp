@@ -3,7 +3,7 @@
  * de propósito: a regra dos três acessórios é a única lógica de verdade do
  * editor, e ela merece teste sem montar uma tela.
  */
-import { CASAS_ACESSORIO, MAX_ACESSORIOS } from './catalogo';
+import { CASAS_ACESSORIO, MAX_ACESSORIOS, type Categoria } from './catalogo';
 import { CASAS, LIMITES, normalizar } from './montar';
 
 /** As dezoito casas, sempre completas. */
@@ -69,4 +69,68 @@ export function codigoDaOpcao(codigo: string, iForma: number, peca: number): str
 		saida = trocarCasa(saida, casa, i === 0 ? peca : 0);
 	});
 	return saida;
+}
+
+/** O que está escolhido numa categoria: a posição, o total e o nome que a tela diz. */
+export interface Escolha {
+	/** Posição da escolha, a partir de 0. Em acessório, quantos estão ligados. */
+	indice: number;
+	/** Quantas opções a categoria tem. Em acessório, o teto de peças ao mesmo tempo. */
+	total: number;
+	/** O nome legível: "longo", "tom de pele 3", "coroa e fone", "nenhum". */
+	nome: string;
+	/** As setas ‹ › fazem sentido — não em acessório, que é escolha múltipla. */
+	cicla: boolean;
+}
+
+/**
+ * A escolha atual de uma categoria, para o cabeçalho da oficina do editor
+ * ("Cabelo: longo, 3 de 16"). Onde só existe cor (pele, fundo), a escolha É a
+ * cor — e o nome é a posição dela na paleta ("tom de pele 3"), porque cor
+ * não tem nome.
+ */
+export function escolhaAtual(categoria: Categoria, codigo: string): Escolha {
+	const n = casas(codigo);
+	if (categoria.iForma === CASAS_ACESSORIO[0]) {
+		const ligados = acessoriosLigados(codigo);
+		const nomes = ligados.map((i) => categoria.nomes[i] ?? String(i));
+		return {
+			indice: ligados.length,
+			total: MAX_ACESSORIOS,
+			nome:
+				nomes.length === 0
+					? 'nenhum'
+					: nomes.length === 1
+						? nomes[0]!
+						: `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}`,
+			cicla: false
+		};
+	}
+	if (categoria.iForma === null) {
+		const i = n[categoria.iCor] ?? 0;
+		return {
+			indice: i,
+			total: categoria.paleta.length,
+			nome: `${categoria.corLabel.toLowerCase()} ${i + 1}`,
+			cicla: true
+		};
+	}
+	const i = n[categoria.iForma] ?? 0;
+	return {
+		indice: i,
+		total: categoria.nFormas,
+		nome: categoria.nomes[i] ?? String(i + 1),
+		cicla: true
+	};
+}
+
+/**
+ * O código com a escolha de uma categoria andando `passo` casas (‹ é -1, › é
+ * +1), dando a volta nas pontas. Onde só há cor, quem anda é a cor.
+ */
+export function ciclar(categoria: Categoria, codigo: string, passo: number): string {
+	const atual = escolhaAtual(categoria, codigo);
+	if (!atual.cicla || atual.total === 0) return codigo;
+	const proximo = (((atual.indice + passo) % atual.total) + atual.total) % atual.total;
+	return trocarCasa(codigo, categoria.iForma ?? categoria.iCor, proximo);
 }

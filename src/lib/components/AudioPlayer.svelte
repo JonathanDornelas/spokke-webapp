@@ -15,7 +15,8 @@
 		onplay,
 		playing = $bindable(false),
 		duration,
-		plays
+		plays,
+		emLinha = false
 	}: {
 		src: string;
 		srcSlow?: string;
@@ -23,6 +24,13 @@
 		playing?: boolean;
 		duration?: string;
 		plays?: number;
+		/**
+		 * Tocar, onda e velocidade numa linha só, em QUALQUER largura de tela. É o
+		 * celular da home: ele tem sempre a largura de um telefone, mas a tela de
+		 * quem o vê é que decide o breakpoint — no celular de verdade a velocidade
+		 * descia para uma segunda linha e a questão passava da tela do aparelho.
+		 */
+		emLinha?: boolean;
 	} = $props();
 
 	let audio: HTMLAudioElement;
@@ -129,7 +137,7 @@
 	}
 
 	/**
-	 * O arquivo lento sumiu (o áudio tem 10 dias de vida — server.md "TTS") ou
+	 * O arquivo lento não carregou (a síntese ainda na fila, um job que falhou) ou
 	 * nunca existiu: cai para o normal desacelerado no browser, em vez de deixar
 	 * o aluno com um player mudo. É a mesma reserva que já valia quando o
 	 * profile não gerava a segunda velocidade.
@@ -198,9 +206,13 @@
 
 	<!-- No celular o controle desce para uma linha própria com rótulo: em largura
 	     de telefone ele espremia a onda contra o botão de tocar. -->
-	<div class="w-full border-t border-line pt-3.5 lg:w-auto lg:border-0 lg:pt-0">
+	<div
+		class={emLinha ? 'w-auto' : 'w-full border-t border-line pt-3.5 lg:w-auto lg:border-0 lg:pt-0'}
+	>
 		<div class="flex items-center gap-2">
-			<span class="flex-1 text-[12.5px] text-base-content/65 lg:hidden">Velocidade</span>
+			{#if !emLinha}
+				<span class="flex-1 text-[12.5px] text-base-content/65 lg:hidden">Velocidade</span>
+			{/if}
 			<button
 				type="button"
 				onclick={() => definirVelocidade(proximaVelocidade())}

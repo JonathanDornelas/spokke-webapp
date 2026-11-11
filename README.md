@@ -1,4 +1,4 @@
-# entendo
+# Spokke
 
 SaaS onde professores de idiomas criam exercícios interativos e publicam por link. O aluno abre o
 link, digita o nome e responde — sem criar conta. Exercícios das quatro habilidades (escuta, fala,

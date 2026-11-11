@@ -17,7 +17,7 @@ Três coisas que valem em TODAS as quatro:
 1. **Estado nunca é comunicado só por cor.** Ícone e texto, sempre — daltonismo é comum e
    metade destas telas é feita de estado.
 2. **Verde, âmbar e vermelho são reservados para a semântica de correção** (certo, parcial,
-   errado). Não use como decoração ou destaque de marca; violeta é a marca, teal é áudio.
+   errado). Não use como decoração ou destaque de marca; azul (#3659CB) é a marca, teal é áudio.
 3. **O Studio é desktop com sessão longa** — pode ser denso. Mas todas estas telas têm versão de
    celular hoje, e ela não pode virar rolagem lateral.
 
@@ -53,7 +53,7 @@ Três coisas que valem em TODAS as quatro:
 
 ### Cores de etiqueta
 
-Cinco, fixas: violeta, teal, azul, magenta, ardósia. São identidade de turma, **não** estado.
+Cinco, fixas: azul, teal, violeta, magenta, ardósia. São identidade de turma, **não** estado.
 
 ### Hoje
 
@@ -161,13 +161,12 @@ atividade é uma só, com estado.
 
 ### Estado do áudio (dentro do cartão de estado)
 
-O áudio é a única parte da atividade que vive FORA do banco — num bucket, com 10 dias de
-validade — e portanto a única que pode estar faltando sem nada avisar.
+O áudio é a única parte da atividade que vive FORA do banco — num bucket — e portanto a única
+que pode estar faltando sem nada avisar. Ele não vence: fica enquanto a atividade existir.
 
-- **Pronto**: `Áudio pronto — N arquivos das questões de escuta, válidos até daqui a N dias`.
-- **A 3 dias ou menos do vencimento**: o aviso muda de tom (âmbar) e diz que o link para de abrir
-  quando vencer.
-- **Faltando** (vencido, apagado, ou ainda gerando): `Gerando áudio — N de N prontos` **mais o
+- **Pronto**: `Áudio pronto — N arquivos das questões de escuta. Ficam guardados enquanto a
+atividade existir.`
+- **Faltando** (ainda gerando, ou a geração falhou): `Gerando áudio — N de N prontos` **mais o
   botão "Gerar áudio de novo"**, que só aparece neste caso. Regerar deixa o link fora do ar por
   alguns minutos, e a tela avisa antes.
 - **Atividade sem questão de escuta não mostra linha nenhuma** — "0 de 0" seria inventar um
@@ -284,8 +283,8 @@ Cinco estados de plano, e cada um muda o que a tela mostra:
    isso que existe o estado `pending` com espera visível. Nunca mostre "assinatura ativa" logo
    após o retorno do checkout.
 
-**Pendência aberta**: duração do trial e se ele exige cartão ainda não foram decididas. A linha
-sob o botão de assinar está reservada para isso.
+**Decidido**: o teste dura 14 dias e vai exigir cartão, cadastrado no gateway quando ele existir
+(billing.md "Trial"). Até lá a tela diz só "14 dias grátis".
 
 ### Sobre as abas laterais
 

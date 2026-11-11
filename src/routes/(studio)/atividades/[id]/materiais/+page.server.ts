@@ -7,6 +7,7 @@ import { parseContentUnit } from '$lib/kernel/content/parse';
 import { getProfile, labelForTag } from '$lib/kernel/language/profiles';
 import { KERNEL_TO_KIND, type MaterialRow } from '$lib/components/material-form';
 import { estadoDaIa } from '$lib/server/ia/estado';
+import { isTraducaoLigada } from '$lib/server/traducao';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const teacher = requireTeacher(locals);
@@ -80,10 +81,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			/** A tag do idioma alvo — é o que tokeniza a prévia de "montar a frase". */
 			tag: profile.tag,
 			targetLabel: idioma,
-			sourceLabel: labelForTag(activity.sourceLang)
+			sourceLabel: labelForTag(activity.sourceLang),
+			/** A língua do aluno: para onde vai a tradução automática do material. */
+			sourceTag: activity.sourceLang
 		},
 		materials,
 		// "Gerar com IA" escreve no par de idiomas DA ATIVIDADE.
-		ia: await estadoDaIa(teacher, { alvo: activity.targetLang, origem: activity.sourceLang })
+		ia: await estadoDaIa(teacher, { alvo: activity.targetLang, origem: activity.sourceLang }),
+		// A tradução da frase do aluno sai sozinha quando há tradutor (adr-006).
+		traducaoAutomatica: isTraducaoLigada()
 	};
 };
