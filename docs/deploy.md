@@ -385,12 +385,18 @@ O backup diário do banco precisa sair do servidor: um backup que mora na mesma 
 à perda da máquina. Quem o tira de lá é o backup automático da Hostinger, que copia o servidor
 inteiro uma vez por semana, com os dumps do banco dentro (passo 2.17).
 
-1. No painel da Hostinger, abra a página do VPS › **Backups** (no menu do VPS; o nome da seção pode
-   variar entre "Backups" e "Snapshots e backups").
-2. Confira que o **backup automático semanal** está ativo. Ele vem no plano.
-3. Anote na ficha o dia da semana em que ele roda.
+1. No painel da Hostinger: **VPS** › **Manage** (Gerenciar), ao lado do servidor › no menu lateral,
+   **Backups & Monitoring** › **Snapshots & Backups** (no painel em português, "Backups e
+   monitoramento" › "Snapshots e backups").
+2. Em **Manage Schedule**, confira que está em **Weekly** (semanal), o padrão. Nunca em "Turn off
+   auto-backups".
+3. Anote na ficha o dia da semana em que ele roda. O horário é fixo: a Hostinger não deixa mudar.
 4. Se perder até uma semana de dados não for aceitável, o **backup diário** é um adicional pago, na
-   mesma tela.
+   mesma tela (**Upgrade** em "Daily Backups").
+
+O que a Hostinger guarda: os **2 últimos backups semanais** (e, com o diário, também os 2 últimos
+diários) — o mais antigo tem umas duas semanas. Eles ficam fora do servidor, mas voltar é sempre o
+servidor inteiro, nunca um arquivo só.
 
 ### 1.14 Monitor e opcionais
 
@@ -1014,9 +1020,48 @@ para fora da máquina junto com o resto do disco.
 - **Monitor:** no UptimeRobot, Add New Monitor › tipo **Keyword** › URL `https://spokke.com.br` ›
   palavra-chave `Spokke` › intervalo de 5 minutos › alerta por e-mail para a caixa da equipe. Se o
   site cair, o e-mail chega em até 5 minutos.
-- **Snapshot:** no painel da Hostinger, na página do VPS, crie um **snapshot** agora, com tudo
-  funcionando. É a fotografia do servidor inteiro para voltar se algo der muito errado. Antes de cada
-  operação arriscada (uma migration grande, uma atualização do sistema), outro.
+- **Snapshot:** a fotografia do servidor inteiro — disco, banco, MinIO, certificados, configuração —
+  para voltar atrás se uma operação der muito errado. Detalhes logo abaixo.
+
+#### O snapshot
+
+Três coisas a saber antes, todas regras da Hostinger:
+
+- **Ele dura 1 dia.** A Hostinger apaga o snapshot sozinha no dia seguinte. Não é backup: é a rede de
+  proteção de uma operação arriscada. O backup de longo prazo é o automático (passo 1.13).
+- **Só existe um.** Criar outro apaga o anterior.
+- **Ele fica no mesmo servidor físico do VPS**, ao contrário do backup automático. Se aquela máquina
+  da Hostinger se perder, ele vai junto. Reinstalar o sistema ou restaurar um backup também o apaga.
+
+**Criar:**
+
+1. **No servidor**, primeiro um dump fresco do banco. A fotografia do disco pode pegar o Postgres no
+   meio de uma escrita; o dump não, e ele vai junto na fotografia:
+
+   ```bash
+   bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh
+   ```
+
+   **Deve aparecer:** uma linha terminando em `ok <tamanho> /srv/spokke/backups/spokke-<data>.dump`.
+
+2. No painel da Hostinger: **VPS** › **Manage** (Gerenciar), ao lado do servidor › no menu lateral,
+   **Backups & Monitoring** › **Snapshots & Backups** (no painel em português, "Backups e
+   monitoramento" › "Snapshots e backups") › **Create Snapshot**.
+3. Espere o snapshot aparecer acima da lista de backups, com a data e a hora de agora. Até lá, não
+   mexa no servidor pelo painel.
+
+**Quando fazer outro:** no mesmo dia de cada operação arriscada, logo antes dela — a atualização
+mensal do sistema (Parte 3, "Atualizar o sistema"), uma versão com migration grande, uma mudança no
+Caddy ou no firewall. Deu certo? Ele se apaga sozinho no dia seguinte.
+
+**Voltar para ele** (só se a operação quebrou o servidor e não tem conserto rápido): na mesma tela,
+a opção de restaurar no próprio snapshot. Antes de clicar:
+
+- **Sobrescreve o servidor inteiro.** Tudo o que entrou depois do snapshot some: cadastros, respostas
+  de alunos, áudios. Para desfazer só um erro no banco, o caminho são os dumps (Parte 3, "Backup e
+  restauração"), não o snapshot.
+- **Não dá para cancelar** depois de começar.
+- O site fica fora do ar até terminar. Depois, refaça o teste de fumaça (passo 2.16).
 
 ### 2.19 Busca, medição e selos
 
@@ -1116,7 +1161,7 @@ ls /var/run/reboot-required 2>/dev/null && sudo reboot
 ```
 
 Os containers voltam sozinhos depois do reboot (todos têm `restart: unless-stopped`). Faça um
-snapshot antes.
+snapshot antes, no mesmo dia (passo 2.18, "O snapshot"): ele dura só um dia.
 
 ### Backup e restauração
 
@@ -1134,8 +1179,9 @@ docker exec -i spokke-postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGR
 spk start worker web
 ```
 
-**Se a máquina se perdeu:** restaure o backup mais recente da Hostinger pelo painel (página do VPS ›
-Backups). Ele sobrescreve o servidor inteiro, então é só para esse caso — para desfazer um erro no
+**Se a máquina se perdeu:** restaure o backup mais recente da Hostinger pelo painel (**Backups &
+Monitoring** › **Snapshots & Backups** › **Restore** ao lado da data). Ele sobrescreve o servidor
+inteiro e não dá para cancelar depois de começar, então é só para esse caso — para desfazer um erro no
 banco, use os dumps acima. O banco volta junto com o disco; se o Postgres não subir limpo (a cópia do
 disco pode ter pego uma escrita no meio), restaure o `.dump` mais recente que veio na cópia, com os
 comandos acima. O que foi escrito entre esse backup e a perda não volta.
