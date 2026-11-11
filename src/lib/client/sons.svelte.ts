@@ -46,6 +46,15 @@ const PADRAO = 0.6;
 /** Rampa de ganho, em segundos. Curta demais para se ouvir, longa o bastante para não estalar. */
 const RAMPA = 0.004;
 
+/**
+ * Quanto o veredito ainda espera pelo som que está chegando, em ms. Na PRIMEIRA questão nada
+ * está em cache: os arquivos começam a baixar no "Verificar", junto com a correção, e a correção
+ * costuma ganhar por frações de segundo — o som era descartado e a primeira resposta certa saía
+ * calada (o bug relatado pelo dono). Até aqui, um retorno ainda lê como resposta; depois disso
+ * leria como engano, e é descartado como antes.
+ */
+const ESPERA_PELO_SOM_MS = 800;
+
 class EstadoSom {
 	/** 0 a 1. `0` é mudo. */
 	volume = $state(PADRAO);
@@ -134,6 +143,11 @@ class EstadoSom {
 	 */
 	preparar(...sons: Som[]) {
 		if (!browser || this.volume === 0) return;
+		// Quem chama está DENTRO do clique de "Verificar": é o momento de destravar o contexto.
+		// No iPhone, um contexto suspenso só retoma dentro de um gesto — o `resume` de `tocar`
+		// acontece depois da ida ao servidor, já fora dele.
+		const ctx = this.#contexto();
+		if (ctx?.state === 'suspended') void ctx.resume().catch(() => {});
 		for (const som of sons) void this.#carregar(som);
 	}
 
@@ -168,21 +182,33 @@ class EstadoSom {
 	 * usuário o browser mantém o contexto suspenso — abrir `/resultado` direto
 	 * pelo endereço é exatamente esse caso —, e aí o exercício segue calado.
 	 *
-	 * Não espera o carregamento: se o buffer ainda não chegou, o som daquela
-	 * questão é perdido de propósito. Tocar o retorno de "correto" três segundos
-	 * depois de a tela já ter dito "Correto." confunde mais do que ajuda.
+	 * Espera o carregamento só um pouco (`ESPERA_PELO_SOM_MS`): o som que chega
+	 * logo depois do veredito ainda toca — era o caso da primeira questão, com nada
+	 * em cache. Passou disso, é perdido de propósito: tocar o retorno de "correto"
+	 * segundos depois de a tela já ter dito "Correto." confunde mais do que ajuda.
 	 */
 	tocar(som: Som) {
 		if (!browser || this.volume === 0) return;
-		const ctx = this.#contexto();
-		if (!ctx) return;
+		if (!this.#contexto()) return;
 
 		const buffer = this.#buffers.get(som);
-		if (!buffer) {
-			// Não chegou a tempo. Deixa carregado para a próxima questão.
-			void this.#carregar(som);
+		if (buffer) {
+			this.#tocarAgora(som, buffer);
 			return;
 		}
+		// Ainda chegando (ou nem pedido): espera um instante; e fica carregado para a próxima.
+		const pedidoEm = performance.now();
+		void this.#carregar(som).then(() => {
+			const chegou = this.#buffers.get(som);
+			if (chegou && performance.now() - pedidoEm <= ESPERA_PELO_SOM_MS) {
+				this.#tocarAgora(som, chegou);
+			}
+		});
+	}
+
+	#tocarAgora(som: Som, buffer: AudioBuffer) {
+		const ctx = this.#contexto();
+		if (!ctx || this.volume === 0) return;
 
 		// O contexto nasce suspenso quando é criado fora de um gesto; retomar é
 		// barato e resolve o caso de a primeira correção acontecer pelo teclado.
