@@ -251,8 +251,10 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   data de fim de `concederSemVencimento`, billing.md). Não escreve no banco do Spokke: põe um job
   `intranet` na fila e o worker aplica pelo `assinaturas.ts`. Entra com um papel de leitura coluna
   por coluna (`infra/papel-no-spokke.sql` de lá), que precisa ser rodado de novo quando uma
-  migration mexer no que ela lê. O `/admin` daqui continua sendo onde se atende pedido de plano;
-  falta decidir se ele migra inteiro para a intranet.
+  migration mexer no que ela lê. **Por enquanto ela roda na máquina de quem opera**, com o banco e
+  o MinIO de produção por túnel SSH (README de lá, "Produção pela própria máquina"); no servidor,
+  atrás de VPN, é a Parte 5 de `docs/deploy.md`. O `/admin` daqui continua sendo onde se atende
+  pedido de plano; falta decidir se ele migra inteiro para a intranet.
 - **Login com Google, pronto e desligado** (auth.md "Login com Google"): professor E aluno, com
   `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`. Guarda só nome, e-mail e o id da conta Google — sem
   foto, sem token. Conta com senha NÃO é ligada no login (o cadastro não verifica e-mail); liga por

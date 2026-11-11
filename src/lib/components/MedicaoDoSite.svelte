@@ -96,16 +96,18 @@
 {#if mostrarAviso}
 	<div
 		role="region"
-		aria-label="Aviso de medição de audiência"
+		aria-label="Aviso de cookies"
 		class="fixed inset-x-3 bottom-3 z-[70] mx-auto flex max-w-[720px] animate-entrada-curta flex-wrap items-center gap-x-5 gap-y-2 rounded-[14px] border border-line bg-card px-4 py-2.5 shadow-[0_18px_40px_-24px_rgb(var(--shadow)/0.5)] sm:px-5 sm:py-3"
 	>
 		<!-- Curto de propósito: no celular o aviso não pode passar de um oitavo da
-		     altura da tela (docs/blog.md, "Nada que cubra o texto no celular"). -->
+		     altura da tela (docs/blog.md, "Nada que cubra o texto no celular"). A frase é
+		     a de costume nos sites, sem nome de ferramenta — quem é o Google Analytics e o
+		     que ele guarda está na página de Cookies, a um toque. -->
 		<p class="min-w-0 flex-[1_1_300px] text-[13px] leading-snug text-base-content/80">
-			Só medimos as visitas, com o Google Analytics, se você aceitar.
+			Usamos cookies para melhorar a sua experiência e entender como o site é usado.
 			<a
 				href={resolve('/(site)/cookies')}
-				class="font-semibold text-primary underline underline-offset-2">Cookies</a
+				class="font-semibold text-primary underline underline-offset-2">Saiba mais</a
 			>
 		</p>
 		<div class="flex gap-2">
