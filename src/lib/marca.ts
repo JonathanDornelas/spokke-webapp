@@ -8,7 +8,7 @@
  * `text-primary`: o logo segue o tema (#3659CB no claro, #608AFF no escuro)
  * em vez de ser uma imagem com o azul gravado.
  *
- * O favicon (`$lib/assets/favicon.svg`), o `favicon.ico` e o
+ * O favicon (`static/favicon.svg` e `static/favicon-192.png`), o `favicon.ico` e o
  * `apple-touch-icon.png` de `static/` saíram do MESMO traço do ícone.
  *
  * **Quem desenha usa `fill-rule="evenodd"`.** Todos os contornos daqui giram no
