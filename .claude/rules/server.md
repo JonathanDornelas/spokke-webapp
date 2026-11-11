@@ -410,6 +410,11 @@ worker da publicação tenta de novo com backoff.
 - **Raciocínio MÍNIMO** (`raciocinioMinimo` em `gemini-provider.ts`, que escolhe a opção certa para
   cada geração do Gemini a partir do `GEMINI_MODEL`): os tokens de raciocínio são cobrados como saída
   e os preços dos planos contam com ele desligado. Ligar é refazer a conta (adr-002 "Preços").
+  **Modelo que recusa o nível sobe um degrau** (`raciocinioAcima`: MINIMAL → LOW → MEDIUM, nunca o
+  padrão do modelo) e fica nele pelo resto do processo — o `gemini-3.8-flash` não aceita o MINIMAL, e
+  toda geração voltava "recusou". **Todo motivo de recusa vai para o log** (`[ia] o Gemini
+recusou: …`), o 503 de sobrecarga ganha UMA nova tentativa, e a tela diz o que fazer: sobrecarga
+  ("tente em alguns minutos"), limite da chave (429) ou recusa.
 - Cada geração respondida grava os tokens em `AiUsage` (`registrarUso`), DEPOIS do estorno e sem
   nunca derrubar a geração: medir não pode custar ao professor o que ele pediu.
 

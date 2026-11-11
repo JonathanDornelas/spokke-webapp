@@ -32,6 +32,11 @@ importa o SDK.
   (`raciocinioMinimo`), porque esses tokens são cobrados como saída e os preços dos planos foram
   calculados assim (`docs/adr-002-billing.md` "Preços"). Cada geração respondida grava os tokens que
   o Gemini informou em `AiUsage`.
+- **Nem todo modelo aceita o mínimo** (2026-11-11): o `gemini-3.8-flash` recusa o MINIMAL com 400, e
+  o provedor sobe para o LOW sozinho (`raciocinioAcima`). O LOW gasta raciocínio que a conta dos
+  preços não previa — com ele, a tabela de adr-002 vira estimativa por baixo até o `AiUsage` medir.
+  O `gemini-3.6-flash` aceita o mínimo: medido, 3 pares de frases em 1,5 s, 182 tokens de entrada,
+  118 de saída e nenhum de raciocínio.
 - **Agnóstico de idioma**: o prompt (`prompt.ts`) só recebe rótulos de idioma do `LanguageProfile`.
   Um teste garante que a estrutura é a mesma para todo profile. O texto do professor vai delimitado,
   como dado, depois das instruções.
