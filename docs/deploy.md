@@ -1017,11 +1017,33 @@ para fora da máquina junto com o resto do disco.
 
 ### 2.18 Monitor e snapshot
 
-- **Monitor:** no UptimeRobot, Add New Monitor › tipo **Keyword** › URL `https://spokke.com.br` ›
-  palavra-chave `Spokke` › intervalo de 5 minutos › alerta por e-mail para a caixa da equipe. Se o
-  site cair, o e-mail chega em até 5 minutos.
+- **Monitor:** o UptimeRobot abre a página inicial a cada 5 minutos e avisa por e-mail se ela não
+  mostrar o site. Detalhes logo abaixo.
 - **Snapshot:** a fotografia do servidor inteiro — disco, banco, MinIO, certificados, configuração —
   para voltar atrás se uma operação der muito errado. Detalhes logo abaixo.
+
+#### O monitor
+
+É do tipo **Keyword**, e não o HTTP simples, porque "no ar" não basta: uma página de estacionamento
+da Hostinger ou de erro também responde `200`. Ele procura a palavra `Spokke` na página, e o
+incidente abre quando ela **some**.
+
+1. No UptimeRobot: **New monitor** (Add New Monitor).
+2. **Monitor type:** **Keyword**.
+3. **URL:** `https://spokke.com.br` (com `https://`, para conferir o certificado junto).
+4. **Keyword:** `Spokke`, com "case sensitive" **desmarcado**.
+5. **Quando abrir o incidente:** quando a palavra **não existir** ("Doesn't exist" / "Keyword not
+   exists"). É a opção que mais confunde: em "existe", ele abre incidente com o site funcionando —
+   o aviso chega como `Keyword has been found`.
+6. **Interval:** 5 minutos (o menor do plano grátis).
+7. **Alertas:** e-mail para `equipe@spokke.com.br`. Na primeira vez, o UptimeRobot manda um e-mail de
+   confirmação para esse endereço — ele chega pelo ImprovMX, e sem clicar no link os alertas não saem.
+8. **Create monitor.**
+
+**Deve aparecer:** o monitor verde ("Up") em até 5 minutos. Se ele abriu um incidente com
+`Keyword has been found`, é o passo 5 invertido: edite o monitor, troque para "não existir" e salve —
+o incidente fecha na checagem seguinte. A região que aparece no aviso ("North America", "Europe") é só
+de onde o UptimeRobot checou.
 
 #### O snapshot
 
