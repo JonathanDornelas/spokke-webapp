@@ -209,11 +209,13 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   ligar.
 - Geradores: os 7 de `SentencePair` mais um por tipo de conteúdo. Faltam 8 da tabela de
   kernel.md.
-- **"Gerar com IA" é o Gemini** (`LLM_PROVIDER=gemini`, `docs/adr-003-ia-gemini.md`): a IA propõe
-  material a partir de um pedido, o professor marca e confirma, e cada proposta custa um crédito
-  (estornado se não servir). Só o modo "prompt" existe — imagem e vídeo pedem leitura de arquivo.
-  **A chave precisa ser de projeto com faturamento**: a política de privacidade promete que os
-  dados não treinam modelos, o que não vale na camada gratuita.
+- **"Gerar com IA" é o Claude, com o Gemini de reserva** (`LLM_PROVIDER="claude,gemini"`, uma fila
+  em ordem — `docs/adr-003-ia-gemini.md`): o Gemini só responde quando o Claude falha (sem
+  créditos, sobrecarga, recusa). A IA propõe material a partir de um pedido, o professor marca e
+  confirma, e cada proposta custa um crédito (estornado se não servir). Só o modo "prompt" existe —
+  imagem e vídeo pedem leitura de arquivo. **As chaves precisam ser de conta com faturamento**: a
+  política de privacidade promete que os dados não treinam modelos, o que não vale na camada
+  gratuita do Gemini.
 - **A tradução do material é automática** (`TRANSLATE_PROVIDER=audiotext`,
   `docs/adr-006-traducao.md`): o professor cadastra no idioma que ensina e a frase do aluno sai do
   **MADLAD-400 3B** (Apache 2.0), o terceiro motor do serviço de áudio. Ela só preenche o que vem em

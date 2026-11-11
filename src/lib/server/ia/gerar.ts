@@ -72,7 +72,8 @@ async function registrarUso(
 	try {
 		await usoDeIa(teacher).registrar({
 			requestId: entrada.requestId,
-			model: gerador.nome,
+			// Quem respondeu de fato: com a reserva (Claude, depois Gemini), não a fila inteira.
+			model: resposta.modelo ?? gerador.nome,
 			kind: entrada.kind,
 			requested: entrada.quantos,
 			accepted: aceitas,

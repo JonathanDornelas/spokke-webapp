@@ -54,3 +54,44 @@ describe('a IA sem a chave do Gemini', () => {
 		expect(() => getGerador()).toThrow(/não tem implementação/);
 	});
 });
+
+/**
+ * A fila "claude,gemini" (decisão do dono, 2026-11-11): o Claude primeiro, o Gemini se ele falhar.
+ * Quem está na lista sem a configuração completa fica de fora da fila, sem derrubar o resto.
+ */
+describe('a fila de provedores', () => {
+	beforeEach(() => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+	});
+
+	const claude = { ANTHROPIC_API_KEY: 'chave-claude', CLAUDE_MODEL: 'claude-opus-5-5' };
+	const gemini = { GEMINI_API_KEY: 'chave-gemini', GEMINI_MODEL: 'gemini-3.6-flash' };
+
+	it('os dois completos: a fila na ordem pedida', () => {
+		configurar({ LLM_PROVIDER: 'claude,gemini', ...claude, ...gemini });
+		expect(isIaConfigurada()).toBe(true);
+		expect(getGerador()?.nome).toBe('claude:claude-opus-5-5 → gemini:gemini-3.6-flash');
+	});
+
+	it('a ordem é a da lista, com espaços tolerados', () => {
+		configurar({ LLM_PROVIDER: ' gemini , claude ', ...claude, ...gemini });
+		expect(getGerador()?.nome).toBe('gemini:gemini-3.6-flash → claude:claude-opus-5-5');
+	});
+
+	it('o Claude sem chave fica de fora: segue só o Gemini', () => {
+		configurar({ LLM_PROVIDER: 'claude,gemini', CLAUDE_MODEL: 'claude-opus-5-5', ...gemini });
+		expect(isIaConfigurada()).toBe(true);
+		expect(getGerador()?.nome).toBe('gemini:gemini-3.6-flash');
+	});
+
+	it('o Claude sozinho', () => {
+		configurar({ LLM_PROVIDER: 'claude', ...claude });
+		expect(getGerador()?.nome).toBe('claude:claude-opus-5-5');
+	});
+
+	it('um nome desconhecido na lista é erro de configuração, e a tela não oferece o botão', () => {
+		configurar({ LLM_PROVIDER: 'claude,outro', ...claude });
+		expect(isIaConfigurada()).toBe(false);
+		expect(() => getGerador()).toThrow(/não tem implementação/);
+	});
+});

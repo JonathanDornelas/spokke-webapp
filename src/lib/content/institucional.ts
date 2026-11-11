@@ -33,9 +33,9 @@ export const legalName = 'Spokke';
 export const empresa = { legalName };
 
 /** A data que as quatro páginas legais mostram no topo. Mudou o texto, muda aqui. */
-export const atualizadoEm = '10 de novembro de 2026';
+export const atualizadoEm = '11 de novembro de 2026';
 /** A mesma data em AAAA-MM-DD: o `lastmod` das páginas legais no sitemap (um teste confere as duas). */
-export const atualizadoEmIso = '2026-11-10';
+export const atualizadoEmIso = '2026-11-11';
 
 /**
  * Selos que aparecem no rodapé. Só entra selo VERIFICÁVEL: o link leva à página
@@ -160,7 +160,7 @@ export const privacidade: LegalSection[] = [
 			l: [
 				'Hospedagem e armazenamento: onde ficam o banco de dados e os arquivos de áudio.',
 				'Resend, o serviço de e-mail: recebe o endereço e o texto dos convites, dos avisos de conta e dos links de recuperação de senha.',
-				'Google, pelo Gemini: só quando você usa "Gerar com IA", e só o pedido que você escreveu com os nomes dos idiomas.',
+				'Anthropic, pelo Claude, e Google, pelo Gemini: só quando você usa "Gerar com IA", e só o pedido que você escreveu com os nomes dos idiomas. O pedido vai ao Claude; ao Gemini, só quando o Claude não está disponível.',
 				'Google, no login: só quando você escolhe "Continuar com o Google". Ele confirma quem você é; nada do Spokke vai para ele além do pedido de entrada.',
 				'Google, pelo Google Analytics: só nas páginas públicas e só com o seu aceite. Recebe dados de navegação, como a página visitada, o tipo de aparelho e de onde veio a visita, sem nome nem e-mail.',
 				'Mercado Pago: os dados da cobrança, nos planos pagos.',
@@ -182,8 +182,8 @@ export const privacidade: LegalSection[] = [
 	),
 	P('Seu material e a IA', [
 		'As questões da atividade são montadas pelo próprio Spokke a partir do material que você cadastra, por regras fixas, sem modelo de linguagem e sem enviar o seu material a ninguém.',
-		'"Gerar com IA" é opcional e existe nos planos Pro e Super. Quando você usa, o pedido que você escreveu vai ao Gemini para ele propor materiais. Nenhum dado de aluno vai junto, e nada entra na sua biblioteca antes de você marcar e confirmar.',
-		'Usamos a modalidade paga do Gemini, em que o que é enviado não treina modelos. Nós também não usamos o seu material nem as respostas dos alunos para isso.',
+		'"Gerar com IA" é opcional e existe nos planos Pro e Super. Quando você usa, o pedido que você escreveu vai ao Claude, da Anthropic, para ele propor materiais (ou ao Gemini, do Google, quando o Claude não está disponível). Nenhum dado de aluno vai junto, e nada entra na sua biblioteca antes de você marcar e confirmar.',
+		'Usamos as modalidades pagas dos dois, em que o que é enviado não treina modelos. Nós também não usamos o seu material nem as respostas dos alunos para isso.',
 		'O material e as atividades são seus: você edita e apaga quando quiser.',
 		'Se você faz parte de uma escola no plano Scholar, a coordenação vê números das suas turmas, nunca o nome de um aluno nem uma resposta.'
 	]),
@@ -202,7 +202,7 @@ export const privacidade: LegalSection[] = [
 		}
 	),
 	P('Transferência internacional', [
-		'O Gemini, do Google, e o Resend tratam dados fora do Brasil. Essas transferências seguem as hipóteses do art. 33 da LGPD.'
+		'O Claude, da Anthropic, o Gemini, do Google, e o Resend tratam dados fora do Brasil. Essas transferências seguem as hipóteses do art. 33 da LGPD.'
 	]),
 	P('Segurança', [
 		'A senha fica guardada de forma irreversível, e toda consulta ao banco vai amarrada à conta de quem pede: um professor não chega aos dados de outro. A gravação de voz fica numa área sem acesso público, e só o professor da turma a ouve.',
