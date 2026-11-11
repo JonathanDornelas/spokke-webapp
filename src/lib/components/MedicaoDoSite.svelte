@@ -8,6 +8,10 @@
 	// Os cliques medidos são marcados no próprio HTML (`data-evento`, com
 	// `data-rotulo` e `data-artigo`), e um ouvinte só, aqui, os registra: a tela
 	// não importa nada de medição para ganhar um evento.
+	//
+	// A cada troca de tela o envio é ligado ou DESLIGADO (`ligarEnvio`): o gtag.js
+	// continua na página depois de uma navegação do SvelteKit, e a medição
+	// automática dele seguiria quem aceitou na home e entrou no Studio pelo link.
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -19,6 +23,7 @@
 		gravarEscolha,
 		idValido,
 		lerEscolha,
+		ligarEnvio,
 		registrarEvento,
 		registrarPagina,
 		revogar,
@@ -34,8 +39,13 @@
 	const medida = $derived(rotaMedida(page.route.id));
 	const mostrarAviso = $derived(ligada && pronto && medida && escolha === null);
 
-	function medirAgora() {
-		if (!ligada || !rotaMedida(page.route.id)) return;
+	// Na página medida, liga o envio, carrega o gtag.js (uma vez) e registra a
+	// visualização; nas outras, só desliga o envio.
+	function acompanhar() {
+		if (!ligada || escolha !== 'aceito') return;
+		const medida = rotaMedida(page.route.id);
+		ligarEnvio(id, medida);
+		if (!medida) return;
 		carregarGa(id);
 		registrarPagina();
 	}
@@ -43,7 +53,7 @@
 	function decidir(nova: Escolha) {
 		escolha = nova;
 		gravarEscolha(nova);
-		if (nova === 'aceito') medirAgora();
+		if (nova === 'aceito') acompanhar();
 		else revogar();
 	}
 
@@ -51,7 +61,7 @@
 		if (!ligada) return;
 		escolha = lerEscolha();
 		pronto = true;
-		if (escolha === 'aceito') medirAgora();
+		acompanhar();
 
 		const reabrir = () => {
 			revogar();
@@ -76,9 +86,10 @@
 	});
 
 	// A troca de tela do SvelteKit não recarrega o documento: cada navegação é
-	// um page_view, se a página de destino é medida e a pessoa aceitou.
+	// um page_view, se a página de destino é medida e a pessoa aceitou — e, se
+	// não é medida, o momento de desligar o envio.
 	afterNavigate(({ from }) => {
-		if (from && escolha === 'aceito') medirAgora();
+		if (from) acompanhar();
 	});
 </script>
 
