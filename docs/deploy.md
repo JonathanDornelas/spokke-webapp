@@ -189,7 +189,7 @@ Falta só, se já existirem, os dados da empresa em `src/lib/content/institucion
 
 ### 1.5 O código no GitHub
 
-O servidor baixa o código de dois repositórios do GitHub: `JonathanDornelas/entendo-webapp` (o
+O servidor baixa o código de dois repositórios do GitHub: `JonathanDornelas/spokke-webapp` (o
 Spokke) e `JonathanDornelas/audiotext-service` (o serviço de áudio), sempre do `main`. O trabalho
 está no `motion`; o `main` do GitHub tem um commit que o `motion` não tem — um merge antigo
 ("Merge branch 'criandoV2'"), cujo conteúdo o `motion` já traz —, então juntar os dois não dá
@@ -219,7 +219,7 @@ strategy`; em cada `push`, uma linha terminando em `main -> main`.
 **Se algum `merge` falar em conflito** (`CONFLICT`): rode `git merge --abort`, pare e me chame — não
 force.
 
-**Confira no navegador:** no GitHub, repositório `entendo-webapp`, branch `main`: o último commit é o
+**Confira no navegador:** no GitHub, repositório `spokke-webapp`, branch `main`: o último commit é o
 merge que você acabou de fazer, e a pasta `deploy/` aparece. O `audiotext-service` mostra o commit
 "Traduções alternativas no /v1/translate".
 
@@ -403,7 +403,7 @@ inteiro uma vez por semana, com os dumps do banco dentro (passo 2.17).
 
 - [ x] Chave SSH criada e o `ssh root@<IP>` entrando sem senha.
 - [ x] Preços reais commitados (ou a decisão de abrir sem divulgar a página de planos).
-- [ ] `main` no GitHub com a pasta `deploy/`, e o `audiotext-service` com push.
+- [x] `main` no GitHub com a pasta `deploy/`, e o `audiotext-service` com push.
 - [ x] Os três registros A respondendo o IP do servidor no `8.8.8.8`.
 - [ x] Resend com o domínio **Verified** e a chave `re_...` no gerenciador.
 - [x ] E-mail para `suporte@spokke.com.br` chegando no seu Gmail.
@@ -598,7 +598,7 @@ ssh deploy@<IP>
 ```bash
 sudo install -d -o deploy -g deploy /srv/spokke
 cd /srv/spokke && mkdir -p env backups
-ssh-keygen -t ed25519 -N "" -C "spokke-vps:entendo-webapp" -f ~/.ssh/deploy_spokke
+ssh-keygen -t ed25519 -N "" -C "spokke-vps:spokke-webapp" -f ~/.ssh/deploy_spokke
 ssh-keygen -t ed25519 -N "" -C "spokke-vps:audiotext-service" -f ~/.ssh/deploy_audiotext
 cat >> ~/.ssh/config <<'EOF'
 Host github-spokke
@@ -623,7 +623,7 @@ porque o GitHub não aceita a mesma deploy key em dois repositórios** ("Key is 
 Cadastre cada uma como **deploy key só de leitura** no seu repositório. Para ver a chave, rode o
 `cat` no servidor, selecione a linha que aparecer (começa com `ssh-ed25519`) e copie:
 
-1. `cat ~/.ssh/deploy_spokke.pub` › no GitHub, repositório `entendo-webapp` › Settings › **Deploy
+1. `cat ~/.ssh/deploy_spokke.pub` › no GitHub, repositório `spokke-webapp` › Settings › **Deploy
    keys** › Add deploy key. Título `spokke-vps`, cole a chave, deixe **desmarcado** "Allow write
    access" › Add key.
 2. `cat ~/.ssh/deploy_audiotext.pub` › repositório `audiotext-service`, o mesmo caminho e o mesmo
@@ -633,7 +633,7 @@ Cadastre cada uma como **deploy key só de leitura** no seu repositório. Para v
 
 ```bash
 ssh-keyscan github.com >> ~/.ssh/known_hosts
-git clone git@github-spokke:JonathanDornelas/entendo-webapp.git spokke-service
+git clone git@github-spokke:JonathanDornelas/spokke-webapp.git spokke-service
 git clone git@github-audiotext:JonathanDornelas/audiotext-service.git
 git -C spokke-service log --oneline -1
 ls spokke-service/deploy
