@@ -65,8 +65,9 @@ em `docs/selos-e-seguranca.md` "5b"). **As imagens são do Spokke, não dos terc
 Google nem a Let's Encrypt têm selo oficial, e as imagens "de selo" com a marca deles que circulam
 na web sugerem um endosso que não existe (a Let's Encrypt pede para tirar do ar). Saem de
 `scripts/gerar-selos.mjs`, em HTML com as cores da marca, como as imagens de `static/og/`. Os
-selos com imagem de emissor (`selos`, o Reclame Aqui um dia) entram ao lado. No bloco da marca ficam os ícones do Instagram e
-do YouTube (`redes`), SEM link enquanto os perfis não existem — e sem `href="#"`.
+selos com imagem de emissor (`selos`, o Reclame Aqui um dia) entram ao lado. No bloco da marca ficam os ícones do Instagram, do
+YouTube e do TikTok (`redes`), com link para os perfis oficiais, em nova aba. Rede nova sem perfil
+ainda entra sem link, e nunca com `href="#"`.
 
 **O letreiro (1b)** vem logo depois do hero, de ponta a ponta — o desenho "Faixa Letreiro" do
 Claude Design: uma tira em `base-300` onde quatro frases (a tradução automática, o aluno sem conta,

@@ -35,7 +35,10 @@
 		Instagram:
 			'M7.5 3.5h9a4 4 0 014 4v9a4 4 0 01-4 4h-9a4 4 0 01-4-4v-9a4 4 0 014-4zM12 8.3a3.7 3.7 0 100 7.4 3.7 3.7 0 000-7.4zM17.2 6.8v.01',
 		YouTube:
-			'M4.2 7.6c.2-1.3 1.2-2.2 2.5-2.3C8.4 5.1 10.2 5 12 5s3.6.1 5.3.3c1.3.1 2.3 1 2.5 2.3.2 1.4.2 2.9.2 4.4s0 3-.2 4.4c-.2 1.3-1.2 2.2-2.5 2.3-1.7.2-3.5.3-5.3.3s-3.6-.1-5.3-.3c-1.3-.1-2.3-1-2.5-2.3C4 15 4 13.5 4 12s0-3 .2-4.4zM10.3 9.3v5.4l4.6-2.7z'
+			'M4.2 7.6c.2-1.3 1.2-2.2 2.5-2.3C8.4 5.1 10.2 5 12 5s3.6.1 5.3.3c1.3.1 2.3 1 2.5 2.3.2 1.4.2 2.9.2 4.4s0 3-.2 4.4c-.2 1.3-1.2 2.2-2.5 2.3-1.7.2-3.5.3-5.3.3s-3.6-.1-5.3-.3c-1.3-.1-2.3-1-2.5-2.3C4 15 4 13.5 4 12s0-3 .2-4.4zM10.3 9.3v5.4l4.6-2.7z',
+		// A nota do TikTok no mesmo traço das outras duas: a haste, a bolinha aberta
+		// onde ela encosta e a bandeirinha que sai do topo.
+		TikTok: 'M13 4v12a4 4 0 11-4-4M13 4c.4 2.9 2.5 4.9 5.5 5.1'
 	} as const;
 
 	// Rodapé público — mesmo desenho na home e nas páginas institucionais.
@@ -97,9 +100,9 @@
 				<p class="max-w-[32ch] text-[13px] leading-relaxed text-base-content/65">
 					Exercícios de idiomas com o material da aula, para professores autônomos e escolas.
 				</p>
-				<!-- Sem `url` (os perfis ainda não existem) o ícone fica sem link —
-				     nada de `href="#"` levando a lugar nenhum —, mas com o mesmo hover do
-				     que terá link, para a fileira não mudar quando os perfis entrarem. -->
+				<!-- Com `url`, link para o perfil em nova aba. Sem ela (perfil que ainda
+				     não existe) o ícone fica sem link — nada de `href="#"` levando a lugar
+				     nenhum —, com o mesmo hover, para a fileira não mudar quando ele entrar. -->
 				<ul class="mt-4 flex list-none gap-2 p-0" aria-label="Redes sociais">
 					{#each redes as rede (rede.nome)}
 						<li>

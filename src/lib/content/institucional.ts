@@ -116,17 +116,21 @@ export function selosDeVerificacao(dominio: string): SeloDeVerificacao[] {
 }
 
 /**
- * As redes sociais do rodapé. Sem `url` o ícone aparece sem link (os perfis
- * ainda não existem); com ela, vira link para o perfil, em nova aba.
+ * As redes sociais do rodapé. Com `url`, o ícone é link para o perfil, em nova
+ * aba; sem ela (perfil que ainda não existe), aparece sem link. Os endereços
+ * também viram o `sameAs` da organização nos dados estruturados
+ * (`$lib/blog/dados-estruturados.ts`): é o que diz ao Google que os perfis são
+ * da mesma marca do site.
  */
 export interface Rede {
-	nome: 'Instagram' | 'YouTube';
+	nome: 'Instagram' | 'YouTube' | 'TikTok';
 	url: string | null;
 }
 
 export const redes: Rede[] = [
-	{ nome: 'Instagram', url: null },
-	{ nome: 'YouTube', url: null }
+	{ nome: 'Instagram', url: 'https://www.instagram.com/spokkeoficial' },
+	{ nome: 'YouTube', url: 'https://www.youtube.com/@SpokkeOficial' },
+	{ nome: 'TikTok', url: 'https://www.tiktok.com/@spokke33' }
 ];
 
 export const privacidade: LegalSection[] = [

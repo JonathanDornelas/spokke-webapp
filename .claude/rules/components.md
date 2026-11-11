@@ -1160,9 +1160,10 @@ monta os dois também, e só ela usa o snippet `extra` de `SiteHeader` pra acres
 tema manual (home.md "Toggle de tema" — nenhuma outra página pública tem esse controle, seguem
 `prefers-color-scheme` puro).
 
-O rodapé tem, no bloco da marca, os ícones das redes (`redes` em `institucional.ts`: sem `url` o
-ícone fica sem link, com o mesmo hover do que terá link — a fileira não muda quando os perfis
-entrarem) e, na linha de baixo, oposto ao "©", os selos de
+O rodapé tem, no bloco da marca, os ícones das redes (`redes` em `institucional.ts`: Instagram,
+YouTube e TikTok, cada um com o link do perfil, em nova aba; rede sem `url` fica sem link, com o
+mesmo hover — e os endereços viram o `sameAs` da organização no JSON-LD) e, na linha de baixo,
+oposto ao "©", os selos de
 verificação (SSL e Google Safe Browsing, `selosDeVerificacao`), em PNG próprio
 (`static/selos/`, gerado por `scripts/gerar-selos.mjs`): a imagem é o link, e o `alt` diz o que
 ele faz. O domínio verificado é o da página

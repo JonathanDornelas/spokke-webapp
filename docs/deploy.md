@@ -1368,9 +1368,10 @@ espera este gateway.
 - **Segundo admin** em `PLATFORM_ADMIN_IDS`, para a operação não depender de uma pessoa só.
 - **O painel da marca no Google** (o card à direita quando alguém busca "Spokke"). O Google monta
   sozinho, quando tem certeza de que a marca é uma entidade — não há formulário para pedir. O que
-  depende do site já está na home (`Organization` e `WebSite` em JSON-LD, com o logo). O resto é
-  de fora: criar os perfis oficiais (Instagram, YouTube, LinkedIn) e pôr os endereços em `redes`
-  (`institucional.ts` — eles entram no rodapé e no `sameAs` sozinhos); conferir a home no **Teste
+  depende do site já está na home (`Organization` e `WebSite` em JSON-LD, com o logo, e os perfis
+  oficiais do Instagram, do YouTube e do TikTok no `sameAs`, saídos de `redes` em
+  `institucional.ts`, os mesmos do rodapé). O resto é de fora: um perfil novo (o LinkedIn, se
+  vier) entra pondo o endereço em `redes`; conferir a home no **Teste
   de pesquisa aprimorada** (search.google.com/test/rich-results) e pedir a indexação dela no Search
   Console; e esperar as buscas pelo nome e as menções em outros sites. Quando o painel aparecer, o
   link "Reivindicar este painel de conhecimento" dentro dele confirma a empresa pela conta do Search
