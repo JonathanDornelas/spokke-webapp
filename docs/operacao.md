@@ -230,7 +230,18 @@ a mesma do status que a API devolve); e o formato do corpo das notificações.
 Como acompanhar: os jobs `mercadopago` aparecem na fila (falhados, no painel interno, com "Tentar
 de novo"); o log do worker diz o desfecho de cada notificação (`ativada`, `estendida`,
 `cancelada`, `sem-mudanca`, `ignorada`); e a aba de assinatura do professor mostra o histórico
-(`checkout_iniciado`, `plano_ativado`).
+(`checkout_iniciado`, `plano_ativado`, `devolucao`).
+
+**Troca de plano** (billing.md "Troca de plano"): trocar é assinar de novo, com o valor cheio, e
+um job `mercadopago-troca` cancela a assinatura antiga no Mercado Pago e devolve a parte não usada
+do último pagamento dela, depois de o plano novo estar pago. O log do worker diz
+`[mercadopago] troca: N cancelada(s), N devolução(ões)` e, enquanto o primeiro pagamento da nova não
+sai, `esperando o primeiro pagamento da nova` (ele confere de meia em meia hora, por um dia). **Se a
+troca parar** — o Mercado Pago recusou cancelar ou devolver, ou o pagamento novo não saiu em um dia
+—, chega um e-mail "Troca de plano parada no Mercado Pago" em `CONTATO_PARA`. Aí, no painel do
+Mercado Pago: confira se a assinatura antiga do professor está cancelada e devolva à mão, no próprio
+pagamento, a parte não usada do último pagamento dela. Devolução feita à mão não sai de novo: antes
+de devolver, o job olha o que já voltou no pagamento.
 
 Com o gateway ligado, o painel continua podendo ativar, estender e cancelar à mão — as mesmas
 funções, com o ator `admin:<id>`. Cuidado: cancelar pelo painel NÃO cancela no Mercado Pago (só o

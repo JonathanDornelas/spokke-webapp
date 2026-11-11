@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { command, getRequestEvent } from '$app/server';
 import { requireTeacher } from '$lib/server/auth/guard';
-import { getBillingProvider } from '$lib/server/billing';
+import { getBillingProvider, nomeDoProvedor } from '$lib/server/billing';
 import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { cancelar, reativar } from '$lib/server/billing/assinaturas';
+import { planoEmVigor } from '$lib/server/billing/mercadopago/troca';
 import { minhaAssinatura } from '$lib/server/db/repos/assinatura';
 import { contaProfessor } from '$lib/server/db/repos/teachers';
 import { removerDaEscola } from '$lib/server/escola/escolas';
 import { CICLOS, PLANOS_PAGOS } from '$lib/billing/catalogo';
+import { ehOPlanoEmVigor } from '$lib/billing/troca';
 
 /**
  * As ações do professor sobre a PRÓPRIA assinatura. Toda remote function é um
@@ -21,24 +23,58 @@ function teacherOf() {
 }
 
 /**
- * "Assinar" um plano. Sem gateway (docs/adr-002-billing.md), o provedor manual
- * registra o pedido e avisa a equipe; com gateway, a resposta seria a URL do
- * checkout. A tela trata as duas formas — e nenhuma delas libera nada: quem
- * libera é o painel (manual) ou o webhook (gateway).
+ * "Assinar" um plano — ou TROCAR, quando já há um. Sem gateway
+ * (docs/adr-002-billing.md), o provedor manual registra o pedido e avisa a
+ * equipe; com o Mercado Pago, a resposta é a URL do checkout. Nenhuma das duas
+ * libera nada: quem libera é o painel (manual) ou a autorização do provedor.
+ *
+ * Com o Mercado Pago, trocar é assinar de novo (billing.md "Troca de plano"): o
+ * checkout cobra o plano novo por inteiro e, autorizado, um job cancela lá a
+ * assinatura antiga e devolve a parte não usada dela. Duas portas fecham aqui,
+ * pela mesma regra da tela (`$lib/billing/troca.ts`): o plano e o ciclo que já
+ * renovam sozinhos — seriam duas assinaturas iguais, a segunda cobrada por
+ * inteiro — e a conta da equipe, que tem o produto inteiro sem assinatura.
+ *
+ * A recusa do provedor volta como `erro` com a frase da tela, e o motivo de
+ * verdade vai para o log do web.
  */
 export const solicitarPlano = command(
 	z.object({ plano: z.enum(PLANOS_PAGOS), ciclo: z.enum(CICLOS) }),
 	async ({ plano, ciclo }) => {
 		const teacher = teacherOf();
-		const resultado = await getBillingProvider().iniciarAssinatura(
-			{ id: teacher.id, name: teacher.name, email: teacher.email },
-			plano,
-			ciclo,
-			{ origem: getRequestEvent().url.origin }
-		);
-		return resultado.tipo === 'redirecionar'
-			? { tipo: 'redirecionar' as const, url: resultado.url }
-			: { tipo: 'pedido' as const };
+		const estado = await acessoDoProfessor(teacher);
+		if (estado.origem === 'equipe') {
+			return {
+				tipo: 'erro' as const,
+				mensagem: 'A conta da equipe já tem o produto inteiro, sem assinatura.'
+			};
+		}
+		const gateway = nomeDoProvedor() === 'mercadopago';
+		if (gateway && ehOPlanoEmVigor(await planoEmVigor(teacher.id, estado.origem), plano, ciclo)) {
+			return {
+				tipo: 'erro' as const,
+				mensagem: 'Você já está neste plano, e ele renova sozinho pelo Mercado Pago.'
+			};
+		}
+		try {
+			const resultado = await getBillingProvider().iniciarAssinatura(
+				{ id: teacher.id, name: teacher.name, email: teacher.email },
+				plano,
+				ciclo,
+				{ origem: getRequestEvent().url.origin }
+			);
+			return resultado.tipo === 'redirecionar'
+				? { tipo: 'redirecionar' as const, url: resultado.url }
+				: { tipo: 'pedido' as const };
+		} catch (err) {
+			console.error('[cobrança] não deu para abrir a assinatura', err);
+			return {
+				tipo: 'erro' as const,
+				mensagem: gateway
+					? 'O Mercado Pago não abriu o pagamento agora. Tente de novo em instantes.'
+					: 'Não deu para enviar o pedido agora. Tente de novo em instantes.'
+			};
+		}
 	}
 );
 

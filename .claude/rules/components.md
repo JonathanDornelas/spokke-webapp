@@ -943,7 +943,12 @@ dão a volta nas pontas).
 ## Planos — `PlanosTabela.svelte`
 
 A tabela de planos, UMA para a home (seção `#planos`) e para `(site)/planos`. Props
-`{ planoAtual?: PlanoId | null; mostrarCabecalho?; mostrarRodape?; titulo?; lede?; compacto? }`.
+`{ planoAtual?: PlanoId | null; mostrarCabecalho?; mostrarRodape?; titulo?; lede?; compacto?; onescolher?; pedidoPendente?; gateway?; planoEmVigor?: PlanoEmVigor | null; contaDaEquipe? }`.
+
+**O botão diz o que o clique faz** (`acaoDoCartao`): pedido enviado, "Seu plano agora" sem ação (o
+plano e o ciclo que o Mercado Pago já renova — `ehOPlanoEmVigor`, a mesma regra de `solicitarPlano`),
+"Mudar para o …" com a linha da troca (billing.md "Troca de plano"), ou o CTA de assinar. Cartão sem
+ação fica `btn-plain` e desabilitado.
 
 **Os preços chegam por `$lib/content/planos.ts` (que os lê de `$lib/billing/precos.ts`), nunca
 daqui** — ver paginas.md "Planos e preços". O componente desenha o que aquele arquivo diz.

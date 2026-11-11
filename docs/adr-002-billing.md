@@ -107,7 +107,7 @@ Decisão do dono: **Mercado Pago**. O esqueleto do Stripe saiu (cliente, webhook
   `mercadopago`) busca o recurso na API e aplica por `assinaturas.ts`, com o ator `provedor`.
   Autorizada ativa até a próxima cobrança; fatura aprovada estende um ciclo, uma vez por fatura
   (`ProviderEvent`); cancelada ou pausada para a renovação no fim do período. Troca de plano
-  cancela a assinatura antiga lá.
+  cancela a assinatura antiga lá e devolve a parte não usada (seção 10).
 - **A volta do checkout relê** as assinaturas pendentes recentes (`sincronizarPendentes`) e a
   Conta mostra "confirmando" até o Mercado Pago autorizar. O redirect nunca libera nada sozinho.
 - **Cancelar no fim do período** cancela PRIMEIRO no Mercado Pago (se ele recusar, nada muda aqui).
@@ -173,6 +173,26 @@ A conta partiu dos dois custos que existem: o **servidor** (R$ 129/mês, fixo) e
 **Refazer a conta** quando mudar: `creditosPorCiclo` (`catalogo.ts`), o raciocínio do modelo, o
 preço do Gemini, o servidor, a taxa do gateway ou o enquadramento do imposto. Ficaram fora dela
 contador, domínio, o Resend acima do plano grátis e o próximo servidor quando este lotar.
+
+### 10. Troca de plano (2026-11-11)
+
+Com um plano pago ativo, escolher outro abria uma assinatura nova do zero: cobrava o valor cheio,
+perdia o que sobrava do plano antigo e, no mesmo plano, fazia o professor pagar duas vezes. O
+Mercado Pago não troca o plano de uma assinatura nem cobra proporcional; ele só muda o VALOR de uma
+existente e devolve parte de um pagamento. Quatro caminhos foram postos ao dono:
+
+| Caminho                    | Subir                         | Descer                          | Custo de construir                           |
+| -------------------------- | ----------------------------- | ------------------------------- | -------------------------------------------- |
+| **Ciclo novo + devolução** | na hora, valor cheio          | na hora, valor cheio            | baixo: quase tudo já existia                 |
+| Sobe na hora, desce no fim | na hora, valor cheio          | muda o valor; vale na renovação | médio: agenda de plano                       |
+| Paga só a diferença        | pagamento avulso proporcional | no fim do período               | alto: outro webhook e créditos proporcionais |
+| Ciclo novo, sem devolução  | na hora, valor cheio          | na hora, valor cheio            | nenhum, e joga fora meses no anual           |
+
+**Decisão do dono: ciclo novo + devolução.** Trocar é assinar de novo — checkout com o valor cheio,
+o ciclo recomeça na autorização —, e um job cancela lá a assinatura antiga e devolve a parte não
+usada do último pagamento dela. Escolher o plano e o ciclo que já renovam sozinhos não abre
+checkout. A devolução só sai depois de o primeiro pagamento do plano novo ser aprovado. Regras do
+código em `billing.md` "Troca de plano".
 
 ## Pendências
 

@@ -1303,16 +1303,32 @@ Web E worker: é o worker que processa a notificação do webhook.
 
 ### 4.2 O teste
 
-1. Numa aba anônima, crie uma conta de professor de teste no Spokke.
+1. Numa aba anônima, crie uma conta de professor de teste no Spokke **com o e-mail do comprador de
+   teste** (o `test_user_...@testuser.com` que o painel mostra em Contas de teste). O e-mail da conta
+   vai para o Mercado Pago como o de quem paga, e com o token de teste ele só aceita usuário de teste:
+   com um e-mail de verdade, "Assinar" falha com "O Mercado Pago não abriu o pagamento agora", e o
+   log do web diz `Both payer and collector must be real or test users`. Vale também para a conta
+   que já tem plano dado pela equipe ou pela intranet.
 2. Em Planos, assine o Pro. O checkout do Mercado Pago abre: entre com a conta de **comprador de
    teste** e pague com um cartão de teste (a documentação do Mercado Pago lista os números).
-3. A volta para o Spokke mostra "confirmando". Em poucos segundos, a aba Assinatura da Conta mostra
-   o plano ativo, e o histórico mostra `plano_ativado`.
-4. **No servidor:** `spk logs --tail 50 worker` mostra a notificação com o desfecho `ativada`.
-5. Na aba Assinatura, "Cancelar no fim do período": o log mostra `cancelada`.
-6. Os três pontos que a documentação do Mercado Pago não fecha (billing.md): a notificação de
-   assinatura chegou pelo painel de Webhooks? A grafia do cancelamento foi aceita? O corpo da
-   notificação veio no formato esperado? Se algum falhar, me chame antes de seguir.
+3. A volta para o Spokke mostra "confirmando", e a tela confere sozinha a cada 5 segundos por dois
+   minutos. Quando o Mercado Pago autoriza, a aba Assinatura mostra o plano ativo e o histórico mostra
+   `plano_ativado`.
+4. **No servidor**, o webhook deixa rastro nos DOIS logs: `spk logs --tail 50 web | grep mercadopago`
+   mostra a notificação chegando (`na fila`, `ignorada` ou `recusada (401)`), e
+   `spk logs --tail 50 worker | grep mercadopago` mostra o desfecho (`ativada`). O erro ao ASSINAR
+   fica no web: quem cria a assinatura é ele.
+5. **A troca de plano** (billing.md "Troca de plano"). Em Planos, o cartão do Pro mensal diz "Seu
+   plano agora", sem botão. Escolha **Mudar para o Super**: o checkout cobra o Super por inteiro.
+   Autorizado, o plano vira Super na hora, e o worker mostra `troca: 1 cancelada(s)`. Quando o
+   pagamento do Super for aprovado (pode levar até uma hora), o worker mostra `1 devolução(ões)`, o
+   histórico da Conta mostra a parte não usada do Pro devolvida ao cartão, e no painel do Mercado
+   Pago a assinatura do Pro aparece cancelada, com a devolução no pagamento dela.
+6. Na aba Assinatura, "Cancelar no fim do período": o log mostra `cancelada`.
+7. Os quatro pontos que a documentação do Mercado Pago não fecha (billing.md): a notificação de
+   assinatura chegou pelo painel de Webhooks? O cancelamento foi aceito (na troca e no passo 6)? O
+   corpo da notificação veio no formato esperado? A devolução parcial saiu? Se algum falhar, me
+   chame antes de seguir.
 
 ### 4.3 Produção
 

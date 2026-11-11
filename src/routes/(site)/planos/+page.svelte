@@ -8,10 +8,13 @@
 	// e é a pior: "quebrou e me jogou na cobrança". O aviso diz também o que
 	// NÃO se perdeu — o rascunho continua salvo, os links continuam no ar.
 	//
-	// **Não há gateway de pagamento** (docs/adr-002-billing.md): escolher um plano
-	// logado registra um PEDIDO e avisa a equipe, que combina o pagamento e ativa
-	// pelo painel interno. A tela diz isso com todas as letras — nada aqui libera
-	// acesso sozinho.
+	// **Sem gateway** (docs/adr-002-billing.md), escolher um plano logado registra
+	// um PEDIDO e avisa a equipe, que combina o pagamento e ativa pelo painel
+	// interno. **Com o Mercado Pago**, escolher abre o checkout — e, para quem já
+	// paga um plano por ele, escolher outro é TROCAR: ciclo novo com o valor cheio
+	// e a parte não usada do plano atual de volta no cartão (billing.md "Troca de
+	// plano"). Cada cartão diz o que o clique faz. Nada aqui libera acesso
+	// sozinho.
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import PlanosTabela from '$lib/components/PlanosTabela.svelte';
@@ -25,6 +28,7 @@
 	import { MOTIVOS_DE_LIMITE, type MotivoDoBloqueio } from '$lib/billing/motivos';
 	import { ehPlanoPago } from '$lib/billing/catalogo';
 	import type { ResumoDoAcesso } from '$lib/billing/resumo';
+	import type { PlanoEmVigor } from '$lib/billing/troca';
 	import { solicitarPlano } from '../../(studio)/conta/conta.remote';
 
 	interface PageData {
@@ -34,6 +38,10 @@
 		acesso: ResumoDoAcesso | null;
 		pedido: { id: PlanoId; nome: string; ciclo: string } | null;
 		logado: boolean;
+		/** O Mercado Pago está ligado: escolher abre o checkout, não um pedido. */
+		gateway: boolean;
+		planoEmVigor: PlanoEmVigor | null;
+		contaDaEquipe: boolean;
 	}
 
 	let { data }: { data: PageData } = $props();
@@ -78,10 +86,16 @@
 				window.location.assign(r.url);
 				return;
 			}
+			if (r.tipo === 'erro') {
+				erroDoPedido = r.mensagem;
+				return;
+			}
 			pedidoEnviado = plano;
 			await invalidateAll();
 		} catch {
-			erroDoPedido = 'Não deu para enviar o pedido agora. Tente de novo em instantes.';
+			erroDoPedido = data.gateway
+				? 'O Mercado Pago não abriu o pagamento agora. Tente de novo em instantes.'
+				: 'Não deu para enviar o pedido agora. Tente de novo em instantes.';
 		}
 	}
 </script>
@@ -175,6 +189,9 @@
 		lede=""
 		onescolher={data.logado ? escolher : undefined}
 		pedidoPendente={data.pedido?.id ?? null}
+		gateway={data.gateway}
+		planoEmVigor={data.planoEmVigor}
+		contaDaEquipe={data.contaDaEquipe}
 	/>
 
 	<!-- Quem não tem conta ainda: o caminho de sempre, que não passa por preço
