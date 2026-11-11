@@ -109,6 +109,26 @@
 	}: { data?: Partial<PageData>; form?: { salvo?: boolean; erro?: string } | null } = $props();
 	const data = $derived(withMock(dataProp, MOCK));
 
+	// ── a volta do checkout ── O loader relê a assinatura no Mercado Pago
+	// (`sincronizarPendentes`), mas só uma vez, na chegada — e a autorização
+	// costuma vir segundos DEPOIS do redirect. A tela dizia "confirmando" e
+	// ficava parada, e o plano só ativava se o webhook chegasse ou se o professor
+	// recarregasse a página. Agora ela relê sozinha enquanto está pendente, com
+	// teto de dois minutos: a tela pode ficar aberta a tarde inteira, e cada
+	// releitura é uma chamada à API do Mercado Pago.
+	const CONFERIR_CHECKOUT_MS = 5000;
+	const CONFERENCIAS_DO_CHECKOUT = 24;
+	let conferencias = $state(0);
+	const confirmando = $derived(data.checkout?.status === 'pending');
+	const desistiuDeConferir = $derived(conferencias >= CONFERENCIAS_DO_CHECKOUT);
+	$effect(() => {
+		if (!confirmando || desistiuDeConferir) return;
+		const relogio = setTimeout(() => {
+			void invalidateAll().finally(() => (conferencias += 1));
+		}, CONFERIR_CHECKOUT_MS);
+		return () => clearTimeout(relogio);
+	});
+
 	// ── avatar ── Grava de verdade, pela remote function `gravarMeuAvatar`.
 	let editorDeAvatarAberto = $state(false);
 	// Só o RASCUNHO do editor. Nasce no padrão e não no avatar da conta de
@@ -871,7 +891,7 @@
 						: 'border-line bg-base-200'}"
 				role="status"
 			>
-				{#if data.checkout.status === 'pending'}
+				{#if data.checkout.status === 'pending' && !desistiuDeConferir}
 					<Loading variant="traco" size={24} tone="current" label="Confirmando o pagamento" />
 				{/if}
 				<div class="min-w-[220px] flex-1">
@@ -883,8 +903,13 @@
 					{:else if data.checkout.status === 'pending'}
 						<p class="mb-1 text-[13.5px] font-bold">Confirmando o pagamento com o Mercado Pago</p>
 						<p class="text-[12.5px] leading-relaxed text-base-content/65">
-							Assim que ele confirmar, o plano {data.checkout.plano} libera sozinho — costuma levar poucos
-							minutos. Até lá a conta segue como está.
+							{#if desistiuDeConferir}
+								O Mercado Pago ainda não respondeu. Recarregue esta página daqui a alguns minutos.
+								Até lá a conta segue como está.
+							{:else}
+								Esta tela confere de novo a cada poucos segundos, e o plano {data.checkout.plano} libera
+								assim que ele confirmar. Até lá a conta segue como está.
+							{/if}
 						</p>
 					{:else}
 						<p class="mb-1 text-[13.5px] font-bold">O pagamento não foi concluído</p>

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NOME_DO_PLANO, ehPlanoPago } from './catalogo';
+import { reais } from './precos';
 
 /**
  * A frase de cada evento de auditoria (`AuditEvent`), para a aba de assinatura
@@ -17,7 +18,9 @@ const dadosSchema = z
 		dias: z.number(),
 		creditos: z.number(),
 		motivo: z.string(),
-		trialEndsAt: z.string()
+		trialEndsAt: z.string(),
+		/** Centavos — a devolução da troca de plano. */
+		valor: z.number()
 	})
 	.partial();
 
@@ -49,6 +52,10 @@ export function textoDoEvento(tipo: string, dadosBrutos: unknown): string {
 			return `Pedido do plano ${nomeDoPlano(d.plano)} (${d.ciclo ?? 'mensal'})`;
 		case 'checkout_iniciado':
 			return `Checkout do plano ${nomeDoPlano(d.plano)} (${d.ciclo ?? 'mensal'}) aberto no Mercado Pago`;
+		case 'devolucao':
+			return `${reais(d.valor ?? 0)} da parte não usada do plano ${nomeDoPlano(d.plano)} devolvidos ao cartão`;
+		case 'devolucao_por_fora':
+			return `${reais(d.valor ?? 0)} da parte não usada do plano ${nomeDoPlano(d.plano)}: a equipe devolve por Pix ou transferência`;
 		case 'plano_ativado':
 			return d.de && d.de !== d.para
 				? `Plano trocado de ${nomeDoPlano(d.de)} para ${nomeDoPlano(d.para)}, até ${dataCurta(d.ate)}`

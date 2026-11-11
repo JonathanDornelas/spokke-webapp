@@ -185,6 +185,35 @@ export async function enqueueMercadoPago(job: MercadoPagoJob): Promise<void> {
 }
 
 /**
+ * A TROCA de plano no Mercado Pago (billing.md "Troca de plano"): a assinatura
+ * `nova` foi autorizada e o ciclo novo começou em `em`. O job cancela lá as
+ * assinaturas que ela substituiu e devolve a parte não usada do último
+ * pagamento delas — `em` fica gravado para a devolução não encolher a cada
+ * retentativa. `tentativa` conta as esperas pelo primeiro pagamento da nova:
+ * nada volta para o cartão antes de o plano novo estar pago.
+ */
+export const trocaMercadoPagoJobSchema = z.object({
+	nova: z.string().min(1).max(100),
+	em: z.iso.datetime({ offset: true }),
+	tentativa: z.number().int().min(0).default(0)
+});
+export type TrocaMercadoPagoJob = z.input<typeof trocaMercadoPagoJobSchema>;
+
+export async function enqueueTrocaMercadoPago(
+	job: TrocaMercadoPagoJob,
+	db: Db = prisma,
+	runAfter?: Date
+): Promise<void> {
+	await db.job.create({
+		data: {
+			type: 'mercadopago-troca',
+			payload: trocaMercadoPagoJobSchema.parse(job),
+			...(runAfter ? { runAfter } : {})
+		}
+	});
+}
+
+/**
  * Uma ação da INTRANET (`spokke-intranet`, o painel interno separado). A
  * intranet não escreve na cobrança: ela só insere este job — o papel dela no
  * banco tem INSERT em `Job` restrito ao tipo `intranet` por RLS

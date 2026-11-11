@@ -37,7 +37,20 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		dataId: notificacao.dataIdDaUrl ?? notificacao.id,
 		segredo
 	});
-	if (!valida) error(401, 'Assinatura inválida');
+	// Toda saída daqui deixa uma linha no log do web. O adapter-node não registra
+	// pedidos, então "a notificação não chegou", "chegou e a assinatura não
+	// conferiu" e "chegou com outro tópico" eram iguais vistos do servidor: plano
+	// sem ativar e nenhum rastro. Nunca o segredo nem o valor da assinatura —
+	// só o que diz ONDE parou.
+	if (!valida) {
+		const tem = (nome: string) => (request.headers.has(nome) ? 'sim' : 'não');
+		console.warn(
+			`[mercadopago] notificação recusada (401): a assinatura não confere — tópico ${notificacao.topico ?? '?'}, ` +
+				`id ${notificacao.id ?? '?'}, data.id na URL: ${notificacao.dataIdDaUrl ? 'sim' : 'não'}, ` +
+				`x-signature: ${tem('x-signature')}, x-request-id: ${tem('x-request-id')}`
+		);
+		error(401, 'Assinatura inválida');
+	}
 
 	// Tópico que não mexe em assinatura (pagamento avulso, plano) e id que não
 	// parece id são aceitos e ignorados: um 4xx aqui faria o provedor reenviar
@@ -48,6 +61,11 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		/^[\w-]{1,100}$/.test(notificacao.id)
 	) {
 		await enqueueMercadoPago({ topico: notificacao.topico, id: notificacao.id });
+		console.info(`[mercadopago] notificação na fila: ${notificacao.topico} ${notificacao.id}`);
+	} else {
+		console.info(
+			`[mercadopago] notificação ignorada: tópico ${notificacao.topico ?? '?'}, id ${notificacao.id ?? '?'}`
+		);
 	}
 	return json({ recebido: true });
 };

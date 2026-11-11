@@ -27,6 +27,10 @@ import { putObject } from '../src/lib/server/storage/index.ts';
 import { avisarAudioQueFalhou } from '../src/lib/server/tts/falha.ts';
 import { processarNotificacao } from '../src/lib/server/billing/mercadopago/sincronizar.ts';
 import {
+	avisarTrocaQueFalhou,
+	processarTroca
+} from '../src/lib/server/billing/mercadopago/troca.ts';
+import {
 	concederSemVencimento,
 	encerrarSemVencimento
 } from '../src/lib/server/billing/assinaturas.ts';
@@ -224,6 +228,20 @@ async function processMercadoPago(payload: unknown): Promise<void> {
 }
 
 /**
+ * A troca de plano (`troca.ts`): cancela lá as assinaturas que a nova substituiu
+ * e devolve a parte não usada delas, depois de o plano novo estar pago. O que o
+ * Mercado Pago recusa devolver vai para a equipe, por fora.
+ */
+async function processTrocaMercadoPago(payload: unknown): Promise<void> {
+	const d = await processarTroca(payload);
+	console.info(
+		`[mercadopago] troca: ${d.canceladas} cancelada(s), ${d.devolvidas} devolução(ões)` +
+			(d.porFora ? `, ${d.porFora} por fora (e-mail para a equipe)` : '') +
+			(d.aguardando ? ', esperando o primeiro pagamento da nova' : '')
+	);
+}
+
+/**
  * Uma ação pedida pela intranet. O worker aplica pelo `assinaturas.ts` (o único
  * escritor da cobrança), com o e-mail de quem pediu no histórico. Encerrar só
  * vale para plano sem vencimento: se a conta não está assim, o job FALHA com o
@@ -272,6 +290,8 @@ async function processJob(job: ClaimedJob): Promise<void> {
 			return processEnvioProgramado(job.payload);
 		case 'mercadopago':
 			return processMercadoPago(job.payload);
+		case 'mercadopago-troca':
+			return processTrocaMercadoPago(job.payload);
 		case 'intranet':
 			return processIntranet(job.payload);
 		default:
@@ -302,6 +322,15 @@ async function executar(job: ClaimedJob): Promise<void> {
 		if (exhausted && job.type === 'tts') {
 			const tts = ttsJobSchema.safeParse(job.payload);
 			if (tts.success) await avisarAudioQueFalhou(tts.data.teacherId, tts.data.hash);
+		}
+		// A troca de plano parada é dinheiro do professor: assinatura antiga ainda
+		// cobrando, ou devolução que não saiu. Vai para a equipe por e-mail.
+		if (exhausted && job.type === 'mercadopago-troca') {
+			try {
+				await avisarTrocaQueFalhou(job.payload, err instanceof Error ? err.message : String(err));
+			} catch (aviso) {
+				console.error('[mercadopago] não deu para avisar a equipe da troca parada', aviso);
+			}
 		}
 	}
 }

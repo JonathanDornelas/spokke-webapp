@@ -8,14 +8,24 @@
 	//
 	// **Não decide o que "assinar" faz.** Quem está logado aperta o CTA e a
 	// PÁGINA recebe `onescolher(plano, ciclo)` — sem gateway, ela registra um
-	// pedido (adr-002-billing.md). Sem `onescolher` (a home, quem não tem conta)
-	// o CTA leva ao cadastro. O Scholar é por contrato e leva sempre ao contato.
+	// pedido (adr-002-billing.md); com o Mercado Pago, abre o checkout. Sem
+	// `onescolher` (a home, quem não tem conta) o CTA leva ao cadastro. O Scholar
+	// é por contrato e leva sempre ao contato.
+	//
+	// **Mas DIZ o que o clique faz.** Com o Mercado Pago e um plano pago por ele
+	// (`planoEmVigor`), o cartão do mesmo plano e ciclo não tem ação — ele renova
+	// sozinho — e os outros TROCAM: ciclo novo com o valor cheio, e a parte não
+	// usada do plano atual de volta no cartão (billing.md "Troca de plano"). A
+	// regra é a mesma que `solicitarPlano` aplica (`$lib/billing/troca.ts`).
 	//
 	// **O plano ATUAL ganha o destaque de "seu plano agora"**, e o destaque de
 	// marketing cede a vez: dizer "o mais escolhido" no cartão de quem já
 	// assinou aquele plano é propaganda para dentro.
+	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import Loading from './Loading.svelte';
+	import { ehPlanoPago } from '$lib/billing/catalogo';
+	import { ehOPlanoEmVigor, type PlanoEmVigor } from '$lib/billing/troca';
 	import {
 		garantias,
 		alunoNaoPaga,
@@ -40,7 +50,13 @@
 		/** Logado: o CTA chama isto em vez de levar ao cadastro. */
 		onescolher,
 		/** O plano já pedido e ainda não atendido — o cartão dele diz "pedido enviado". */
-		pedidoPendente = null
+		pedidoPendente = null,
+		/** O Mercado Pago está ligado: escolher abre o checkout, não um pedido para a equipe. */
+		gateway = false,
+		/** O plano que o Mercado Pago já cobra, quando há um. Muda o botão de cada cartão. */
+		planoEmVigor = null,
+		/** A conta da equipe tem o produto inteiro: nenhum cartão assina nada. */
+		contaDaEquipe = false
 	}: {
 		planoAtual?: PlanoId | null;
 		mostrarCabecalho?: boolean;
@@ -50,6 +66,9 @@
 		compacto?: boolean;
 		onescolher?: (plano: PlanoId, ciclo: CicloDeCobranca) => Promise<void>;
 		pedidoPendente?: PlanoId | null;
+		gateway?: boolean;
+		planoEmVigor?: PlanoEmVigor | null;
+		contaDaEquipe?: boolean;
 	} = $props();
 
 	/** O id do plano cujo pedido está indo ao servidor — o botão mostra a fila. */
@@ -67,7 +86,10 @@
 
 	// Mensal é o padrão porque é o número que a pessoa compara primeiro; o anual
 	// é a economia, e ela só interessa depois de o mensal parecer aceitável.
-	let ciclo = $state<CicloDeCobranca>('mensal');
+	// **Quem já assina abre no ciclo dele**: aberto no mensal, o assinante do
+	// anual via o próprio plano como "Mudar para o mensal" até achar o seletor.
+	// Só o valor INICIAL — depois, o seletor é de quem lê.
+	let ciclo = $state<CicloDeCobranca>(untrack(() => planoEmVigor?.ciclo ?? 'mensal'));
 
 	// ── o carrossel ──
 	// Os planos passam como num carrossel: o cartão escolhido fica no centro, em
@@ -132,10 +154,60 @@
 		bolt: 'M13.5 3L5 13.5h6L10.5 21 19 10.5h-6z'
 	};
 
+	/** O botão de um cartão e a linha embaixo dele: o que o clique faz, para quem está lendo. */
+	function acaoDoCartao(p: (typeof planos)[number]): {
+		cta: string;
+		nota: string;
+		semAcao: boolean;
+	} {
+		if (contaDaEquipe) {
+			return {
+				cta: 'Incluído na conta da equipe',
+				nota: 'A conta da equipe tem o produto inteiro, sem assinatura.',
+				semAcao: true
+			};
+		}
+		if (pedidoPendente === p.id) {
+			return {
+				cta: 'Pedido enviado',
+				nota: 'A equipe vai falar com você para combinar o pagamento.',
+				semAcao: true
+			};
+		}
+		const emVigor = gateway ? planoEmVigor : null;
+		if (emVigor && ehPlanoPago(p.id)) {
+			if (ehOPlanoEmVigor(emVigor, p.id, ciclo)) {
+				return { cta: 'Seu plano agora', nota: 'Renova sozinho pelo Mercado Pago.', semAcao: true };
+			}
+			const mesmoPlano = emVigor.plano === p.id;
+			return {
+				// O mesmo plano e ciclo sem a renovação ligada é assinar de novo; o
+				// mesmo plano noutro ciclo é trocar de ciclo; o resto é trocar de plano.
+				cta:
+					mesmoPlano && emVigor.ciclo === ciclo
+						? 'Assinar de novo'
+						: mesmoPlano
+							? `Mudar para o ${ciclo}`
+							: `Mudar para o ${p.nome}`,
+				nota: 'Começa um ciclo novo hoje, com o valor cheio. A parte do plano atual que você não usou volta para o cartão.',
+				semAcao: false
+			};
+		}
+		if (planoAtual === p.id && !gateway) {
+			return {
+				cta: 'Renovar este plano',
+				nota: 'Você já está neste plano. Renovar registra um pedido para a equipe.',
+				semAcao: false
+			};
+		}
+		return { cta: p.cta, nota: p.ctaNota, semAcao: false };
+	}
+
 	const cartoes = $derived(
 		planos.map((p) => {
 			const atual = planoAtual === p.id;
 			const herói = !!p.destaque && !atual;
+			const acao = acaoDoCartao(p);
 			return {
 				...p,
 				atual,
@@ -145,14 +217,9 @@
 				// "Seu plano agora" vence o selo de marketing: é informação sobre a
 				// conta de quem está lendo, não uma recomendação de venda.
 				faixa: atual ? 'Seu plano agora' : p.destaque,
-				pedido: pedidoPendente === p.id,
-				ctaAgora: pedidoPendente === p.id ? 'Pedido enviado' : atual ? 'Renovar este plano' : p.cta,
-				ctaNotaAgora:
-					pedidoPendente === p.id
-						? 'A equipe vai falar com você para combinar o pagamento.'
-						: atual
-							? 'Você já está neste plano. Renovar registra um pedido para a equipe.'
-							: p.ctaNota
+				semAcao: acao.semAcao,
+				ctaAgora: acao.cta,
+				ctaNotaAgora: acao.nota
 			};
 		})
 	);
@@ -375,16 +442,21 @@
 							</a>
 							<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						{:else if onescolher}
-							<!-- Sem gateway (adr-002-billing.md): a página registra um pedido. -->
+							<!-- A página decide: um pedido (sem gateway) ou o checkout (Mercado Pago). -->
 							<button
 								type="button"
 								onclick={() => escolher(p.id)}
-								disabled={escolhendo !== null || p.pedido}
+								disabled={escolhendo !== null || p.semAcao}
 								class="btn min-h-12 w-full motion-tap gap-2.5 text-[14.5px] font-bold
-						       {p.atual || p.pedido ? 'btn-plain' : p.herói ? 'btn-primary' : 'btn-outline'}"
+						       {p.atual || p.semAcao ? 'btn-plain' : p.herói ? 'btn-primary' : 'btn-outline'}"
 							>
 								{#if escolhendo === p.id}
-									<Loading variant="fila" size={10} tone="current" label="Enviando o pedido" />
+									<Loading
+										variant="fila"
+										size={10}
+										tone="current"
+										label={gateway ? 'Abrindo o pagamento' : 'Enviando o pedido'}
+									/>
 								{/if}
 								{p.ctaAgora}
 							</button>

@@ -1,5 +1,7 @@
 import type { PageServerLoad } from './$types';
+import { nomeDoProvedor } from '$lib/server/billing';
 import { acessoDoProfessor, resumoDoAcesso } from '$lib/server/billing/acesso';
+import { planoEmVigor } from '$lib/server/billing/mercadopago/troca';
 import { minhaAssinatura } from '$lib/server/db/repos/assinatura';
 import { ehMotivo, type MotivoDoBloqueio } from '$lib/billing/motivos';
 import { NOME_DO_PLANO, ehPlanoPago } from '$lib/billing/catalogo';
@@ -66,6 +68,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const teacher = locals.user;
 	const parametro = url.searchParams.get('motivo');
 	const motivo = ehMotivo(parametro) ? parametro : null;
+	const gateway = nomeDoProvedor() === 'mercadopago';
 
 	if (!teacher) {
 		return {
@@ -74,7 +77,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			planoAtual: null,
 			acesso: null,
 			pedido: null,
-			logado: false
+			logado: false,
+			gateway,
+			planoEmVigor: null,
+			contaDaEquipe: false
 		};
 	}
 
@@ -85,6 +91,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const acesso = resumoDoAcesso(estado);
 
 	return {
+		gateway,
+		// Com o Mercado Pago, quem paga o plano de agora decide o botão de cada
+		// cartão: o mesmo plano e ciclo não abrem checkout, e os outros TROCAM
+		// (ciclo novo + devolução, `$lib/billing/troca.ts`).
+		planoEmVigor: gateway ? await planoEmVigor(teacher.id, estado.origem) : null,
+		// A conta da equipe tem o produto inteiro e não assina nada (billing.md).
+		contaDaEquipe: acesso.origem === 'equipe',
 		motivo,
 		motivos: MOTIVOS,
 		// "Seu plano agora" só para quem TEM um plano em vigor — o trial usa os

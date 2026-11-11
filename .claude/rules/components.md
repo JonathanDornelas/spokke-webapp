@@ -943,7 +943,13 @@ dão a volta nas pontas).
 ## Planos — `PlanosTabela.svelte`
 
 A tabela de planos, UMA para a home (seção `#planos`) e para `(site)/planos`. Props
-`{ planoAtual?: PlanoId | null; mostrarCabecalho?; mostrarRodape?; titulo?; lede?; compacto? }`.
+`{ planoAtual?: PlanoId | null; mostrarCabecalho?; mostrarRodape?; titulo?; lede?; compacto?; onescolher?; pedidoPendente?; gateway?; planoEmVigor?: PlanoEmVigor | null; contaDaEquipe? }`.
+
+**O botão diz o que o clique faz** (`acaoDoCartao`): pedido enviado, "Seu plano agora" sem ação (o
+plano e o ciclo que o Mercado Pago já renova — `ehOPlanoEmVigor`, a mesma regra de `solicitarPlano`),
+"Mudar para o …" com a linha da troca (billing.md "Troca de plano"), ou o CTA de assinar. Cartão sem
+ação fica `btn-plain` e desabilitado. **O seletor de ciclo abre no ciclo do plano em vigor** (só o
+valor inicial): aberto no mensal, quem assina o anual via o próprio plano como "Mudar para o mensal".
 
 **Os preços chegam por `$lib/content/planos.ts` (que os lê de `$lib/billing/precos.ts`), nunca
 daqui** — ver paginas.md "Planos e preços". O componente desenha o que aquele arquivo diz.
@@ -1154,9 +1160,10 @@ monta os dois também, e só ela usa o snippet `extra` de `SiteHeader` pra acres
 tema manual (home.md "Toggle de tema" — nenhuma outra página pública tem esse controle, seguem
 `prefers-color-scheme` puro).
 
-O rodapé tem, no bloco da marca, os ícones das redes (`redes` em `institucional.ts`: sem `url` o
-ícone fica sem link, com o mesmo hover do que terá link — a fileira não muda quando os perfis
-entrarem) e, na linha de baixo, oposto ao "©", os selos de
+O rodapé tem, no bloco da marca, os ícones das redes (`redes` em `institucional.ts`: Instagram,
+YouTube e TikTok, cada um com o link do perfil, em nova aba; rede sem `url` fica sem link, com o
+mesmo hover — e os endereços viram o `sameAs` da organização no JSON-LD) e, na linha de baixo,
+oposto ao "©", os selos de
 verificação (SSL e Google Safe Browsing, `selosDeVerificacao`), em PNG próprio
 (`static/selos/`, gerado por `scripts/gerar-selos.mjs`): a imagem é o link, e o `alt` diz o que
 ele faz. O domínio verificado é o da página

@@ -60,6 +60,10 @@
 				window.location.assign(r.url);
 				return;
 			}
+			if (r.tipo === 'erro') {
+				erro = r.mensagem;
+				return;
+			}
 			pedido = plano;
 		} catch {
 			erro = 'Não deu para enviar o pedido agora. Tente de novo em instantes.';

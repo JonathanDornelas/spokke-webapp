@@ -109,10 +109,10 @@ As três disciplinas:
 
 ## Mercado Pago — o que vale no código
 
-- `src/lib/server/billing/mercadopago/`: `cliente.ts` (`fetch` + Zod, quatro chamadas),
-  `webhook.ts` (assinatura e leitura da notificação, puro), `sincronizar.ts` (o estado do provedor
-  aplicado à conta), `provider.ts` (o `BillingProvider`). Testes com cliente FALSO — o de verdade
-  não entra em teste.
+- `src/lib/server/billing/mercadopago/`: `cliente.ts` (`fetch` + Zod, só as chamadas que o produto
+  usa), `webhook.ts` (assinatura e leitura da notificação, puro), `sincronizar.ts` (o estado do
+  provedor aplicado à conta), `troca.ts` (a troca de plano, abaixo), `provider.ts` (o
+  `BillingProvider`). Testes com cliente FALSO — o de verdade não entra em teste.
 - **Assinatura sem plano associado**, `status: 'pending'`, `external_reference` = id do professor
   (conferido contra a `ProviderSubscription` em toda aplicação: divergiu, é ignorada).
 - **`authorized`** ativa até `next_payment_date` (ou um ciclo); **fatura aprovada** estende um ciclo
@@ -123,8 +123,56 @@ As três disciplinas:
   volta (`podeDesfazerCancelamento: false`).
 - **404 do provedor** termina o job sem erro (é o "testar notificação" do painel ou outro app).
 - **A conferir no sandbox** antes de produção — a documentação não fecha: se as notificações de
-  assinatura vêm pelo painel de Webhooks, a grafia que o `PUT` de cancelar aceita (`cancelled`) e
-  o formato exato do corpo da notificação.
+  assinatura vêm pelo painel de Webhooks, a grafia que o `PUT` de cancelar aceita (o cliente manda
+  `cancelled` e, se o provedor recusar com 400, `canceled`), o formato exato do corpo da
+  notificação, e a devolução parcial (`POST /v1/payments/{id}/refunds`) num pagamento de assinatura.
+
+## Troca de plano
+
+**Decisão do dono (2026-11-11): ciclo novo + devolução.** O Mercado Pago não troca o plano de uma
+assinatura nem cobra proporcional — só muda o VALOR de uma existente —, então TROCAR é assinar de
+novo: checkout com o valor cheio do plano escolhido, o ciclo recomeça na autorização, a assinatura
+antiga é cancelada lá e a parte não usada do último pagamento dela volta para o cartão. Vale igual
+para subir, descer e trocar de ciclo, e também para "assinar de novo" depois de cancelar a renovação.
+Ficaram de fora "sobe na hora, desce no fim", "paga só a diferença" (pagamento avulso, outro webhook,
+créditos proporcionais) e "ciclo novo sem devolução" (jogava fora meses pagos no anual).
+
+- **Uma regra, duas pontas** (`$lib/billing/troca.ts`): `ehOPlanoEmVigor` — o plano e o ciclo que já
+  renovam sozinhos não abrem checkout (seria a mesma assinatura duas vezes, a segunda cobrada por
+  inteiro). `PlanosTabela` mostra "Seu plano agora" sem ação; `solicitarPlano` recusa. O plano em
+  vigor sai de `planoEmVigor` (`troca.ts`): só existe quando há assinatura paga no gateway por trás —
+  trial, escola, equipe, plano da equipe e sem vencimento assinam como sempre. A conta da equipe não
+  assina nada (cartões sem ação, `solicitarPlano` recusa).
+- **Ativar é síncrono; mexer no Mercado Pago é do job.** Na primeira vez que uma assinatura aparece
+  autorizada, `aplicarAssinatura` ativa o plano dela e, na MESMA transação, grava a marca
+  `ProviderEvent` `mercadopago:troca:<id>` e enfileira `mercadopago-troca`. A marca é a ordem das
+  ativações: entre duas autorizadas do mesmo professor, vale a ativada por último — notificação
+  atrasada da antiga (ou fatura dela que escapou do cancelamento) não devolve o professor ao plano de
+  antes, e a fatura chama o job de novo. Assinatura autorizada antes da marca existir conta como a
+  mais antiga.
+- **O job** (`processarTroca`): cancela lá as substituídas (autorizadas, pausadas; as canceladas no
+  último ano e pouco entram só para a devolução) — sem esperar nada, porque duas ativas são duas
+  cobranças. Depois devolve a parte não usada do ÚLTIMO pagamento aprovado de cada uma, contada do
+  instante da troca (`em`, gravado no job para não encolher a cada retentativa), arredondada para
+  baixo, e só acima de R$ 1 (`DEVOLUCAO_MINIMA_CENTAVOS`).
+- **Nada volta antes de o plano novo estar PAGO.** A autorização chega antes da primeira cobrança;
+  sem aprovado na nova, o job se reagenda a cada 30 minutos por um dia e, esgotado, avisa a equipe
+  por e-mail. Devolver em cima de um cartão que depois recusa seria dar o plano novo e o dinheiro do
+  antigo.
+- **Cada pagamento devolve uma vez**: `ProviderEvent` `mercadopago:devolucao:<pagamento>`, a chave
+  de idempotência do Mercado Pago (`spokke-devolucao-<pagamento>`) e, antes de pedir, o que já voltou
+  no próprio pagamento (`transaction_amount_refunded`) — devolução feita à mão pelo painel do Mercado
+  Pago não sai de novo. A devolução entra no histórico (`AuditEvent` `devolucao`).
+- **O que o Mercado Pago recusa devolver sai POR FORA** (decisão do dono, 2026-11-11). Pagamento
+  antigo demais — o anual trocado depois do prazo de devolução dele, que a documentação não diz
+  qual é — ou devolução parcial que o meio não aceita volta 400/422, e pedir de novo não muda nada:
+  o job grava a marca `devolucao_por_fora`, põe no histórico do professor que a equipe devolve por
+  Pix ou transferência, e manda à equipe o e-mail "Devolução por fora" com o valor já calculado, o
+  pagamento e o Reply-To do professor. Token errado, limite e provedor fora continuam erro, com a
+  retentativa da fila.
+- **Job que esgota as tentativas vai para a equipe por e-mail** (`avisarTrocaQueFalhou`, no
+  worker), além do painel interno: é assinatura antiga cobrando ou dinheiro do professor parado.
+  Teste: `mercadopago/troca.test.ts`.
 
 ## Trial
 
