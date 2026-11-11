@@ -992,21 +992,19 @@ ls -lh /srv/spokke/backups/
 **Deve aparecer:** `ok <tamanho> /srv/spokke/backups/spokke-<data>.dump`, e o mesmo arquivo na
 listagem.
 
-Por fim, o agendamento diário:
+Por fim, o agendamento diário (06:15 UTC são 03:15 em Brasília), sem abrir editor:
 
 ```bash
-crontab -e
+(crontab -l 2>/dev/null; echo '15 6 * * * bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1') | crontab -
+crontab -l
 ```
 
-Na primeira vez ele pergunta o editor: digite `1` (nano). Vá até o fim do arquivo e cole esta linha
-(06:15 UTC são 03:15 em Brasília):
-
-```
-15 6 * * * bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1
-```
-
-Salve (Ctrl+O, Enter) e saia (Ctrl+X). Confira com `crontab -l`. Amanhã de manhã, a última linha de
+**Deve aparecer:** a linha do backup, uma vez. Rode o primeiro comando **uma vez só** — de novo, ele
+duplica a linha, e o backup passa a rodar duas vezes por noite. Amanhã de manhã, a última linha de
 `/srv/spokke/backups/backup.log` tem de ser um `ok` do dia.
+
+**Se preferir o `crontab -e`:** cole só a linha que começa com `15 6`. As três crases (```) que
+delimitam o bloco no roteiro não entram — com elas, o cron recusa com `bad minute`.
 
 Os dumps ficam 14 dias em `/srv/spokke/backups`, e o backup semanal da Hostinger (passo 1.13) os leva
 para fora da máquina junto com o resto do disco.
