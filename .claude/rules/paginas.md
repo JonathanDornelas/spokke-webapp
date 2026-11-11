@@ -158,10 +158,21 @@ aluno da página (a mesma da IA), e material "sem idioma" não tem de onde tradu
 tudo volta ao de antes: a tradução é obrigatória e a linha sem separador fica de fora.
 
 **"Gerar com IA" é o terceiro modo de entrada, ao lado de digitar e colar** — não um lugar
-separado. O front está inteiro (fonte prompt / imagem / vídeo, quantidade, a lista de propostas
-marcáveis com "você já tem"), e o botão de gerar fica TRAVADO até existir um provedor
-(CLAUDE.md "Pendências"). Quando existir, a regra já está desenhada: a IA propõe, nada é gravado
-antes de o professor marcar e confirmar, e o que ele já tem é reaproveitado.
+separado. Três fontes: o **prompt** (o professor descreve), a **foto** de uma página e a **fala de
+um vídeo** (adr-003, seção 6). A regra é a mesma nas três: a IA propõe, nada é gravado antes de o
+professor marcar e confirmar, e o que ele já tem é reaproveitado.
+
+- **A área de arrastar é o seletor de arquivo**: tocar abre o do aparelho, arrastar também serve,
+  e o input escondido continua focável pelo Tab. A foto aparece em miniatura; o vídeo mostra a
+  duração e ganha os campos de TRECHO ("2:30", em branco é o vídeo inteiro), que dizem embaixo
+  quanto de fala vai para a IA, ou o que está errado. O teto é de 10 minutos de fala por geração.
+- **O arquivo é preparado no navegador**: a foto reduzida, e do vídeo só a fala do trecho. O aviso
+  sob a área diz isso, e pede material do professor ou didático, sem imagem nem voz de aluno.
+- **O botão diz o custo TOTAL** ("Gerar 10 propostas · 13 créditos"), e a linha sob ele separa as
+  propostas da leitura do arquivo. É a mesma conta que o servidor debita (`custoDaGeracao`).
+- **Fonte que a IA ligada não lê** (vídeo com só o Claude configurado) continua selecionável, e a
+  linha sob o botão diz por que ele está travado: `EstadoDaIa.fontes` vem do servidor.
+- O campo de texto vira "Foco do material · opcional" nas fontes de arquivo.
 
 **Repetido é dito ENQUANTO digita**, não depois de enviar: "você já tem esta frase" (ou "já está
 nesta atividade") aparece sob o campo. A comparação espelha a do servidor — os campos como vão ser

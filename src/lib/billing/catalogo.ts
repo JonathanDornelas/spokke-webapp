@@ -71,8 +71,19 @@ export const EQUIPE = { plano: 'super' } as const satisfies { plano: PlanoPago }
  */
 export const CARENCIA_DIAS = 7;
 
-/** Quanto custa, em créditos, cada material que a IA PROPÕE. Estornado se a proposta não serve. */
-export const CUSTO_IA = { porProposta: 1 } as const;
+/**
+ * Quanto custa, em créditos, uma geração por IA (docs/adr-003-ia-gemini.md "Imagem e vídeo"). A
+ * conta é `custoDaGeracao` (`./ia.ts`), a MESMA no botão da tela e no débito do servidor.
+ *
+ * - `porProposta`: cada material que a IA PROPÕE. Estornado se a proposta não serve.
+ * - `porImagem`: ler a foto. No Gemini 3.8 Flash ela entra como 1.120 tokens de entrada, R$ 0,0097
+ *   no preço de 2027, menos que o pior caso de um crédito na conta dos planos (R$ 0,030, adr-002).
+ * - `porMinutoDeFala`: ler o áudio do vídeo, por minuto COMEÇADO. São 25 tokens por segundo,
+ *   1.500 por minuto: R$ 0,013 por minuto no mesmo preço, também abaixo do pior caso.
+ *
+ * Mudar o preço do modelo, o dólar ou os tokens por mídia é refazer esta conta (adr-002 "Preços").
+ */
+export const CUSTO_IA = { porProposta: 1, porImagem: 1, porMinutoDeFala: 1 } as const;
 
 export function ehPlanoPago(valor: unknown): valor is PlanoPago {
 	return typeof valor === 'string' && (PLANOS_PAGOS as readonly string[]).includes(valor);

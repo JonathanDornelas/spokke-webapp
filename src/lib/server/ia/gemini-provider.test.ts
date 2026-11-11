@@ -1,12 +1,52 @@
 import { describe, expect, it } from 'vitest';
 import { ThinkingLevel } from '@google/genai';
 import {
+	conteudoParaGemini,
+	criarGemini,
 	limiteDoProvedor,
 	provedorOcupado,
 	raciocinioAcima,
 	raciocinioMinimo,
 	recusouORaciocinio
 } from './gemini-provider';
+import type { PedidoDeMateriais } from './prompt';
+
+describe('o que vai ao Gemini', () => {
+	const PEDIDO: PedidoDeMateriais = {
+		kind: 'SentencePair',
+		quantos: 3,
+		pedido: 'frases de restaurante',
+		idiomaAlvo: 'Inglês (EUA)',
+		idiomaOrigem: 'Português (Brasil)'
+	};
+
+	it('lê imagem e áudio', () => {
+		expect([...criarGemini({ apiKey: 'k', model: 'gemini-3.8-flash' }).le].sort()).toEqual([
+			'audio',
+			'imagem'
+		]);
+	});
+
+	it('sem arquivo, só o texto', () => {
+		expect(typeof conteudoParaGemini(PEDIDO)).toBe('string');
+	});
+
+	it('com a fala do vídeo, o áudio vai INLINE antes do texto, no tipo certo', () => {
+		const wav = new Uint8Array([82, 73, 70, 70, 1, 2]);
+		const conteudo = conteudoParaGemini({
+			...PEDIDO,
+			anexo: { tipo: 'audio', mime: 'audio/wav', dados: wav, segundos: 2 }
+		});
+		expect(Array.isArray(conteudo)).toBe(true);
+		if (!Array.isArray(conteudo)) return;
+		const partes = conteudo[0].parts ?? [];
+		expect(partes[0].inlineData).toEqual({
+			mimeType: 'audio/wav',
+			data: Buffer.from(wav).toString('base64')
+		});
+		expect(partes[1].text).toContain('frases de restaurante');
+	});
+});
 
 /**
  * O raciocínio do modelo entra na conta dos preços (docs/adr-002-billing.md

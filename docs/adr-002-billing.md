@@ -159,10 +159,16 @@ A conta partiu dos dois custos que existem: o **servidor** (R$ 129/mês, fixo) e
   tabela acima vira consulta:
 
   ```sql
-  SELECT model, kind, count(*) AS geracoes, sum(accepted) AS creditos,
-         round(avg(("outputTokens" + coalesce("thoughtsTokens", 0))::numeric / greatest(accepted, 1))) AS saida_por_credito
-  FROM "AiUsage" GROUP BY model, kind;
+  SELECT model, kind, source, count(*) AS geracoes, sum(accepted) AS creditos,
+         round(avg(("outputTokens" + coalesce("thoughtsTokens", 0))::numeric / greatest(accepted, 1))) AS saida_por_credito,
+         round(avg("inputTokens")) AS entrada_media,
+         round(avg("inputTokens"::numeric / nullif("mediaSeconds", 0) * 60)) AS entrada_por_minuto_de_fala
+  FROM "AiUsage" GROUP BY model, kind, source;
   ```
+
+- **Ler foto e vídeo também custa crédito** (adr-003, seção 6): um pela foto e um por minuto de
+  fala, além das propostas. Os dois ficam abaixo do pior caso por crédito desta conta (R$ 0,0097 a
+  foto e R$ 0,013 o minuto, contra R$ 0,030), então nenhum preço muda por causa deles.
 
 **Refazer a conta** quando mudar: `creditosPorCiclo` (`catalogo.ts`), o raciocínio do modelo, o
 preço do Gemini, o servidor, a taxa do gateway ou o enquadramento do imposto. Ficaram fora dela

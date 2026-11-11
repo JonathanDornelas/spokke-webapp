@@ -8,6 +8,10 @@ export interface RegistroDeUsoDeIa {
 	kind: string;
 	requested: number;
 	accepted: number;
+	/** De onde a IA partiu: `prompt`, `imagem` ou `video`. */
+	source: string;
+	/** Os segundos de fala do vídeo (os que a leitura cobrou); nulo fora dele. */
+	mediaSeconds: number | null;
 	inputTokens: number | null;
 	outputTokens: number | null;
 	thoughtsTokens: number | null;

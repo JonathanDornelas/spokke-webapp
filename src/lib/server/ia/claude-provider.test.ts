@@ -80,6 +80,42 @@ describe('o pedido e a resposta', () => {
 		expect(r.modelo).toBe('claude:claude-opus-5-5');
 	});
 
+	it('foto: o bloco de imagem em base64 vai ANTES do texto do professor', async () => {
+		responder(200, mensagem(JSON.stringify({ propostas: [PROPOSTA] })));
+		const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+		const claude = criarClaude({ apiKey: 'k', model: 'claude-opus-5-5' });
+		expect([...claude.le]).toEqual(['imagem']);
+		await claude.propor(
+			{ ...PEDIDO, anexo: { tipo: 'imagem', mime: 'image/jpeg', dados: jpeg } },
+			OPCOES
+		);
+
+		const [mensagemDoUsuario] = pedidos[0].corpo.messages as {
+			content: { type: string; source?: { type: string; media_type: string; data: string } }[];
+		}[];
+		expect(mensagemDoUsuario.content.map((b) => b.type)).toEqual(['image', 'text']);
+		expect(mensagemDoUsuario.content[0].source).toEqual({
+			type: 'base64',
+			media_type: 'image/jpeg',
+			data: Buffer.from(jpeg).toString('base64')
+		});
+	});
+
+	it('áudio não é com o Claude: falha de provedor antes de qualquer chamada', async () => {
+		responder(200, mensagem(JSON.stringify({ propostas: [] })));
+		const claude = criarClaude({ apiKey: 'k', model: 'claude-opus-5-5' });
+		await expect(
+			claude.propor(
+				{
+					...PEDIDO,
+					anexo: { tipo: 'audio', mime: 'audio/wav', dados: new Uint8Array(44), segundos: 1 }
+				},
+				OPCOES
+			)
+		).rejects.toBeInstanceOf(FalhaDoProvedor);
+		expect(pedidos).toHaveLength(0);
+	});
+
 	it('modelo sem a reserva do servidor: o parâmetro não vai', async () => {
 		responder(200, mensagem(JSON.stringify({ propostas: [] }), { model: 'claude-haiku-5-5' }));
 		await criarClaude({ apiKey: 'k', model: 'claude-haiku-5-5' }).propor(PEDIDO, OPCOES);

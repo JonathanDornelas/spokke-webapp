@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FalhaDoProvedor, type GeradorDeMateriais, type RespostaDoModelo } from './provider';
+import {
+	FalhaDoProvedor,
+	type GeradorDeMateriais,
+	type RespostaDoModelo,
+	type TipoDeAnexo
+} from './provider';
 import { comReserva } from './reserva';
 import type { PedidoDeMateriais } from './prompt';
 
@@ -19,10 +24,11 @@ const OPCOES = { schema: {}, timeoutMs: 1_000 };
 
 type Comportamento = 'responde' | 'falha' | 'quebra';
 
-function provedor(nome: string, comportamento: Comportamento) {
+function provedor(nome: string, comportamento: Comportamento, le: TipoDeAnexo[] = ['imagem']) {
 	const registro = { chamadas: 0 };
 	const gerador: GeradorDeMateriais = {
 		nome,
+		le: new Set(le),
 		async propor(): Promise<RespostaDoModelo> {
 			registro.chamadas += 1;
 			if (comportamento === 'falha') throw new FalhaDoProvedor(`${nome} sem créditos`);
@@ -73,5 +79,32 @@ describe('comReserva', () => {
 	it('um provedor só é ele mesmo, sem embrulho', () => {
 		const claude = provedor('claude', 'responde');
 		expect(comReserva([claude.gerador])).toBe(claude.gerador);
+	});
+
+	it('a fala de um vídeo pula quem não lê áudio e vai direto a quem lê', async () => {
+		const claude = provedor('claude', 'responde', ['imagem']);
+		const gemini = provedor('gemini', 'responde', ['imagem', 'audio']);
+		const fila = comReserva([claude.gerador, gemini.gerador]);
+		expect([...fila.le].sort()).toEqual(['audio', 'imagem']);
+		const comAudio: PedidoDeMateriais = {
+			...PEDIDO,
+			anexo: { tipo: 'audio', mime: 'audio/wav', dados: new Uint8Array(4), segundos: 1 }
+		};
+		const r = await fila.propor(comAudio, OPCOES);
+		expect(r.modelo).toBe('gemini');
+		expect(claude.registro.chamadas).toBe(0);
+	});
+
+	it('ninguém da fila lê o arquivo: falha de provedor, para a geração ser estornada', async () => {
+		const fila = comReserva(
+			[provedor('claude', 'responde', ['imagem']), provedor('outro', 'responde', [])].map(
+				(p) => p.gerador
+			)
+		);
+		const comAudio: PedidoDeMateriais = {
+			...PEDIDO,
+			anexo: { tipo: 'audio', mime: 'audio/wav', dados: new Uint8Array(4), segundos: 1 }
+		};
+		await expect(fila.propor(comAudio, OPCOES)).rejects.toBeInstanceOf(FalhaDoProvedor);
 	});
 });

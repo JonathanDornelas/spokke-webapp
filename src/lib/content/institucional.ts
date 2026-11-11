@@ -16,6 +16,8 @@
  * precisam ser criadas (docs/operacao.md).
  */
 
+import { CUSTO_IA } from '$lib/billing/catalogo';
+
 export interface LegalSection {
 	t: string;
 	p: string[];
@@ -25,6 +27,11 @@ export interface LegalSection {
 
 function P(t: string, p: string[], extra?: { l?: string[]; note?: string }): LegalSection {
 	return { t, p, ...extra };
+}
+
+/** "um crédito", "3 créditos": o custo da IA na ajuda sai de `CUSTO_IA`, o mesmo que o servidor cobra. */
+function creditos(n: number): string {
+	return n === 1 ? 'um crédito' : `${n} créditos`;
 }
 
 /** O nome que o rodapé e os documentos usam. */
@@ -160,7 +167,7 @@ export const privacidade: LegalSection[] = [
 			l: [
 				'Hospedagem e armazenamento: onde ficam o banco de dados e os arquivos de áudio.',
 				'Resend, o serviço de e-mail: recebe o endereço e o texto dos convites, dos avisos de conta e dos links de recuperação de senha.',
-				'Anthropic, pelo Claude, e Google, pelo Gemini: só quando você usa "Gerar com IA", e só o pedido que você escreveu com os nomes dos idiomas. O pedido vai ao Claude; ao Gemini, só quando o Claude não está disponível.',
+				'Anthropic, pelo Claude, e Google, pelo Gemini: só quando você usa "Gerar com IA", e só o que você manda: o pedido escrito, os nomes dos idiomas e, se você escolher, a foto de uma página ou a fala do trecho de um vídeo. O pedido vai ao Claude, e ao Gemini só quando o Claude não está disponível. A fala do vídeo vai sempre ao Gemini, porque o Claude não lê áudio.',
 				'Google, no login: só quando você escolhe "Continuar com o Google". Ele confirma quem você é; nada do Spokke vai para ele além do pedido de entrada.',
 				'Google, pelo Google Analytics: só nas páginas públicas e só com o seu aceite. Recebe dados de navegação, como a página visitada, o tipo de aparelho e de onde veio a visita, sem nome nem e-mail.',
 				'Mercado Pago: os dados da cobrança, nos planos pagos.',
@@ -183,6 +190,7 @@ export const privacidade: LegalSection[] = [
 	P('Seu material e a IA', [
 		'As questões da atividade são montadas pelo próprio Spokke a partir do material que você cadastra, por regras fixas, sem modelo de linguagem e sem enviar o seu material a ninguém.',
 		'"Gerar com IA" é opcional e existe nos planos Pro e Super. Quando você usa, o pedido que você escreveu vai ao Claude, da Anthropic, para ele propor materiais (ou ao Gemini, do Google, quando o Claude não está disponível). Nenhum dado de aluno vai junto, e nada entra na sua biblioteca antes de você marcar e confirmar.',
+		'Se você parte de uma foto ou de um vídeo, a foto vai junto do pedido. Do vídeo vai só a fala do trecho que você escolheu: o vídeo em si não sai do seu computador. A IA lê o arquivo uma vez para propor o material, e o Spokke não guarda nem a foto nem o áudio. Por isso, use material seu ou didático, sem imagem nem voz de aluno.',
 		'Usamos as modalidades pagas dos dois, em que o que é enviado não treina modelos. Nós também não usamos o seu material nem as respostas dos alunos para isso.',
 		'O material e as atividades são seus: você edita e apaga quando quiser.',
 		'Se você faz parte de uma escola no plano Scholar, a coordenação vê números das suas turmas, nunca o nome de um aluno nem uma resposta.'
@@ -430,7 +438,7 @@ export const faqGrupos: FaqGroup[] = [
 		items: [
 			[
 				'Preciso preparar o material antes?',
-				'Não. Cole o que você já usa: a lista de frases do caderno, o texto da aula passada, o vocabulário da unidade. Escreva a frase no idioma que você ensina, e a tradução vem preenchida para você conferir. Nos planos Pro e Super, a IA também propõe material a partir de um pedido seu.'
+				'Não. Cole o que você já usa: a lista de frases do caderno, o texto da aula passada, o vocabulário da unidade. Escreva a frase no idioma que você ensina, e a tradução vem preenchida para você conferir. Nos planos Pro e Super, a IA também propõe material a partir de um pedido seu, da foto de uma página ou da fala de um vídeo.'
 			],
 			[
 				'Como o aluno recebe a atividade?',
@@ -493,7 +501,7 @@ export const faqGrupos: FaqGroup[] = [
 			],
 			[
 				'O que são os créditos de IA?',
-				'Nos planos Pro e Super, a IA propõe materiais a partir de um pedido seu. Cada proposta custa um crédito, e a que não servir é devolvida. Os créditos renovam todo mês, no dia em que o plano foi ativado, e não acumulam.'
+				`Nos planos Pro e Super, a IA propõe materiais a partir de um pedido seu, de uma foto ou de um vídeo. Cada proposta custa ${creditos(CUSTO_IA.porProposta)}, e a que não servir é devolvida. Ler uma foto custa ${creditos(CUSTO_IA.porImagem)} a mais, e cada minuto de fala de um vídeo, ${creditos(CUSTO_IA.porMinutoDeFala)}; o botão de gerar mostra o total antes do clique. Os créditos renovam todo mês, no dia em que o plano foi ativado, e não acumulam.`
 			],
 			[
 				'E se o meu plano vencer?',

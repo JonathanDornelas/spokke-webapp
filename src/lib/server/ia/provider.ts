@@ -1,3 +1,4 @@
+import type { TipoDeImagem } from '$lib/ia/arquivo';
 import type { PedidoDeMateriais } from './prompt';
 
 /**
@@ -10,11 +11,27 @@ import type { PedidoDeMateriais } from './prompt';
  */
 export interface GeradorDeMateriais {
 	readonly nome: string;
+	/**
+	 * O que o provedor lê ALÉM do texto do pedido (adr-003 "Imagem e vídeo"). A fila de reserva só
+	 * passa um pedido com arquivo a quem o lê, e `gerarPropostas` recusa ANTES de cobrar quando
+	 * ninguém lê: o Claude lê imagem e não lê áudio.
+	 */
+	readonly le: ReadonlySet<TipoDeAnexo>;
 	propor(
 		pedido: PedidoDeMateriais,
 		opcoes: { schema: unknown; timeoutMs: number }
 	): Promise<RespostaDoModelo>;
 }
+
+/**
+ * O arquivo que vai junto do pedido: a foto de uma página ou a fala de um vídeo. Vive só na memória
+ * da requisição — não é gravado em lugar nenhum, nem no bucket, nem no banco.
+ */
+export type AnexoDaIa =
+	| { tipo: 'imagem'; mime: TipoDeImagem; dados: Uint8Array }
+	| { tipo: 'audio'; mime: 'audio/wav'; dados: Uint8Array; segundos: number };
+
+export type TipoDeAnexo = AnexoDaIa['tipo'];
 
 export interface RespostaDoModelo {
 	dados: unknown;
@@ -41,3 +58,10 @@ export interface UsoDoModelo {
 
 /** O provedor recusou ou caiu — a geração é estornada e a tela diz para tentar de novo. */
 export class FalhaDoProvedor extends Error {}
+
+/** Os bytes do anexo em base64, como os dois provedores pedem o arquivo inline. */
+export function base64DoAnexo(anexo: AnexoDaIa): string {
+	return Buffer.from(anexo.dados.buffer, anexo.dados.byteOffset, anexo.dados.byteLength).toString(
+		'base64'
+	);
+}

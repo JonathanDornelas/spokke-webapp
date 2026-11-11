@@ -79,9 +79,11 @@ purgar); LÊ só a intranet. Nenhuma tela do Spokke mostra relato, nem ao profes
 
 `AiUsage` é UMA linha por geração respondida, com os tokens que o provedor informou (entrada, saída
 e raciocínio), o modelo, o tipo de material e quantas propostas foram pedidas e aceitas — a medição
-que substitui a estimativa dos preços (`docs/adr-002-billing.md` "Preços"). Nem o pedido do
-professor nem as propostas vão para ela. Escreve só `gerarPropostas`, por `repos/uso-de-ia.ts`;
-nenhuma tela lê — a conta é SQL da equipe.
+que substitui a estimativa dos preços (`docs/adr-002-billing.md` "Preços"). `source` diz de onde a
+IA partiu (`prompt`, `imagem` ou `video`) e `mediaSeconds`, quantos segundos de fala o vídeo mandou:
+é o que separa, na conta, os tokens de LER o arquivo dos de escrever as propostas (adr-003 "Imagem e
+vídeo"). Nem o pedido do professor, nem as propostas, nem o arquivo vão para ela. Escreve só
+`gerarPropostas`, por `repos/uso-de-ia.ts`; nenhuma tela lê — a conta é SQL da equipe.
 
 **Turma do módulo e programação** (`docs/adr-004-modulos-e-nivel.md`, atualização):
 `ModuleClassroom` é a turma ALOCADA ao módulo, única por par, e guarda a programação de envio em

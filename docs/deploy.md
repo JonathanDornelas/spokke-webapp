@@ -1260,7 +1260,7 @@ restaurar o backup.
 | Todo mundo bate no limite de tentativas          | faltou `ADDRESS_HEADER` / `XFF_DEPTH`                  | conferir o `.env` e recriar o web                                            |
 | Google: `redirect_uri_mismatch`                  | URI diferente no cliente OAuth                         | as duas URIs exatas, com `https://spokke.com.br`                             |
 | Google: só alguns e-mails conseguem entrar       | o app OAuth ainda está "em teste"                      | publicar o app (passo 1.11, item 5)                                          |
-| A gravação de voz dá erro 413                    | `BODY_SIZE_LIMIT` ausente                              | `BODY_SIZE_LIMIT="10M"` no `.env` e recriar o web                            |
+| A gravação de voz (ou o vídeo do "Gerar com IA") dá erro 413 | `BODY_SIZE_LIMIT` ausente ou abaixo de 10M | `BODY_SIZE_LIMIT="10M"` no `.env` e recriar o web                            |
 | O serviço de áudio reinicia sozinho              | memória                                                | `docker stats`, `free -h`; o tradutor sozinho ocupa ~3 GB                    |
 | O disco está enchendo                            | imagens velhas do Docker                               | `docker system df`; `docker image prune -f` (nunca com `--volumes`)          |
 

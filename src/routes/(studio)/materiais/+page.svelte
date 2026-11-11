@@ -27,6 +27,7 @@
 		criarMateriaisEmLote
 	} from './materiais.remote';
 	import { aceitarPropostasIa, gerarPropostasIa } from './ia.remote';
+	import { gerarComArquivo } from '$lib/client/arquivo-ia';
 	import { sugerirTraducao } from './traducao.remote';
 	import type { ResultadoMaterial } from '$lib/components/MaterialForm.svelte';
 	import type { EstadoDaIa, RespostaDaGeracao } from '$lib/billing/ia';
@@ -68,6 +69,7 @@
 			motivo: 'ia',
 			saldo: 0,
 			custoPorProposta: 1,
+			fontes: { imagem: false, video: false },
 			idiomas: null
 		},
 		iaIdiomas: { alvo: 'en-US', origem: 'pt-BR' },
@@ -175,7 +177,22 @@
 		kind: ContentUnitKind;
 		texto: string;
 		quantos: 5 | 10 | 20;
+		arquivo?: { fonte: 'imagem' | 'video'; blob: Blob };
 	}): Promise<RespostaDaGeracao> {
+		// Com arquivo (a foto, ou a fala do trecho do vídeo), o pedido vai pelo endpoint que
+		// recebe binário, com os mesmos idiomas da remote function.
+		if (pedido.arquivo) {
+			return gerarComArquivo({
+				requestId: crypto.randomUUID(),
+				kind: pedido.kind,
+				fonte: pedido.arquivo.fonte,
+				quantos: pedido.quantos,
+				pedido: pedido.texto,
+				arquivo: pedido.arquivo.blob,
+				sourceLang: data.iaIdiomas.origem,
+				targetLang: idioma || data.iaIdiomas.alvo
+			});
+		}
 		const r = await gerarPropostasIa({
 			requestId: crypto.randomUUID(),
 			kind: pedido.kind,
