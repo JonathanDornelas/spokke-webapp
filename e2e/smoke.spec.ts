@@ -13,6 +13,16 @@ test('a home abre com a promessa do produto', async ({ page }) => {
 test('o painel interno responde 404 para quem não está logado', async ({ page }) => {
 	const resposta = await page.goto('/admin');
 	expect(resposta?.status()).toBe(404);
+	// A MESMA tela de qualquer endereço que não existe, não um "Not found" em texto puro.
+	await expect(page.getByRole('heading', { name: 'Esta página não existe.' })).toBeVisible();
+});
+
+test('subpágina do painel interno também cai na tela de página não encontrada', async ({
+	page
+}) => {
+	const resposta = await page.goto('/admin/professores');
+	expect(resposta?.status()).toBe(404);
+	await expect(page.getByRole('heading', { name: 'Esta página não existe.' })).toBeVisible();
 });
 
 test('quem bate no limite chega aos planos sabendo por quê', async ({ page }) => {
