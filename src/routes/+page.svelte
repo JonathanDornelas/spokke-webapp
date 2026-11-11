@@ -1036,7 +1036,7 @@
 		<!-- 7 · Planos — a MESMA tabela de `/planos` (`PlanosTabela.svelte`), lendo os
 	     mesmos preços de `$lib/content/planos.ts`. Duas cópias divergiriam no
 	     primeiro ajuste de preço, e a home é onde a divergência aparece primeiro.
-	     Os PREÇOS SÃO PLACEHOLDER — ver o cabeçalho daquele arquivo. -->
+	     O valor de cada plano sai de `$lib/billing/precos.ts`. -->
 		<section id="planos" class="pt-[72px]">
 			<div class="reveal-row" use:reveal>
 				<PlanosTabela titulo="Um preço por professor. Para a escola, um contrato." />

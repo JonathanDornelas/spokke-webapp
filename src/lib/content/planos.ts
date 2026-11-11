@@ -9,7 +9,7 @@
  *
  * **Os PREÇOS também não moram aqui**: saem de `$lib/billing/precos.ts`, o mesmo
  * número que o checkout do Mercado Pago cobra. Aqui fica só o texto em volta.
- * Os valores continuam PLACEHOLDER (CLAUDE.md "Pendências").
+ * O Scholar não tem preço: é orçado por escola, e o CTA leva ao contato.
  */
 import {
 	LIMITES,

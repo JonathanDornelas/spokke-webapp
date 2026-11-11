@@ -12,7 +12,7 @@ describe('preços', () => {
 
 	it('o anual por mês é o total dividido por doze, arredondado', () => {
 		expect(porMes('basico', 'anual')).toBe(2_400);
-		expect(porMes('pro', 'mensal')).toBe(4_900);
+		expect(porMes('pro', 'mensal')).toBe(5_900);
 	});
 
 	it('a vitrine anuncia o que o checkout cobra', () => {

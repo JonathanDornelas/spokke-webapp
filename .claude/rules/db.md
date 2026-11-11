@@ -28,6 +28,7 @@ Teacher ─┬─ Classroom ─── Student ─┬─ Invite ─── Deliver
          │                                          └─ ModuleSend (dueAt, status) ─── Activity
          ├─ AuditEvent (actor, type, data)   PlanRequest (pedido de plano)
          ├─ CreditEntry (delta, cicloInicio, refKey único)            [livro-razão]
+         ├─ AiUsage (requestId único, model, tokens)        [medição dos preços; só números]
          └─ SchoolMembership ─── School ─── SchoolInvite (token)      [plano Scholar]
 Teacher ─── Notification (kind, key, data, count, readAt)          [o sino; docs/notificacoes.md]
 Teacher ─── ProviderSubscription (id do provedor, plano, ciclo, status)   [Mercado Pago]
@@ -75,6 +76,12 @@ apagar a tentativa leva o relato. Escreve o Player (`repos/relatos.ts`, criar) e
 purgar); LÊ só a intranet. Nenhuma tela do Spokke mostra relato, nem ao professor.
 
 `CreditEntry` não tem contador ao lado: saldo = franquia do plano + soma dos lançamentos do ciclo.
+
+`AiUsage` é UMA linha por geração respondida, com os tokens que o provedor informou (entrada, saída
+e raciocínio), o modelo, o tipo de material e quantas propostas foram pedidas e aceitas — a medição
+que substitui a estimativa dos preços (`docs/adr-002-billing.md` "Preços"). Nem o pedido do
+professor nem as propostas vão para ela. Escreve só `gerarPropostas`, por `repos/uso-de-ia.ts`;
+nenhuma tela lê — a conta é SQL da equipe.
 
 **Turma do módulo e programação** (`docs/adr-004-modulos-e-nivel.md`, atualização):
 `ModuleClassroom` é a turma ALOCADA ao módulo, única por par, e guarda a programação de envio em

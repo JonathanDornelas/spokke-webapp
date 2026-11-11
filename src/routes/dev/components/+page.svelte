@@ -1783,8 +1783,8 @@
 			<h2 class="font-display text-2xl">Planos</h2>
 			<p class="mt-1 max-w-2xl text-sm text-base-content/60">
 				A mesma tabela da home e de <code class="font-mono text-[12px]">/planos</code>. Os preços
-				são placeholder — vivem em
-				<code class="font-mono text-[12px]">$lib/content/planos.ts</code>.
+				vivem em
+				<code class="font-mono text-[12px]">$lib/billing/precos.ts</code>.
 			</p>
 
 			<div class="mt-5 flex flex-wrap gap-2">

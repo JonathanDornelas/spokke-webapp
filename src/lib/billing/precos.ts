@@ -6,23 +6,26 @@ import type { CicloDeCobranca, PlanoPago } from './catalogo';
  * lugar só, porque cobrar um valor e anunciar outro é o erro de cobrança que o
  * professor descobre na fatura do cartão.
  *
- * ┌──────────────────────────────────────────────────────────────────────┐
- * │ OS VALORES SÃO PLACEHOLDER — pendência de produto (CLAUDE.md         │
- * │ "Pendências"). Com o gateway ligado, ESTE é o valor da assinatura:   │
- * │ troque antes de pôr o token de produção.                             │
- * └──────────────────────────────────────────────────────────────────────┘
+ * **Como os valores saíram** (decisão do dono, 2026-11-11, docs/adr-002-billing.md
+ * "Preços"): o servidor é custo FIXO e se paga com cinco assinantes do Básico;
+ * o que separa um plano do outro é o Gemini no PIOR caso — todos os créditos do
+ * ciclo gastos em textos com perguntas. A regra é que, nesse caso, nenhum plano
+ * deixe menos que o Básico depois do Mercado Pago (4,49%) e do imposto (6%).
+ * Mexer em `creditosPorCiclo` (`catalogo.ts`) ou no raciocínio do modelo
+ * (`gemini-provider.ts`) é refazer essa conta.
  *
  * O anual é cobrado de uma vez, a cada doze meses (`frequency: 12` no
- * Mercado Pago), e vale dez mensalidades.
+ * Mercado Pago), e vale dez mensalidades. O Scholar não tem preço aqui: é
+ * orçado por escola (ADR-005).
  */
 export const PRECO_EM_CENTAVOS: Readonly<Record<PlanoPago, Record<CicloDeCobranca, number>>> = {
 	basico: { mensal: 2_900, anual: 29_000 },
-	pro: { mensal: 4_900, anual: 49_000 },
-	super: { mensal: 8_900, anual: 89_000 }
+	pro: { mensal: 5_900, anual: 59_000 },
+	super: { mensal: 9_900, anual: 99_000 }
 };
 
-/** Marca para o desenvolvedor: nenhum preço deste arquivo foi aprovado. */
-export const PRECOS_SAO_PLACEHOLDER = true;
+/** Marca para o desenvolvedor: verdadeiro enquanto nenhum preço deste arquivo foi aprovado. */
+export const PRECOS_SAO_PLACEHOLDER = false;
 
 /** Quantos meses cada cobrança cobre. */
 export const MESES_DO_CICLO: Readonly<Record<CicloDeCobranca, number>> = { mensal: 1, anual: 12 };

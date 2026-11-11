@@ -1,0 +1,28 @@
+# PRODUÇÃO (Linux) — a aplicação na rede `spokke`. Usado JUNTO do compose de
+# sempre, nunca sozinho:
+#
+#   docker compose -f docker-compose.yml -f deploy/compose/app.yml up -d
+#
+# Em desenvolvimento (Docker Desktop) os quatro composes conversam pelas portas
+# que cada um publica no host (`host.docker.internal`). Num servidor Linux isso
+# tem dois problemas: o Docker passa por cima do firewall (ufw) ao publicar uma
+# porta, então o banco e o serviço de áudio ficariam abertos para a internet; e
+# a conversa entre redes de projetos diferentes depende de regra de firewall do
+# próprio Docker. Aqui cada serviço entra também na rede externa `spokke`
+# (criada uma vez: `docker network create spokke`) e acha os outros pelo nome do
+# container — `spokke-postgres`, `spokke-minio`, `audiotext`. As portas
+# publicadas continuam existindo, presas ao 127.0.0.1 pelas variáveis do `.env`
+# (`APP_PORT=127.0.0.1:3000`), só para teste de dentro do servidor.
+#
+# Os ciclos de vida continuam separados: a rede não é de nenhum compose, e
+# derrubar um não derruba os outros. Ver docs/deploy.md.
+
+services:
+  web:
+    networks: [default, spokke]
+  worker:
+    networks: [default, spokke]
+
+networks:
+  spokke:
+    external: true

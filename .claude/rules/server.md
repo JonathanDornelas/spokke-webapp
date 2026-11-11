@@ -397,6 +397,11 @@ worker da publicação tenta de novo com backoff.
   professor delimitado, como dado. Nunca dado de aluno, nunca a nota privada do professor.
 - Créditos: débito ANTES da chamada (transação curta, `refKey` = `requestId` do cliente), chamada
   FORA da transação com teto de tempo, estorno do que não serviu.
+- **Raciocínio MÍNIMO** (`raciocinioMinimo` em `gemini-provider.ts`, que escolhe a opção certa para
+  cada geração do Gemini a partir do `GEMINI_MODEL`): os tokens de raciocínio são cobrados como saída
+  e os preços dos planos contam com ele desligado. Ligar é refazer a conta (adr-002 "Preços").
+- Cada geração respondida grava os tokens em `AiUsage` (`registrarUso`), DEPOIS do estorno e sem
+  nunca derrubar a geração: medir não pode custar ao professor o que ele pediu.
 
 ## Tradução do material
 

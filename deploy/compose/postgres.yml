@@ -1,0 +1,15 @@
+# PRODUÇÃO (Linux) — o banco na rede `spokke` (ver deploy/compose/app.yml):
+#
+#   docker compose --env-file ../env/infra.env -f docker/postgres.yml -f deploy/compose/postgres.yml up -d
+#
+# A aplicação chega nele como `spokke-postgres:5432`. A porta publicada fica
+# presa ao 127.0.0.1 (`POSTGRES_PORT=127.0.0.1:5432` no infra.env): o banco
+# nunca responde para fora do servidor.
+
+services:
+  postgres:
+    networks: [default, spokke]
+
+networks:
+  spokke:
+    external: true

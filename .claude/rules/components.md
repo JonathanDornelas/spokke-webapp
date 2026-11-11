@@ -942,8 +942,8 @@ dão a volta nas pontas).
 A tabela de planos, UMA para a home (seção `#planos`) e para `(site)/planos`. Props
 `{ planoAtual?: PlanoId | null; mostrarCabecalho?; mostrarRodape?; titulo?; lede?; compacto? }`.
 
-**Os preços são PLACEHOLDER e vivem em `$lib/content/planos.ts`, nunca aqui** — ver paginas.md
-"Planos e preços". O componente desenha o que aquele arquivo diz.
+**Os preços chegam por `$lib/content/planos.ts` (que os lê de `$lib/billing/precos.ts`), nunca
+daqui** — ver paginas.md "Planos e preços". O componente desenha o que aquele arquivo diz.
 
 **É um carrossel** (pedido do dono do repositório): o cartão em foco fica no centro em tamanho
 cheio e os vizinhos aparecem a 92%, esmaecidos, com as pontas do trilho sumindo em degradê. **Abre

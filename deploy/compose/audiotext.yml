@@ -1,0 +1,24 @@
+# PRODUÇÃO (Linux) — o serviço de áudio na rede `spokke` (ver deploy/compose/app.yml).
+# Fica neste repositório para o deploy morar num lugar só, mas é usado com o
+# compose do OUTRO projeto, rodando de dentro dele:
+#
+#   cd /srv/spokke/audiotext-service
+#   docker compose -f docker-compose.yml -f ../spokke-service/deploy/compose/audiotext.yml up -d --build
+#
+# A aplicação chega nele como `audiotext:8000` (a porta do container, não a
+# 8080 do host). A porta publicada fica presa ao 127.0.0.1
+# (`AUDIOTEXT_PORT=127.0.0.1:8080` no .env de lá): é por ela que se confere o
+# `/health` de dentro do servidor. O token (`AUDIOTEXT_API_TOKEN`) é obrigatório
+# em produção — vazio, o serviço atende qualquer um, e ele transporta a voz de
+# aluno.
+
+services:
+  audiotext:
+    networks:
+      default: {}
+      spokke:
+        aliases: [audiotext]
+
+networks:
+  spokke:
+    external: true

@@ -77,14 +77,20 @@ apaga o cenário anterior e o recria recente. Recusa `NODE_ENV=production`.
 
 ## Produção
 
+**O roteiro do servidor está em `docs/deploy.md`** (da véspera do lançamento à rotina de atualizar,
+backup e voltar versão), com os arquivos em `deploy/`. Em produção os composes conversam pela rede
+Docker `spokke`, e não pelas portas do host como em desenvolvimento: as portas ficam presas ao
+`127.0.0.1` e só o Caddy responde para fora.
+
 - **Migrations**: `pnpm db:deploy` (`prisma migrate deploy`) antes de subir a versão nova. Nunca
   `migrate dev` nem `db push` em produção. O Prisma 7 não gera o cliente sozinho: o `postinstall`
   roda `prisma generate`.
 - **Ordem**: migration → worker → web.
-- **Bucket**: UMA regra de ciclo de vida precisa existir no R2 — `fala/` (a voz do aluno)
-  expira em **7 dias**. `tts/` (o áudio das atividades) NÃO tem prazo: sai quando a atividade é
-  apagada. Em dev o container `init` de `docker/minio.yml` escreve a regra; no R2, crie-a à mão.
-  Só `tts/` tem leitura pública.
+- **Bucket**: UMA regra de ciclo de vida — `fala/` (a voz do aluno) expira em **7 dias**. `tts/` (o
+  áudio das atividades) NÃO tem prazo: sai quando a atividade é apagada. No lançamento a mídia fica
+  no MinIO do próprio servidor, e o container `init` de `docker/minio.yml` escreve a regra; no R2
+  (a migração planejada, `docs/deploy.md` "Depois do lançamento"), crie-a à mão. Só `tts/` tem
+  leitura pública.
 
 ## Variáveis de ambiente
 

@@ -2,9 +2,9 @@
 	// A tabela de planos. UMA, para a home e para `/planos` — enquanto cada tela
 	// tivesse a sua, as duas divergiam no primeiro ajuste de preço.
 	//
-	// **Os preços são placeholder** e vivem em `$lib/content/planos.ts`, nunca
-	// aqui; os LIMITES saem de `$lib/billing/catalogo.ts` através dele. Este
-	// componente desenha o que aquele arquivo diz.
+	// **Os preços** saem de `$lib/billing/precos.ts` e os LIMITES de
+	// `$lib/billing/catalogo.ts`, os dois através de `$lib/content/planos.ts` —
+	// nunca daqui. Este componente desenha o que aquele arquivo diz.
 	//
 	// **Não decide o que "assinar" faz.** Quem está logado aperta o CTA e a
 	// PÁGINA recebe `onescolher(plano, ciclo)` — sem gateway, ela registra um

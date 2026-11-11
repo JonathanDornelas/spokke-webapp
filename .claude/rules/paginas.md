@@ -1072,7 +1072,8 @@ plano é propaganda para dentro.
 
 **Os planos são Básico, Pro, Super e Scholar**, e os NÚMEROS de cada um saem de
 `$lib/billing/catalogo.ts` — o mesmo arquivo que decide o acesso; `catalogo.test.ts` garante que o
-cartão não promete outra coisa. **Os PREÇOS continuam placeholder** em `$lib/content/planos.ts`.
+cartão não promete outra coisa. **Os PREÇOS saem de `$lib/billing/precos.ts`** (o que o checkout
+cobra); o Scholar não tem preço na tela, só "Sob proposta" e o contato.
 
 O CTA depende de quem lê: logado, ele chama `solicitarPlano` pela página (`onescolher`) — sem gateway,
 registra um pedido e a tela diz que a equipe vai entrar em contato; deslogado, leva ao cadastro; o

@@ -28,6 +28,10 @@ importa o SDK.
   proposta não tem `note` (a nota é do professor) nem `imageMediaId`.
 - **O id do modelo não está no código**: `GEMINI_MODEL`. O catálogo do Gemini muda de nome com
   frequência; quem opera escolhe o Flash estável vigente.
+- **Raciocínio mínimo** (atualização de 2026-11-11): o modelo roda com o menor raciocínio que aceita
+  (`raciocinioMinimo`), porque esses tokens são cobrados como saída e os preços dos planos foram
+  calculados assim (`docs/adr-002-billing.md` "Preços"). Cada geração respondida grava os tokens que
+  o Gemini informou em `AiUsage`.
 - **Agnóstico de idioma**: o prompt (`prompt.ts`) só recebe rótulos de idioma do `LanguageProfile`.
   Um teste garante que a estrutura é a mesma para todo profile. O texto do professor vai delimitado,
   como dado, depois das instruções.

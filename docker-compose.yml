@@ -17,6 +17,9 @@
 #
 # Migrations não sobem sozinhas: continuam sendo aplicadas à mão
 # (`pnpm db:migrate`), como o projeto já faz.
+#
+# **Em produção (Linux) este arquivo vai junto de `deploy/compose/app.yml`**, que
+# põe os dois serviços na rede `spokke` em vez das portas do host — docs/deploy.md.
 
 name: spokke
 

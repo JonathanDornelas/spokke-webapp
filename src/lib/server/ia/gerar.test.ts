@@ -16,8 +16,10 @@ import { FalhaDoProvedor, type GeradorDeMateriais } from './provider';
 const ids = { pro: crypto.randomUUID(), outro: crypto.randomUUID(), basico: crypto.randomUUID() };
 const futuro = new Date(Date.now() + 30 * 24 * 3600 * 1000);
 
-function falso(resposta: unknown): GeradorDeMateriais {
-	return { nome: 'falso', propor: async () => resposta };
+const usoFalso = { entrada: 700, saida: 120, raciocinio: 30 };
+
+function falso(dados: unknown): GeradorDeMateriais {
+	return { nome: 'falso', propor: async () => ({ dados, uso: usoFalso }) };
 }
 const quebrado: GeradorDeMateriais = {
 	nome: 'quebrado',
@@ -63,9 +65,10 @@ const saldo = async (id: string) => (await acessoDoProfessor({ id })).creditos.s
 describe('geração por IA', () => {
 	it('cobra só o que serviu: inválida e repetida são estornadas', async () => {
 		const antes = await saldo(ids.pro);
+		const requestId = crypto.randomUUID();
 		const r = await gerarPropostas(
 			{ id: ids.pro },
-			{ ...pedidoBase, requestId: crypto.randomUUID() },
+			{ ...pedidoBase, requestId },
 			falso({
 				propostas: [
 					{ source: 'Eu acordo cedo.', target: 'I wake up early.' },
@@ -85,17 +88,49 @@ describe('geração por IA', () => {
 			estornados: 3
 		});
 		expect(await saldo(ids.pro)).toBe(antes - 2);
+
+		// A medição dos preços: os tokens que o provedor informou, no professor
+		// que pediu, com o que foi pedido e o que ficou cobrado — e nada do texto.
+		const uso = await prisma.aiUsage.findUnique({ where: { requestId } });
+		expect(uso).toMatchObject({
+			teacherId: ids.pro,
+			model: 'falso',
+			kind: 'SentencePair',
+			requested: 5,
+			accepted: 2,
+			inputTokens: 700,
+			outputTokens: 120,
+			thoughtsTokens: 30
+		});
 	});
 
-	it('provedor fora do ar devolve tudo', async () => {
+	it('provedor fora do ar devolve tudo, e não há uso a gravar', async () => {
 		const antes = await saldo(ids.pro);
-		const r = await gerarPropostas(
-			{ id: ids.pro },
-			{ ...pedidoBase, requestId: crypto.randomUUID() },
-			quebrado
-		);
+		const requestId = crypto.randomUUID();
+		const r = await gerarPropostas({ id: ids.pro }, { ...pedidoBase, requestId }, quebrado);
 		expect(r.ok).toBe(false);
 		expect(await saldo(ids.pro)).toBe(antes);
+		expect(await prisma.aiUsage.count({ where: { requestId } })).toBe(0);
+	});
+
+	it('provedor que não informa tokens: o uso é gravado com eles nulos', async () => {
+		const requestId = crypto.randomUUID();
+		const semUso: GeradorDeMateriais = {
+			nome: 'sem-uso',
+			propor: async () => ({
+				dados: { propostas: [{ source: 'Eu leio.', target: 'I read.' }] },
+				uso: null
+			})
+		};
+		const r = await gerarPropostas({ id: ids.pro }, { ...pedidoBase, requestId }, semUso);
+		expect(r.ok).toBe(true);
+		expect(await prisma.aiUsage.findUnique({ where: { requestId } })).toMatchObject({
+			teacherId: ids.pro,
+			accepted: 1,
+			inputTokens: null,
+			outputTokens: null,
+			thoughtsTokens: null
+		});
 	});
 
 	it('o mesmo requestId debita uma vez só', async () => {

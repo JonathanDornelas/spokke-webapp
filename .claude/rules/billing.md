@@ -25,8 +25,10 @@ Decisões e histórico: `docs/adr-002-billing.md` (planos e cobrança) e `docs/a
 Os números moram em **`src/lib/billing/catalogo.ts`** e em nenhum outro lugar. A vitrine
 (`src/lib/content/planos.ts`) escreve os textos a partir dele; `catalogo.test.ts` falha se divergirem.
 **O preço mora em `src/lib/billing/precos.ts`** (centavos) — é o que o checkout COBRA e o que a vitrine
-MOSTRA (`planos.ts` escreve o texto a partir dele; `precos.test.ts` confere). Os valores continuam
-placeholder.
+MOSTRA (`planos.ts` escreve o texto a partir dele; `precos.test.ts` confere): Básico R$ 29, Pro R$ 59 e
+Super R$ 99 por mês, o anual a dez mensalidades. O Scholar não tem preço publicado — é orçado por
+escola. **Os preços dependem dos créditos e do raciocínio do modelo**: mudar `creditosPorCiclo` ou
+o `thinkingConfig` do Gemini é refazer a conta (`docs/adr-002-billing.md` "Preços").
 
 **Os limites são de ESTOQUE** — contam o que existe agora. Atividade arquivada não conta; material
 reaproveitado (`findEquivalent`) não ocupa vaga nova. Créditos renovam por ciclo mensal e não

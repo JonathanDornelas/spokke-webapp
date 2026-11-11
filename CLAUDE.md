@@ -84,6 +84,7 @@ pnpm worker         # worker da fila (rodar junto do dev)
 pnpm db:migrate     # prisma migrate dev
 pnpm db:studio
 pnpm db:seed:demo <email>   # cenário de demonstração numa conta (docs/operacao.md)
+bash deploy/scripts/atualizar.sh   # NO SERVIDOR: nova versão no ar (docs/deploy.md)
 ```
 
 ## Onde está o resto
@@ -120,8 +121,9 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   existe com autorização dele — auth.md). **O áudio de atividade (`tts/`) não vence**: ele vivia
   10 dias e passou a ficar enquanto alguma atividade do professor o usa — com o limite de
   atividades por plano o estoque é finito. Apagar a atividade apaga o que só ela usava
-  (`server/tts/limpeza.ts`). Em dev a regra vive em `docker/minio.yml`; em produção o storage
-  continua sendo o R2 preferido de server.md, e ela precisa ser recriada lá.
+  (`server/tts/limpeza.ts`). A regra vive em `docker/minio.yml`, que é também o storage do
+  lançamento (o MinIO no próprio servidor, atrás do Caddy). O R2 preferido de server.md é a
+  migração planejada, e ali ela precisa ser recriada à mão (`docs/deploy.md`).
 - **O alvo de produção é CPU, não GPU**: 4 vCPU, 16 GB, 200 GB NVMe. Por isso o Whisper roda
   `small` em `int8` com teto de 2 núcleos (`audiotext-service/app/config.py`) e todo container
   tem limite de CPU e memória no compose. Medido nessa configuração: TTS de uma frase em ~0,9 s,
@@ -155,8 +157,14 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
 - **Quatro composes, de propósito**: `docker-compose.yml` roda só a APLICAÇÃO (web + worker),
   `docker/postgres.yml` e `docker/minio.yml` rodam a infra, e o serviço de áudio tem o dele em
   `../audiotext-service`. Cada um com o próprio volume e o próprio ciclo de vida — reconstruir
-  a aplicação não pode encostar em dado do professor nem no áudio publicado. Eles conversam
-  pelas portas publicadas no host (`host.docker.internal`), não por uma rede compartilhada.
+  a aplicação não pode encostar em dado do professor nem no áudio publicado. Em desenvolvimento
+  eles conversam pelas portas publicadas no host (`host.docker.internal`); **em produção (Linux),
+  pela rede Docker externa `spokke`**, com as portas presas ao `127.0.0.1` e só o Caddy aberto
+  (`deploy/compose/`, `docs/deploy.md`) — num servidor exposto, a porta publicada passaria por cima
+  do firewall. A rede não é de nenhum compose, então os ciclos de vida continuam separados.
+- **Deploy: `docs/deploy.md`** (a véspera, o dia, atualizar, backup e voltar versão), com os arquivos
+  em `deploy/`. No lançamento a mídia fica no MinIO do próprio servidor, atrás do Caddy; o R2 é a
+  migração planejada.
 - **E-mail: Resend, plano grátis**, por SMTP (`EMAIL_PROVIDER=smtp` + `SMTP_URL` + `EMAIL_FROM`,
   server.md "E-mail"). Vazio é o estado de fábrica e só registra no log — foi o que fez o convite
   "não estar enviando" — e continua sendo o caminho de desenvolvimento, sem container nenhum.
@@ -169,9 +177,13 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   interno (`/admin`); com `mercadopago` + `MERCADOPAGO_ACCESS_TOKEN` + `MERCADOPAGO_WEBHOOK_SECRET`,
   vira o checkout do Mercado Pago e o webhook ativa o plano (`docs/operacao.md` "Mercado Pago").
   Falta pôr as credenciais e conferir no sandbox o que a documentação não fecha (billing.md).
-- **Os PREÇOS são PLACEHOLDER** (`src/lib/billing/precos.ts`, o mesmo valor que o checkout cobra e
-  a vitrine mostra). Os limites não:
-  eles saem do catálogo, e `catalogo.test.ts` garante que a vitrine não promete outra coisa.
+- **Preços: Básico R$ 29, Pro R$ 59, Super R$ 99** por mês, o anual a dez mensalidades
+  (`src/lib/billing/precos.ts`, o mesmo valor que o checkout cobra e a vitrine mostra). O Scholar
+  não tem preço publicado: é orçado por escola, pelo contato. A conta está em
+  `docs/adr-002-billing.md` "Preços": o servidor se paga com cinco assinantes, e o que separa os
+  planos é o Gemini no pior caso — por isso o modelo roda com raciocínio MÍNIMO e cada geração
+  grava os tokens (`AiUsage`), para trocar a estimativa por medição. Os limites saem do catálogo, e
+  `catalogo.test.ts` garante que a vitrine não promete outra coisa.
 - **O avatar da conta são dezoito números, não uma imagem** (`src/lib/avatar/`) — coluna de texto
   em `Teacher` e `StudentAccount`, sem bucket e sem prazo de validade. Vale para professor e
   aluno, e é a única coisa da conta do aluno que ele escolhe por gosto (a regra de "nome, e-mail

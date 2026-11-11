@@ -119,9 +119,57 @@ Decisão do dono: **Mercado Pago**. O esqueleto do Stripe saiu (cliente, webhook
   `free_trial` e o cadastro levando ao checkout — decisão de produto, porque muda a primeira tela
   depois do cadastro.
 
+### 9. Preços (2026-11-11)
+
+**Básico R$ 29, Pro R$ 59 e Super R$ 99 por mês; o anual a dez mensalidades.** O Scholar não tem
+preço publicado: a escola é orçada caso a caso, pelo contato (ADR-005). Os valores estão em
+`src/lib/billing/precos.ts`.
+
+A conta partiu dos dois custos que existem: o **servidor** (R$ 129/mês, fixo) e o **Gemini**
+(variável, por crédito). E desconta o que sai de cada cobrança: **4,49%** do Mercado Pago
+(assinatura, recebimento na hora) e **6%** de imposto (Simples, Anexo III — no Anexo V seriam
+15,5% e a conta muda).
+
+- **O servidor não decide o preço de plano nenhum.** Cinco assinantes do Básico já o pagam. Ele
+  decide quantos assinantes faltam para empatar, não quanto cada um custa.
+- **O Gemini decide, e só no pior caso.** Preço de referência do Flash a partir de 1/1/2027:
+  US$ 1,50 por milhão de tokens de entrada e US$ 7,50 de saída (até 31/12 está pela metade), com o
+  dólar a R$ 5,60 mais 3,5% de IOF. Por crédito, estimado — não medido:
+
+  | Cenário                                     | Por crédito | 300 (Pro) | 1.000 (Super) |
+  | ------------------------------------------- | ----------- | --------- | ------------- |
+  | Frases e vocabulário, sem raciocínio        | R$ 0,002    | R$ 0,70   | R$ 2,35       |
+  | Uso misto, raciocínio padrão do modelo      | R$ 0,012    | R$ 3,70   | R$ 12,35      |
+  | Textos em lotes de 5, raciocínio alto       | R$ 0,062    | R$ 18,60  | R$ 62,10      |
+  | Textos em lotes de 5, **raciocínio mínimo** | R$ 0,030    | R$ 9,00   | R$ 29,90      |
+
+  As estimativas supõem ~700 tokens de entrada por pedido (instruções, schema e o pedido do
+  professor), ~40 de saída por frase e ~600 por texto com perguntas, e de 0 a 4.000 de raciocínio
+  por pedido — que o Gemini cobra como saída.
+
+- **A regra**: no pior caso (todos os créditos do ciclo gastos em textos), nenhum plano pode deixar
+  menos que o Básico depois de taxa e imposto (R$ 25,96). Com os preços provisórios (R$ 49 e R$ 89)
+  e o raciocínio padrão, o Super deixava R$ 17,59 — menos que o Básico — e o anual dele, R$ 4,31.
+- **Raciocínio mínimo** (`gemini-provider.ts`): para devolver frases num JSON com schema o
+  raciocínio não ajuda, e ele dobrava o pior caso. Com ele mínimo, o Super a R$ 99 deixa R$ 58,71
+  no pior caso (R$ 43,94 no anual) e o Pro a R$ 59, R$ 43,84. Sem ele, o Super teria de custar
+  R$ 129.
+- **Medir em vez de estimar**: cada geração grava os tokens que o modelo informou (`AiUsage`:
+  entrada, saída e raciocínio, com o modelo e o tipo de material). Com algumas semanas de uso, a
+  tabela acima vira consulta:
+
+  ```sql
+  SELECT model, kind, count(*) AS geracoes, sum(accepted) AS creditos,
+         round(avg(("outputTokens" + coalesce("thoughtsTokens", 0))::numeric / greatest(accepted, 1))) AS saida_por_credito
+  FROM "AiUsage" GROUP BY model, kind;
+  ```
+
+**Refazer a conta** quando mudar: `creditosPorCiclo` (`catalogo.ts`), o raciocínio do modelo, o
+preço do Gemini, o servidor, a taxa do gateway ou o enquadramento do imposto. Ficaram fora dela
+contador, domínio, o Resend acima do plano grátis e o próximo servidor quando este lotar.
+
 ## Pendências
 
-- Preços reais (os de `planos.ts` seguem placeholder).
 - Ligar o Mercado Pago (credenciais e webhook — `docs/operacao.md`) e conferir no sandbox os
   pontos que a documentação não fecha (billing.md "Mercado Pago").
 - O teste exigindo cartão (seção 8).

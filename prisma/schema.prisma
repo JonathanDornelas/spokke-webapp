@@ -71,6 +71,8 @@ model Teacher {
   auditEvents           AuditEvent[]
   planRequests          PlanRequest[]
   creditEntries         CreditEntry[]
+  /// Os tokens de cada geração por IA (docs/adr-002-billing.md "Preços").
+  aiUsages              AiUsage[]
   modules               Module[]
   notifications         Notification[]
   providerSubscriptions ProviderSubscription[]
@@ -730,6 +732,38 @@ model CreditEntry {
   teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@index([teacherId, cicloInicio])
+}
+
+/// Quanto o modelo gastou numa geração por IA, como ELE informou — a medição
+/// que substitui a estimativa dos preços (docs/adr-002-billing.md "Preços").
+/// Só números: nem o pedido do professor nem as propostas são guardados aqui.
+/// Uma linha por pedido que chegou a ser respondido; o que falhou no provedor
+/// não informa tokens e não entra.
+model AiUsage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// O mesmo `requestId` do débito (`CreditEntry.refKey`).
+  requestId String @unique
+  /// `gerador.nome`, ex. `gemini:<id do modelo>`.
+  model     String
+  /// O tipo de material pedido (SentencePair | VocabItem | Passage | Dialogue).
+  kind      String
+  /// Quantas propostas foram pedidas e quantas serviram (o que ficou cobrado).
+  requested Int
+  accepted  Int
+
+  /// Nulos quando o provedor não informa.
+  inputTokens    Int?
+  outputTokens   Int?
+  /// O raciocínio, que o Gemini cobra como saída.
+  thoughtsTokens Int?
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, createdAt])
+  @@index([createdAt])
 }
 
 /// O pedido de plano enquanto não existe gateway de pagamento
