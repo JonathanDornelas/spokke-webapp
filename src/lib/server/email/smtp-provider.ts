@@ -1,5 +1,6 @@
 import { createTransport, type Transporter } from 'nodemailer';
 import type { EmailProvider } from './index';
+import { anexosDoEmail } from './base';
 
 /**
  * Envio por SMTP.
@@ -63,6 +64,8 @@ export const smtpEmailProvider: EmailProvider = {
 			subject: email.subject,
 			text: email.text,
 			html: email.html,
+			// O logo, embutido: o e-mail o mostra sem buscar nada no servidor (base.ts).
+			attachments: anexosDoEmail(email.html),
 			headers: {
 				// A linha de pré-visualização já está no HTML; este cabeçalho é o
 				// que alguns clientes usam para agrupar a conversa e o que evita o

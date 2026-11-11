@@ -169,6 +169,16 @@ botão, porque cliente de e-mail engole botão; o código de acesso vem depois d
 alternativa. Sem pixel de rastreio e sem imagem remota — a abertura só é registrada quando o
 aluno clica.
 
+**Todo e-mail sai da moldura de `server/email/base.ts`** (faixa azul com o logo, corpo branco,
+rodapé claro) e dos ajudantes dela (`secao`, `rotulo`, `titulo`, `paragrafo`, `botao`,
+`linkReserva`, `nota`) — nenhum e-mail monta a própria casca. A tabela do conteúdo é
+`width="100%"` com `max-width:600px`, com uma tabela fixa de 600px só para o Outlook: o
+`width:600px; max-width:100%` de antes estourava no Gmail do celular. O link cru fica numa caixa
+`table-layout:fixed`, que obriga o endereço longo a quebrar. **O logo vai EMBUTIDO** (anexo inline
+`cid:`, de `server/email/logo.ts`, gerado por `scripts/gerar-logo-email.mjs` a partir do traço da
+marca): aparece sem buscar nada no servidor. `base.test.ts` falha se alguma `<img>` apontar para
+fora do e-mail.
+
 `process.env` e não `$env/dynamic/private`, porque o worker importa este módulo fora do
 SvelteKit — mesma razão do `server/tts`.
 
