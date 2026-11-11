@@ -1092,8 +1092,16 @@ a opção de restaurar no próprio snapshot. Antes de clicar:
 2. **Search Console › Configurações › Associações:** associe a propriedade do Google Analytics.
 3. **Bing Webmaster Tools** (bing.com/webmasters): entre com a conta Google e use **Importar do
    Google Search Console** — ele traz a propriedade e o sitemap.
-4. **GA4 › Administrador › Eventos principais (Key events) › Novo evento principal:** digite
-   `sign_up` e salve; repita com `generate_lead`. Não precisa esperar os eventos chegarem.
+4. **GA4 › Administrador › Eventos › novo evento:** o nome exato `sign_up`, marcado como **evento
+   principal**, **Default key event value** em branco (ou `0`, se for obrigatório: nenhum dos dois
+   tem valor em dinheiro) e **Counting method** "Once per event" — cada cadastro é uma conta nova.
+   Repita com `generate_lead`, mas em "Once per session": duas mensagens na mesma visita são um
+   contato só. Não precisa esperar os eventos chegarem; o site já os manda com esses nomes.
+
+   **Se a tela pedir condições de correspondência** ("Matching conditions", do tipo "event_name
+   igual a…"), é a criação de evento DERIVADO: cancele, porque com o mesmo nome cada cadastro
+   contaria duas vezes. Nesse caso, espere o evento aparecer na lista de Eventos depois do primeiro
+   cadastro real (até 24 h) e marque-o como principal ali, com as mesmas opções.
 
    **Confira que a medição chega.** Até alguém clicar em **Aceitar** no aviso do site, o GA4 mostra
    "No data received from your website yet" — é o esperado: nada do Google carrega antes do aceite,
