@@ -1,5 +1,8 @@
 <script lang="ts">
 	import Metadados from '$lib/components/Metadados.svelte';
+	import DadosEstruturados from '$lib/components/blog/DadosEstruturados.svelte';
+	import { organizacaoEstruturada, siteEstruturado } from '$lib/blog/dados-estruturados';
+	import { page } from '$app/state';
 	/**
 	 * Home — Spokke. Tema, tipografia e movimento vêm de src/app.css.
 	 * Regras: .claude/rules/design-system.md + home.md
@@ -307,6 +310,16 @@
 	titulo="Exercícios de idioma com o material da sua aula"
 	descricao="Exercícios de idiomas feitos com o material da sua aula. O aluno responde pelo link, sem criar conta, e você vê o que a turma errou. Para professores e escolas."
 	tituloDaAba="Spokke · Exercícios de idiomas com o material da sua aula"
+/>
+<!-- A empresa e o site, para o Google: o nome nos resultados, o logo e o painel da marca. -->
+<DadosEstruturados
+	dados={[
+		organizacaoEstruturada(
+			page.url.origin,
+			'Exercícios de idiomas feitos com o material da aula do professor: o aluno responde pelo link, sem criar conta.'
+		),
+		siteEstruturado(page.url.origin)
+	]}
 />
 
 <SiteHeader>

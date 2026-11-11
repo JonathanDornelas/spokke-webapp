@@ -1333,11 +1333,8 @@ espera este gateway.
 - **Intranet, hoje:** roda na máquina de quem opera, com o banco e o MinIO do servidor chegando por
   túnel SSH — o passo a passo é o README de `../spokke-intranet`, "Produção pela própria máquina".
   Nada abre porta na internet.
-- **Intranet, definitiva.** VPN (Tailscale) no servidor e nas máquinas da equipe; a intranet escutando só no IP
-  da VPN, sem DNS público; o banco dela e o papel de leitura no do Spokke
-  (`../spokke-intranet/infra/*.sql`, rodados com `docker exec -i spokke-postgres psql`); uma chave
-  só de leitura no MinIO para o termômetro do bucket. Ela ainda não tem Dockerfile — eu preparo
-  quando formos ligar.
+- **Intranet, definitiva:** no servidor, atrás da VPN da equipe (Tailscale) — passo a passo em
+  "5.1 A intranet atrás da VPN", no fim deste arquivo.
 - **CSP.** Pela configuração do SvelteKit (`kit.csp`), que calcula o hash do script de tema do
   `app.html`; liberando o Google Analytics e `midia.spokke.com.br`. Primeiro em modo só-relatório.
 - **Mídia no R2.** Mover o DNS do domínio para a Cloudflare; bucket com domínio próprio
@@ -1353,3 +1350,199 @@ espera este gateway.
 - **Postgres:** ajustar `shared_buffers` e afins quando houver carga para medir.
 - **HSTS preload** (`hstspreload.org`), só depois de meses com tudo em HTTPS — é difícil de desfazer.
 - **Segundo admin** em `PLATFORM_ADMIN_IDS`, para a operação não depender de uma pessoa só.
+- **O painel da marca no Google** (o card à direita quando alguém busca "Spokke"). O Google monta
+  sozinho, quando tem certeza de que a marca é uma entidade — não há formulário para pedir. O que
+  depende do site já está na home (`Organization` e `WebSite` em JSON-LD, com o logo). O resto é
+  de fora: criar os perfis oficiais (Instagram, YouTube, LinkedIn) e pôr os endereços em `redes`
+  (`institucional.ts` — eles entram no rodapé e no `sameAs` sozinhos); conferir a home no **Teste
+  de pesquisa aprimorada** (search.google.com/test/rich-results) e pedir a indexação dela no Search
+  Console; e esperar as buscas pelo nome e as menções em outros sites. Quando o painel aparecer, o
+  link "Reivindicar este painel de conhecimento" dentro dele confirma a empresa pela conta do Search
+  Console. Perfil da Empresa no Google (o do mapa) não serve: ele é para quem atende num endereço.
+
+### 5.1 A intranet atrás da VPN (Tailscale)
+
+A intranet sai da máquina de quem opera e vira mais um container no servidor, ao lado do site. Só
+quem está na rede privada da equipe (o Tailscale) chega até ela: sem endereço público, sem porta
+nova no firewall, e sem depender do túnel nem de um computador ligado.
+
+```
+seu PC (Tailscale ligado) ──rede privada──► servidor ──► container da intranet ──► banco e MinIO
+                                            (Tailscale)    (só 127.0.0.1:5190)      (rede "spokke")
+```
+
+Três barreiras, cada uma valendo sozinha: estar na rede do Tailscale; a lista de IPs da própria
+intranet (só a faixa do Tailscale); e o login dela, com senha e código do autenticador.
+
+**Antes — o que ainda falta no código** (eu preparo quando formos ligar):
+
+- [ ] O Dockerfile da intranet (`pnpm build` e `node build`, levando `scripts/` e o `tsx` para o
+      `admin:criar`).
+- [ ] O compose dela, `deploy/compose/intranet.yml`: na rede `spokke`, porta presa em
+      `127.0.0.1:5190`, teto de 256 MB.
+- [ ] O modelo do ambiente, `deploy/env/intranet.env.exemplo`.
+- [ ] O backup diário levando também o banco da intranet — `backup-postgres.sh` só copia o do
+      Spokke, e a auditoria mora no dela.
+
+Os passos abaixo contam com essas quatro peças.
+
+#### 1. O Tailscale
+
+1. Crie a conta em tailscale.com, entrando com a conta Google da empresa.
+2. No painel (login.tailscale.com/admin) › **DNS**: **MagicDNS** ligado e, em **HTTPS
+   Certificates**, **Enable**.
+3. Instale o Tailscale no seu computador (tailscale.com/download) e entre com a mesma conta.
+
+**Deve aparecer:** o seu computador na lista de **Machines** do painel.
+
+O plano grátis atende poucos usuários; confira o limite atual antes de a equipe crescer.
+
+#### 2. O servidor na rede
+
+**No servidor:**
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up --hostname=spokke-vps
+```
+
+Abra no navegador o link que ele mostrar e autorize. Depois, no painel › **Machines** ›
+`spokke-vps` › **⋯** › **Disable key expiry** — sem isso o servidor sai da rede sozinho em 180
+dias, e a intranet some junto.
+
+```bash
+tailscale status
+tailscale ip -4
+```
+
+**Deve aparecer:** as duas máquinas na lista e um IP começando com `100.`. O firewall não muda: o
+Tailscale funciona por conexão de saída, sem porta aberta para entrar.
+
+#### 3. O código da intranet
+
+Uma terceira deploy key, pelo mesmo motivo das outras duas (o GitHub não aceita a mesma chave em
+dois repositórios). **No servidor:**
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "spokke-vps:spokke-intranet" -f ~/.ssh/deploy_intranet
+cat >> ~/.ssh/config <<'FIM'
+
+Host github-intranet
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/deploy_intranet
+  IdentitiesOnly yes
+FIM
+cat ~/.ssh/deploy_intranet.pub
+```
+
+Cadastre a chave como **deploy key só de leitura** no repositório `spokke-intranet` (Settings ›
+Deploy keys › Add deploy key, título `spokke-vps`, sem "Allow write access"). Depois:
+
+```bash
+cd /srv/spokke
+git clone git@github-intranet:JonathanDornelas/spokke-intranet.git
+```
+
+#### 4. Os bancos e a chave do MinIO
+
+O banco PRÓPRIO da intranet (pessoas da equipe, sessões, auditoria) mora no mesmo Postgres, como
+outro banco e com outro papel. **No servidor:**
+
+```bash
+SENHA_APP=$(openssl rand -hex 24)
+docker exec -i spokke-postgres psql -U spokke -d postgres -v senha_app="$SENHA_APP" \
+  < /srv/spokke/spokke-intranet/infra/banco-da-intranet.sql
+echo "senha do spokke_intranet_app: $SENHA_APP"
+```
+
+O papel de leitura no banco do Spokke e a chave do MinIO são os mesmos do jeito rápido (README da
+intranet, "Produção pela própria máquina"). Se já foram criados para o túnel, servem — use as
+mesmas senhas. Se não, rode os dois blocos de lá, trocando o caminho do SQL por
+`/srv/spokke/spokke-intranet/infra/papel-no-spokke.sql` (o código já está no servidor, sem `scp`).
+
+Guarde as três senhas no gerenciador.
+
+#### 5. O ambiente da intranet
+
+```bash
+cp /srv/spokke/spokke-service/deploy/env/intranet.env.exemplo /srv/spokke/env/intranet.env
+chmod 600 /srv/spokke/env/intranet.env
+nano /srv/spokke/env/intranet.env
+```
+
+| Variável                         | Valor                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------- |
+| `INTRANET_URL`                   | `https://spokke-vps.<sua-rede>.ts.net` (o nome completo está em **Machines**)   |
+| `INTRANET_AMBIENTE`              | `producao`                                                                      |
+| `INTRANET_AUTH_SECRET`           | `openssl rand -base64 48` — um NOVO, nunca o do desenvolvimento                 |
+| `INTRANET_DATABASE_URL`          | `postgresql://spokke_intranet_app:<senha>@spokke-postgres:5432/spokke_intranet` |
+| `SPOKKE_DATABASE_URL`            | `postgresql://spokke_intranet_leitor:<senha>@spokke-postgres:5432/spokke`       |
+| `IPS_PERMITIDOS`                 | `100.64.0.0/10` (a faixa de endereços do Tailscale)                             |
+| `ADDRESS_HEADER` / `XFF_DEPTH`   | `X-Forwarded-For` / `1` — quem fala com a intranet é o Tailscale, no passo 7    |
+| `STORAGE_ENDPOINT`               | `http://spokke-minio:9000`                                                      |
+| `STORAGE_BUCKET`                 | `spokke-midia`                                                                  |
+| `STORAGE_ACCESS_KEY_ID` / secret | `intranet` / a senha do MinIO                                                   |
+| `MERCADOPAGO_ACCESS_TOKEN`       | opcional: o de produção, para o extrato na tela de Pagamentos (só leitura)      |
+
+#### 6. Subir
+
+**No servidor:**
+
+```bash
+cd /srv/spokke/spokke-intranet
+alias spi='docker compose -f /srv/spokke/spokke-service/deploy/compose/intranet.yml'
+spi up -d --build
+spi run --rm intranet pnpm db:migrate
+spi run --rm intranet pnpm admin:criar <seu-email> "Seu Nome"
+```
+
+**Deve aparecer:** as migrations aplicadas e, no fim, a **senha provisória** — ela aparece uma vez
+só; guarde no gerenciador.
+
+#### 7. Publicar na rede privada
+
+```bash
+sudo tailscale serve --bg 5190
+tailscale serve status
+```
+
+**Deve aparecer:** `https://spokke-vps.<sua-rede>.ts.net` apontando para `http://127.0.0.1:5190`.
+O Tailscale emite o certificado HTTPS sozinho, e esse endereço só abre dentro da rede.
+
+**Nunca `tailscale funnel`**: o funnel publica na internet aberta — é exatamente o contrário do que
+se quer aqui.
+
+#### 8. Entrar
+
+No seu computador, com o Tailscale ligado, abra `https://spokke-vps.<sua-rede>.ts.net`.
+
+**Deve aparecer:** a tela de entrar com a faixa vermelha "Produção: os dados e as ações aqui são
+reais". Entre com a senha provisória; o painel obriga a trocar a senha e a ativar o autenticador
+antes de mostrar qualquer dado.
+
+**Se tudo responder 404:** é a lista de IPs — o endereço que chega à intranet não é o do
+Tailscale. Confira o que o passo 7 repassa no `X-Forwarded-For`; se ele não repassar, o caminho é
+liberar o endereço do Docker em `IPS_PERMITIDOS` (o Tailscale continua sendo a barreira de rede).
+
+#### 9. Quem pode entrar na máquina
+
+No painel › **Access controls**: só a equipe alcança o `spokke-vps`, e só na porta 443. Com a
+política padrão, todo aparelho da rede fala com todos — basta para começar, mas o lugar de fechar
+é aqui.
+
+#### 10. Gente nova e gente que sai
+
+- **Entrou alguém:** convite no painel (**Users** › **Invite users**), o Tailscale no computador
+  dela, e um `spi run --rm intranet pnpm admin:criar <email> "Nome"`.
+- **Saiu alguém:** remova a pessoa do Tailscale e rode
+  `spi run --rm intranet pnpm admin:desativar <email>` — tira o acesso e derruba as sessões.
+
+#### Depois de ligada
+
+- Apague o `.env.producao` do seu computador: o túnel não é mais o caminho.
+- **Atualizar a intranet:** `cd /srv/spokke/spokke-intranet && git pull --ff-only && spi up -d --build`.
+- Depois de uma migration do Spokke que a intranet precise ler, rode o `papel-no-spokke.sql` de
+  novo, com a mesma senha.
+- **Opcional, à parte e com calma:** o SSH pelo Tailscale (`tailscale up --ssh`) e a porta 22
+  fechada no firewall. Testado antes de fechar — fechar sem testar é perder o acesso ao servidor.

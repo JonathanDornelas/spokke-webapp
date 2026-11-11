@@ -1,3 +1,4 @@
+import { redes } from '$lib/content/institucional';
 import type { ResumoDoArtigo } from './tipos';
 
 /**
@@ -11,13 +12,52 @@ import type { ResumoDoArtigo } from './tipos';
 
 type Objeto = Record<string, unknown>;
 
-/** A marca, como autora e como editora. */
+/**
+ * A marca, como autora e como editora do blog — e, na home, como a EMPRESA que o Google liga ao
+ * site (o painel da marca na busca, o logo ao lado do resultado). O `@id` é o mesmo em todo
+ * lugar: é o que diz ao Google que o autor do artigo e a empresa da home são a mesma entidade.
+ *
+ * `sameAs` são os perfis oficiais (`redes`, no rodapé) — só os que JÁ têm endereço: um perfil
+ * que ainda não existe não pode ser apontado como a mesma entidade.
+ */
 export function organizacao(origem: string): Objeto {
+	const perfis = redes.flatMap((rede) => (rede.url ? [rede.url] : []));
 	return {
 		'@type': 'Organization',
+		'@id': `${origem}/#organizacao`,
 		name: 'Spokke',
 		url: `${origem}/`,
-		logo: { '@type': 'ImageObject', url: `${origem}/apple-touch-icon.png`, width: 180, height: 180 }
+		// Quadrado e acima dos 112 px que o Google pede para o logo da organização.
+		logo: {
+			'@type': 'ImageObject',
+			url: `${origem}/apple-touch-icon.png`,
+			width: 180,
+			height: 180
+		},
+		email: 'suporte@spokke.com.br',
+		...(perfis.length > 0 ? { sameAs: perfis } : {})
+	};
+}
+
+/** A empresa, sozinha na home: a mesma `organizacao`, com o que só a home diz. */
+export function organizacaoEstruturada(origem: string, descricao: string): Objeto {
+	return { '@context': 'https://schema.org', ...organizacao(origem), description: descricao };
+}
+
+/**
+ * O SITE, na home: é daqui que o Google tira o nome que mostra acima do endereço nos resultados
+ * ("Spokke" em vez de "spokke.com.br").
+ */
+export function siteEstruturado(origem: string): Objeto {
+	return {
+		'@context': 'https://schema.org',
+		'@type': 'WebSite',
+		'@id': `${origem}/#site`,
+		name: 'Spokke',
+		alternateName: 'spokke.com.br',
+		url: `${origem}/`,
+		inLanguage: 'pt-BR',
+		publisher: { '@id': `${origem}/#organizacao` }
 	};
 }
 
