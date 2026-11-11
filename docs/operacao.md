@@ -97,19 +97,21 @@ Docker `spokke`, e não pelas portas do host como em desenvolvimento: as portas 
 As de infraestrutura (banco, storage, áudio, e-mail) estão comentadas no `.env.example`. As do
 produto:
 
-| Variável                          | Para quê                                                                      |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `BILLING_PROVIDER`                | Vazio/`manual`: "Assinar" vira pedido atendido no painel (adr-002)            |
-| `PLATFORM_ADMIN_IDS`              | IDs de `Teacher` com acesso ao `/admin` — IDs, nunca e-mails                  |
-| `CONTATO_PARA`                    | Caixa da equipe: pedidos de plano, contato e relatos de problema dos alunos   |
-| `GOOGLE_CLIENT_ID`                | Com `GOOGLE_CLIENT_SECRET`, liga "Continuar com o Google"; vazio desliga      |
-| `LLM_PROVIDER`                    | `gemini` liga "Gerar com IA"; vazio desliga (adr-003)                         |
-| `GEMINI_API_KEY`                  | Chave de projeto **com faturamento** (a política promete não treinar)         |
-| `GEMINI_MODEL`                    | Id do modelo — escolha o Flash estável vigente na página de modelos do Gemini |
-| `TRANSLATE_PROVIDER`              | `audiotext` liga a tradução automática do material; vazio desliga (adr-006)   |
-| `WORKER_CONCURRENCY`              | Jobs em paralelo (padrão 3). Acelera e-mail, não TTS                          |
-| `PUBLIC_GA_ID`                    | ID do Google Analytics 4 ("G-…"); vazio desliga a medição (seção abaixo)      |
-| `PUBLIC_GOOGLE_SITE_VERIFICATION` | Meta tag do Search Console; vazio não emite nada                              |
+| Variável                          | Para quê                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `BILLING_PROVIDER`                | Vazio/`manual`: "Assinar" vira pedido atendido no painel (adr-002)                                |
+| `PLATFORM_ADMIN_IDS`              | IDs de `Teacher` com acesso ao `/admin` — IDs, nunca e-mails                                      |
+| `CONTATO_PARA`                    | Caixa da equipe: pedidos de plano, contato e relatos de problema dos alunos                       |
+| `GOOGLE_CLIENT_ID`                | Com `GOOGLE_CLIENT_SECRET`, liga "Continuar com o Google"; vazio desliga                          |
+| `LLM_PROVIDER`                    | A fila da IA, em ordem: `claude,gemini` (o Gemini só se o Claude falhar); vazio desliga (adr-003) |
+| `ANTHROPIC_API_KEY`               | Chave da API do Claude (console.anthropic.com)                                                    |
+| `CLAUDE_MODEL`                    | Id do modelo do Claude, como `claude-opus-5-5`                                                    |
+| `GEMINI_API_KEY`                  | Chave de projeto **com faturamento** (a política promete não treinar)                             |
+| `GEMINI_MODEL`                    | Id do modelo — escolha o Flash estável vigente na página de modelos do Gemini                     |
+| `TRANSLATE_PROVIDER`              | `audiotext` liga a tradução automática do material; vazio desliga (adr-006)                       |
+| `WORKER_CONCURRENCY`              | Jobs em paralelo (padrão 3). Acelera e-mail, não TTS                                              |
+| `PUBLIC_GA_ID`                    | ID do Google Analytics 4 ("G-…"); vazio desliga a medição (seção abaixo)                          |
+| `PUBLIC_GOOGLE_SITE_VERIFICATION` | Meta tag do Search Console; vazio não emite nada                                                  |
 
 ## Analytics e Search Console
 

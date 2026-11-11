@@ -32,6 +32,16 @@ importa o SDK.
   (`raciocinioMinimo`), porque esses tokens são cobrados como saída e os preços dos planos foram
   calculados assim (`docs/adr-002-billing.md` "Preços"). Cada geração respondida grava os tokens que
   o Gemini informou em `AiUsage`.
+- **O Claude na frente, o Gemini de reserva** (decisão do dono, 2026-11-11: os créditos mensais da
+  API do Claude vêm primeiro). `LLM_PROVIDER` virou uma FILA em ordem (`"claude,gemini"`), e
+  `reserva.ts` passa o mesmo pedido ao seguinte quando o anterior falha — sem créditos (o
+  `billing_error` 402, lido pelo tipo do erro, nunca pelo texto), sobrecarga, recusa ou tempo. O
+  crédito do professor é debitado uma vez, e falhar em todos estorna como sempre. O Claude
+  (`claude-provider.ts`, `@anthropic-ai/sdk`) usa saída estruturada pelo MESMO Zod do envelope
+  (`betaZodOutputFormat`), `effort: "low"` (o raciocínio não desliga nos Claude atuais; o esforço
+  baixo é o mínimo) e a reserva do próprio servidor numa recusa de política (`fallbacks:
+"default"`, só nos modelos que a oferecem). `AiUsage.model` grava quem respondeu de fato. O
+  modelo vem de `CLAUDE_MODEL`; a política de privacidade cita a Anthropic junto do Google.
 - **Nem todo modelo aceita o mínimo** (2026-11-11): o `gemini-3.8-flash` recusa o MINIMAL com 400, e
   o provedor sobe para o LOW sozinho (`raciocinioAcima`). O LOW gasta raciocínio que a conta dos
   preços não previa — com ele, a tabela de adr-002 vira estimativa por baixo até o `AiUsage` medir.

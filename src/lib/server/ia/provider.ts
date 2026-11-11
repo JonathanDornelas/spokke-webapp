@@ -20,6 +20,12 @@ export interface RespostaDoModelo {
 	dados: unknown;
 	/** O que o PROVEDOR informou ter gastado; nulo quando ele não informa. */
 	uso: UsoDoModelo | null;
+	/**
+	 * Quem respondeu de fato, quando não é o `nome` do gerador: com a reserva (`reserva.ts`) é um
+	 * dos provedores da fila, e o Claude pode ter passado a outro modelo numa recusa. É o que vai
+	 * para `AiUsage.model` — a conta dos preços precisa saber qual modelo gastou o quê.
+	 */
+	modelo?: string;
 }
 
 /**

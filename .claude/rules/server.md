@@ -399,8 +399,11 @@ worker da publicação tenta de novo com backoff.
 
 - A IA **propõe material**, nunca exercício, e nada entra na biblioteca antes de o professor marcar e
   confirmar. Aceitar passa por `gravarMateriais` (cota de estoque, reaproveitamento).
-- Atrás de interface própria (`server/ia/provider.ts`); `LLM_PROVIDER` vazio = desligada. O id do
-  modelo vem de `GEMINI_MODEL`, nunca do código.
+- Atrás de interface própria (`server/ia/provider.ts`); `LLM_PROVIDER` vazio = desligada. Ele é
+  uma FILA em ordem (`"claude,gemini"`): `reserva.ts` passa o pedido ao seguinte quando o anterior
+  lança `FalhaDoProvedor` — e só ela; outro erro é defeito e sobe. Os ids de modelo vêm de
+  `CLAUDE_MODEL` e `GEMINI_MODEL`, nunca do código. O Claude (`claude-provider.ts`) lê a falha
+  pelo `status`/`type` do erro (`billing_error` é "sem créditos"), nunca pelo texto.
 - Saída estruturada (`responseJsonSchema` saído do mesmo Zod que valida a volta) e **revalidação de
   tudo** contra `contentUnitSchemas` — o provedor não é confiável para dizer que respeitou o formato.
 - O prompt só leva rótulos de idioma do `LanguageProfile` (sem `if` por idioma) e o texto do
