@@ -1,0 +1,241 @@
+# Spokke · vídeo "do jeito que o material estiver"
+
+Brief para o Claude Design. Contexto e orientações básicas de um vídeo em motion que mostra
+**todas as formas de o material da aula entrar no Spokke**, da frase digitada à mão até a IA, e
+que termina no mesmo lugar: as questões prontas.
+
+Anexos: `spokke-marca.svg`, `spokke-icone.svg` e as capturas da seção 5
+(`captura-das-telas.md` diz como gerá-las).
+
+---
+
+## 1. Formato
+
+| O quê          | Valor                                                                              |
+| -------------- | ---------------------------------------------------------------------------------- |
+| Proporção      | **16:9**, 1920 × 1080 (site, YouTube, apresentação para escola)                    |
+| Duração        | 45 a 60 s                                                                          |
+| Corte extra    | Opcional: 9:16 de 30 s com os degraus 1, 2, 7 e o fechamento                      |
+| Tema           | Claro                                                                              |
+| Som            | Funciona no mudo; a legenda carrega a mensagem                                     |
+| Arquivo        | `spokke-formas-de-montar-16x9.mp4`                                                 |
+
+A especificação do `.mp4` (H.264, 30 fps constantes, `faststart`) e a exigência de uma animação
+HTML determinística são as da seção 1 de `animacao-celular.md`. Área segura em 16:9: 96 px livres
+nas laterais e 64 px em cima e embaixo para toda legenda.
+
+---
+
+## 2. Contexto
+
+O professor de idiomas já tem material: a lista de frases no caderno, o vocabulário da unidade, o
+texto do livro, o diálogo da aula passada. A objeção dele não é "não sei fazer exercício", é
+"não tenho tempo de digitar tudo de novo numa ferramenta".
+
+O vídeo responde isso mostrando que **qualquer ponto de partida serve**. Cada forma de entrar é
+um degrau, e a cada degrau o professor faz menos. No fim, todas desembocam na mesma tela de
+questões geradas.
+
+**A ideia visual: uma régua de esforço.** Uma barra discreta na base do quadro, de "Na mão" até
+"Com IA", com um marcador que avança um degrau a cada cena. A régua é o fio do vídeo: o espectador
+sabe onde está e quanto falta.
+
+**O tema do material é um só, do começo ao fim: rotina no presente simples.** É o exemplo que o
+próprio produto usa nos campos vazios ("She leaves home at eight.", "Frases sobre rotina no
+presente simples, nível de 7º ano, com horas.").
+
+---
+
+## 3. Os degraus
+
+Ordem obrigatória, do mais manual ao mais automático. Os textos entre aspas são os do produto.
+
+### Degrau 1 · Um de cada vez
+
+O formulário de material, tipo **"Par de frases"**, em **"Como adicionar" → "Um de cada vez"**.
+
+- O professor digita **"She leaves home at eight."** no campo "Frase em inglês".
+- A tradução aparece sozinha: **"Traduzindo…"** e depois **"Ela sai de casa às oito."**, com
+  **"Tradução automática. Confira e ajuste se precisar."**
+- Ao lado, **"O que o aluno vai ver"** monta a questão enquanto ele digita: **"Montar a frase"**,
+  com as palavras embaralhadas em peças.
+
+Prova: até o jeito mais manual é rápido, e o professor vê a questão antes de publicar.
+
+### Degrau 2 · Colar uma lista
+
+**"Colar uma lista"**. Cinco ou seis frases de rotina coladas de uma vez, uma por linha, algumas
+com tradução depois do separador e outras sem.
+
+- A legenda dos separadores aceitos (`·`, `|`, `-`, `⇥`), que não são botões.
+- A prévia linha a linha, com o contador ("6 linhas · 6 viram material") e "tradução automática"
+  nas linhas sem tradução.
+- O botão **"Adicionar 6 materiais"** e a confirmação com a tradução vinda do tradutor.
+
+Prova: a lista que ele já tem entra inteira.
+
+### Degrau 3 · Os outros tipos
+
+Montagem rápida dos quatro cartões de tipo: **"Par de frases"**, **"Vocabulário"**, **"Texto"**,
+**"Diálogo"**. Dois deles ganham um segundo de tela:
+
+- **Texto**: o trecho colado e duas perguntas de compreensão, campo a campo.
+- **Diálogo**: falas de A e B, com reordenar.
+
+Prova: texto e diálogo também viram questão. As perguntas do texto viram escolha; as falas do
+diálogo, um exercício de pôr na ordem.
+
+### Degrau 4 · Da biblioteca
+
+Na etapa de materiais, **"Usar da biblioteca"**: o painel com busca, filtro por tipo e seleção
+múltipla. Seis frases da aula passada marcadas, **"Trazer 6"**, e elas entram na lista da
+atividade com a etiqueta **"biblioteca"**.
+
+Prova: o que já foi cadastrado não se digita de novo.
+
+### Degrau 5 · Gerar com IA
+
+**"Gerar com IA"**, com a fonte **"Prompt · você descreve"** escolhida.
+
+- Em **"O que você quer treinar"**: **"Frases sobre rotina no presente simples, nível de 7º ano,
+  com horas."**, com um atalho tocado (**"com negativa"**).
+- **"Quantos gerar"** em 10 e o botão **"Gerar 10 propostas · 10 créditos"**, que vira
+  **"Gerando…"**.
+- A lista de propostas: **"10 propostas · 9 marcadas"**, uma delas com a etiqueta **"você já
+  tem"** e desmarcada.
+- Embaixo: **"A IA propõe; quem decide é você."** O professor desmarca uma e toca
+  **"Adicionar 8 materiais"**.
+
+Prova: sem material pronto, ele descreve e escolhe. Nada entra sem a marcação dele.
+
+### Degrau 6 · A foto da página
+
+No mesmo seletor de "Gerar com IA", a fonte **"Imagem · foto de página"**.
+
+- A área **"Arraste uma foto ou toque para escolher"** recebe a foto de uma página de livro. Um
+  instante de **"Preparando a foto…"** e a miniatura aparece, com **"Pronta para a IA ler. Toque
+  para trocar."**
+- O campo **"Foco do material · opcional"** fica em branco.
+- O botão diz **"Gerar 10 propostas · 11 créditos"**, e a linha sob ele separa a conta: **"São 10
+  das propostas e 1 da leitura da foto."**
+- As propostas chegam com as frases da página.
+
+Prova: a página que o professor já usa vira material sem digitar nada.
+
+### Degrau 7 · A fala de um vídeo
+
+A fonte **"Vídeo · com fala"**.
+
+- Um vídeo de 4 minutos é escolhido. **"Lendo o áudio do vídeo…"**, e a área mostra **"Vídeo de
+  4:12. Toque para trocar."**
+- Em **"Trecho a usar"**, de **0:30** até **3:00**. Embaixo: **"2:30 de fala vão para a IA."**
+- O botão diz **"Gerar 10 propostas · 13 créditos"**, e a linha sob ele: **"São 10 das propostas
+  e 3 da leitura de 3 min de fala."**
+- O aviso da tela fica visível por um instante: **"O vídeo não sai do seu computador. Só a fala
+  do trecho vai para a IA…"**
+
+Prova: um vídeo com fala também serve, e o professor escolhe o pedaço.
+
+**O vídeo de exemplo é material didático ou do professor, nunca uma aula com alunos.** É o que a
+própria tela pede.
+
+### Fechamento · Tudo chega ao mesmo lugar
+
+Os cartões de cada degrau convergem para a lista **"Materiais desta atividade"**, o botão de
+gerar as questões é tocado e a etapa **"Revisar"** se enche de cartões de questão, com o tipo e a
+habilidade em cada um (escuta, fala, leitura, escrita). Depois, o cartão final.
+
+---
+
+## 4. Texto na tela
+
+Na voz do Spokke (`../spokke-seo/project/brain/voice.md`): direta, em segunda pessoa, sem
+travessão, sem exclamação e sem superlativo. Ajustes de ritmo são bem-vindos; promessa nova não.
+
+| Cena       | Legenda principal                                     | Linha menor                                                        |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| Abertura   | Seu material entra do jeito que estiver.              | Digitado, colado, fotografado ou falado num vídeo.                 |
+| Degrau 1   | Digite a frase. A tradução vem sozinha.               | Ao lado, a questão que o aluno vai responder.                      |
+| Degrau 2   | A lista da aula passada entra inteira.                | Uma frase por linha. Você vê o que vira material antes de adicionar. |
+| Degrau 3   | Texto e diálogo também viram questão.                 | As perguntas do texto viram escolha. O diálogo vira uma ordem para montar. |
+| Degrau 4   | O que você já cadastrou não se digita de novo.        | Marque na biblioteca e traga tudo de uma vez.                      |
+| Degrau 5   | A IA propõe. Quem escolhe é você.                     | Nos planos Pro e Super. Proposta que não serve devolve o crédito.  |
+| Degrau 6   | A página do livro vira material.                      | Tire a foto, e a IA lê o texto dela.                               |
+| Degrau 7   | Um vídeo com fala também serve.                       | Você escolhe o trecho, e só a fala vai para a IA.                  |
+| Fechamento | Do jeito que entrar, as questões saem prontas.        | Com áudio gerado do texto.                                         |
+| Final      | Comece pelo material que você já tem.                 | Teste grátis por 14 dias · spokke.com.br                           |
+
+Rótulos da régua: **"Na mão"** numa ponta, **"Com IA"** na outra. Nada escrito entre elas além
+dos pontos dos degraus.
+
+---
+
+## 5. Como a tela aparece
+
+O lado do professor é **painel**: a tela do computador recortada, sem moldura de notebook, com o
+componente ampliado para ser lido. O formulário de material é o centro do vídeo, e ele aparece
+sempre pelo **recorte** do componente real, nunca redesenhado (`captura-das-telas.md`).
+
+Capturas, todas em computador (1440 × 900, escala 2), etapa de materiais de uma atividade nova em
+inglês para quem fala português:
+
+| #  | Tela                                | Estados a capturar                                                     | Precisa de      |
+| -- | ----------------------------------- | ---------------------------------------------------------------------- | --------------- |
+| 01 | Formulário, "Um de cada vez"        | vazio · frase digitada · "Traduzindo…" · traduzida, com a prévia do aluno | tradutor     |
+| 02 | Formulário, "Colar uma lista"       | vazio · colado · prévia com contador · confirmação depois de adicionar  | tradutor        |
+| 03 | Cartões de tipo + Texto + Diálogo   | os quatro cartões · Texto com perguntas · Diálogo com falas            | nada            |
+| 04 | "Usar da biblioteca"                | painel aberto · seis marcadas · lista com a etiqueta "biblioteca"      | seed            |
+| 05 | "Gerar com IA", Prompt              | prompt escrito · "Gerando…" · propostas · "Adicionar 8 materiais"      | IA, plano Pro   |
+| 06 | "Gerar com IA", Imagem              | vazia · "Preparando a foto…" · miniatura com o botão de 11 créditos · propostas | IA, plano Pro |
+| 07 | "Gerar com IA", Vídeo               | vazia · "Lendo o áudio do vídeo…" · trecho com "2:30 de fala" e o botão de 13 créditos · propostas | Gemini ligado, plano Pro |
+| 08 | Etapa "Revisar"                     | esqueleto de carregamento · cartões de questão                         | tradutor, áudio |
+
+Os créditos que aparecem nos botões são os que o produto calcula (`custoDaGeracao`): 1 por
+proposta, mais 1 pela leitura da foto, ou 1 por minuto de fala começado. Com 10 propostas: 10 no
+prompt, 11 na foto e 13 nos 2:30 de fala (3 minutos começados). Se a captura usar outra quantidade
+ou outro trecho, o número da tela muda junto; nunca escreva um número que a tela não mostrou.
+
+Recortes por seletor: o formulário inteiro, a prévia "O que o aluno vai ver", a lista de
+propostas e o painel da biblioteca.
+
+---
+
+## 6. Identidade e movimento
+
+Valem inteiras as seções 6 (cores, tipografia, logo, interface, formas de ambiente) e 7
+(movimento) de `animacao-celular.md`. Neste vídeo, ainda:
+
+- **A régua de esforço** é azul da marca (`#3659CB`) sobre `base-300`. O marcador anda de A para
+  B em 300 ms, com a curva suave nas duas pontas.
+- **O cartão do degrau sai para a esquerda e o próximo entra pela direita**, nunca os dois ao
+  mesmo tempo, como a troca de questão do produto.
+- **Na leitura do vídeo, nada de barra de upload com porcentagem**: o vídeo não sobe. A espera é a
+  do produto, "Lendo o áudio do vídeo…" com a fila de formas.
+- Verde só onde o produto já usa verde: o check da prévia e a confirmação de "adicionados".
+
+---
+
+## 7. O que não pode
+
+As regras da seção 8 de `animacao-celular.md` valem aqui. Para este vídeo:
+
+- **Nenhum vídeo nem foto com aluno.** O vídeo de exemplo é material didático ou do professor; a
+  foto é de livro, lousa ou caderno, sem rosto.
+- **A foto e o vídeo não ficam guardados nem entram na atividade.** Eles viram material de texto.
+  Nada de mostrar a foto dentro de uma questão do aluno.
+- **Nenhuma importação de planilha ou PDF**: não existe. O professor cola texto, fotografa a página
+  ou escolhe um vídeo.
+- **A IA não corrige nem publica nada sozinha.** Ela propõe material, o professor marca e
+  confirma. Nada de "a IA cria a atividade inteira".
+- **Gerar com IA é dos planos Pro e Super.** Se a cena da IA ficar sem a linha menor, a
+  informação vai no cartão final.
+- **Nenhum termo interno:** "itens" vira "questões" (`captura-das-telas.md`, "Cuidados").
+
+---
+
+## 8. Entrega
+
+1. `spokke-formas-de-montar-16x9.mp4`.
+2. O HTML da animação, com os controles da seção 1 de `animacao-celular.md`.
+3. Uma página com um quadro estático de cada degrau, para revisar sem dar play.
+4. Se sobrar fôlego, o corte 9:16 de 30 s (`spokke-formas-de-montar-9x16-30s.mp4`).

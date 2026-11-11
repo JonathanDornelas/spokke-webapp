@@ -1,8 +1,37 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-import { instrucoesDoSistema, mensagemDoProfessor } from './prompt';
-import { FalhaDoProvedor, type GeradorDeMateriais } from './provider';
+import { instrucoesDoSistema, mensagemDoProfessor, type PedidoDeMateriais } from './prompt';
+import {
+	base64DoAnexo,
+	FalhaDoProvedor,
+	type GeradorDeMateriais,
+	type TipoDeAnexo
+} from './provider';
 import { envelopeDaResposta } from './schemas';
+
+/** O Claude lê imagem e não lê áudio: o vídeo vai para o provedor seguinte da fila (`reserva.ts`). */
+const LE_NO_CLAUDE: ReadonlySet<TipoDeAnexo> = new Set(['imagem']);
+
+/**
+ * O conteúdo da mensagem do professor: só o texto, ou a foto ANTES do texto (a ordem que a API
+ * recomenda para imagem). Pura, para o teste conferir o que vai ao modelo sem chamar a API.
+ */
+export function conteudoParaClaude(
+	pedido: PedidoDeMateriais
+): string | Anthropic.Beta.BetaContentBlockParam[] {
+	const texto = mensagemDoProfessor(pedido);
+	if (!pedido.anexo) return texto;
+	if (pedido.anexo.tipo !== 'imagem') {
+		throw new FalhaDoProvedor('Este provedor de IA não lê áudio.');
+	}
+	return [
+		{
+			type: 'image',
+			source: { type: 'base64', media_type: pedido.anexo.mime, data: base64DoAnexo(pedido.anexo) }
+		},
+		{ type: 'text', text: texto }
+	];
+}
 
 /**
  * A IA pelo Claude (`@anthropic-ai/sdk`), o provedor PRINCIPAL quando está na frente de
@@ -27,6 +56,7 @@ export function criarClaude(config: { apiKey: string; model: string }): GeradorD
 
 	return {
 		nome: `claude:${config.model}`,
+		le: LE_NO_CLAUDE,
 		async propor(pedido, { timeoutMs }) {
 			try {
 				const resposta = await cliente.beta.messages.parse(
@@ -34,7 +64,7 @@ export function criarClaude(config: { apiKey: string; model: string }): GeradorD
 						model: config.model,
 						max_tokens: 16_000,
 						system: instrucoesDoSistema(pedido),
-						messages: [{ role: 'user', content: mensagemDoProfessor(pedido) }],
+						messages: [{ role: 'user', content: conteudoParaClaude(pedido) }],
 						output_config: {
 							effort: 'low',
 							format: betaZodOutputFormat(envelopeDaResposta(pedido.kind, pedido.quantos))

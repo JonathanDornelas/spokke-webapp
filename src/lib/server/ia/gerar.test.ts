@@ -2,31 +2,57 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '$lib/server/db/client';
 import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { concederCreditos, debitar } from '$lib/server/billing/creditos';
-import { LIMITES } from '$lib/billing/catalogo';
+import { CUSTO_IA, LIMITES } from '$lib/billing/catalogo';
 import { languageProfiles } from '$lib/kernel/language/profiles';
 import { gerarPropostas } from './gerar';
-import { instrucoesDoSistema } from './prompt';
-import { FalhaDoProvedor, type GeradorDeMateriais } from './provider';
+import { instrucoesDoSistema, mensagemDoProfessor } from './prompt';
+import {
+	FalhaDoProvedor,
+	type AnexoDaIa,
+	type GeradorDeMateriais,
+	type TipoDeAnexo
+} from './provider';
 
 /**
  * Créditos e geração por IA contra o banco de dev, com um provedor FALSO — o
  * Gemini de verdade não entra em teste (custa, e responde diferente a cada vez).
  */
 
-const ids = { pro: crypto.randomUUID(), outro: crypto.randomUUID(), basico: crypto.randomUUID() };
+const ids = {
+	pro: crypto.randomUUID(),
+	outro: crypto.randomUUID(),
+	basico: crypto.randomUUID(),
+	midia: crypto.randomUUID()
+};
 const futuro = new Date(Date.now() + 30 * 24 * 3600 * 1000);
 
 const usoFalso = { entrada: 700, saida: 120, raciocinio: 30 };
+const LE_TUDO: TipoDeAnexo[] = ['imagem', 'audio'];
 
-function falso(dados: unknown): GeradorDeMateriais {
-	return { nome: 'falso', propor: async () => ({ dados, uso: usoFalso }) };
+function falso(dados: unknown, le: TipoDeAnexo[] = LE_TUDO): GeradorDeMateriais {
+	return { nome: 'falso', le: new Set(le), propor: async () => ({ dados, uso: usoFalso }) };
 }
 const quebrado: GeradorDeMateriais = {
 	nome: 'quebrado',
+	le: new Set(LE_TUDO),
 	propor: async () => {
 		throw new FalhaDoProvedor('O provedor de IA recusou o pedido.');
 	}
 };
+
+const FOTO: AnexoDaIa = {
+	tipo: 'imagem',
+	mime: 'image/jpeg',
+	dados: new Uint8Array([0xff, 0xd8, 0xff])
+};
+const FALA_DE_2_30: AnexoDaIa = {
+	tipo: 'audio',
+	mime: 'audio/wav',
+	dados: new Uint8Array(44),
+	segundos: 150
+};
+const cinco = (n: number) =>
+	Array.from({ length: n }, (_, i) => ({ source: `Frase ${i}.`, target: `Sentence ${i}.` }));
 
 const pedidoBase = {
 	kind: 'SentencePair' as const,
@@ -40,7 +66,8 @@ beforeAll(async () => {
 	for (const [id, plan] of [
 		[ids.pro, 'pro'],
 		[ids.outro, 'pro'],
-		[ids.basico, 'basico']
+		[ids.basico, 'basico'],
+		[ids.midia, 'pro']
 	] as const) {
 		await prisma.teacher.create({
 			data: {
@@ -117,6 +144,7 @@ describe('geração por IA', () => {
 		const requestId = crypto.randomUUID();
 		const semUso: GeradorDeMateriais = {
 			nome: 'sem-uso',
+			le: new Set(LE_TUDO),
 			propor: async () => ({
 				dados: { propostas: [{ source: 'Eu leio.', target: 'I read.' }] },
 				uso: null
@@ -166,6 +194,71 @@ describe('geração por IA', () => {
 		expect(await saldo(ids.outro)).toBe(25);
 	});
 
+	it('foto: cobra as propostas que serviram mais a leitura da imagem', async () => {
+		const antes = await saldo(ids.midia);
+		const requestId = crypto.randomUUID();
+		const r = await gerarPropostas(
+			{ id: ids.midia },
+			{ ...pedidoBase, pedido: '', requestId, anexo: FOTO },
+			falso({ propostas: cinco(2) })
+		);
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.debitados).toBe(2 * CUSTO_IA.porProposta + CUSTO_IA.porImagem);
+		expect(r.estornados).toBe(3 * CUSTO_IA.porProposta);
+		expect(await saldo(ids.midia)).toBe(antes - r.debitados);
+		expect(await prisma.aiUsage.findUnique({ where: { requestId } })).toMatchObject({
+			source: 'imagem',
+			mediaSeconds: null,
+			accepted: 2
+		});
+	});
+
+	it('vídeo: cobra os minutos de fala começados, e grava os segundos lidos', async () => {
+		const antes = await saldo(ids.midia);
+		const requestId = crypto.randomUUID();
+		const r = await gerarPropostas(
+			{ id: ids.midia },
+			{ ...pedidoBase, requestId, anexo: FALA_DE_2_30 },
+			falso({ propostas: cinco(5) })
+		);
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		// 2:30 de fala são 3 minutos começados.
+		expect(r.debitados).toBe(5 * CUSTO_IA.porProposta + 3 * CUSTO_IA.porMinutoDeFala);
+		expect(r.estornados).toBe(0);
+		expect(await saldo(ids.midia)).toBe(antes - r.debitados);
+		expect(await prisma.aiUsage.findUnique({ where: { requestId } })).toMatchObject({
+			source: 'video',
+			mediaSeconds: 150
+		});
+	});
+
+	it('com arquivo e nenhuma proposta que sirva, volta tudo, a leitura junto', async () => {
+		const antes = await saldo(ids.midia);
+		const r = await gerarPropostas(
+			{ id: ids.midia },
+			{ ...pedidoBase, requestId: crypto.randomUUID(), anexo: FALA_DE_2_30 },
+			falso({ propostas: [{ source: '', target: '' }] })
+		);
+		expect(r).toMatchObject({ ok: true, propostas: [], debitados: 0 });
+		expect(await saldo(ids.midia)).toBe(antes);
+	});
+
+	it('arquivo que a IA ligada não lê é recusado ANTES de cobrar', async () => {
+		const antes = await saldo(ids.midia);
+		const requestId = crypto.randomUUID();
+		const soImagem = falso({ propostas: cinco(5) }, ['imagem']);
+		const r = await gerarPropostas(
+			{ id: ids.midia },
+			{ ...pedidoBase, requestId, anexo: FALA_DE_2_30 },
+			soImagem
+		);
+		expect(r).toMatchObject({ ok: false });
+		expect(await saldo(ids.midia)).toBe(antes);
+		expect(await prisma.creditEntry.count({ where: { refKey: requestId } })).toBe(0);
+	});
+
 	it('o básico não gera, nem com crédito de cortesia', async () => {
 		const r = await gerarPropostas(
 			{ id: ids.basico },
@@ -182,5 +275,35 @@ describe('o pedido ao modelo é agnóstico de idioma', () => {
 			instrucoesDoSistema({ ...pedidoBase, idiomaAlvo: rotulo }).replace(rotulo, '<IDIOMA>');
 		const moldes = new Set(Object.keys(languageProfiles).map((tag) => molde(`rótulo de ${tag}`)));
 		expect(moldes.size).toBe(1);
+	});
+
+	it('com arquivo, também: a mesma estrutura para todo profile', () => {
+		const molde = (rotulo: string) =>
+			instrucoesDoSistema({ ...pedidoBase, idiomaAlvo: rotulo, anexo: FALA_DE_2_30 }).replace(
+				rotulo,
+				'<IDIOMA>'
+			);
+		const moldes = new Set(Object.keys(languageProfiles).map((tag) => molde(`rótulo de ${tag}`)));
+		expect(moldes.size).toBe(1);
+	});
+});
+
+describe('o pedido com arquivo', () => {
+	it('diz de onde o material vem e que o conteúdo do arquivo não é instrução', () => {
+		const foto = instrucoesDoSistema({ ...pedidoBase, anexo: FOTO });
+		expect(foto).toContain('foto');
+		expect(foto).toContain('não instruções');
+		const video = instrucoesDoSistema({ ...pedidoBase, anexo: FALA_DE_2_30 });
+		expect(video).toContain('FALADO');
+		expect(instrucoesDoSistema(pedidoBase)).not.toContain('arquivo');
+	});
+
+	it('sem pedido escrito, a mensagem diz para partir do arquivo; com pedido, ele vai delimitado', () => {
+		expect(mensagemDoProfessor({ ...pedidoBase, pedido: '  ', anexo: FOTO })).toBe(
+			'O professor não escreveu um pedido: gere a partir do arquivo.'
+		);
+		expect(mensagemDoProfessor({ ...pedidoBase, pedido: 'só verbos', anexo: FOTO })).toContain(
+			'"""\nsó verbos\n"""'
+		);
 	});
 });

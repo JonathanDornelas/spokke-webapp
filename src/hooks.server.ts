@@ -82,7 +82,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// redirecionamento de login, que confirmaria que há algo ali. É defesa em
 	// profundidade: a barreira de verdade é `requirePlatformAdmin` em cada load
 	// e remote function (que nem passam por aqui: `/_app/remote/...`).
-	if (event.url.pathname.startsWith('/admin') && !ehAdminDaPlataforma(event.locals.user?.id)) {
+	//
+	// A NAVEGAÇÃO (GET) segue até a página, e o `requirePlatformAdmin` do load dela
+	// responde o 404 pela tela de "página não encontrada" (`+error.svelte`), a mesma de
+	// qualquer endereço que não existe. Responder aqui mesmo dava um "Not found" em
+	// texto puro, que só esta rota tinha — e uma tela diferente das outras é justamente
+	// o que confirma que há algo ali. Isso só vale porque TODA página do painel tem o
+	// guard no próprio load, e `auth/painel-interno.test.ts` falha se uma não tiver. O
+	// resto continua barrado aqui: POST e afins (o painel não tem form action) e o pedido
+	// de DADOS da navegação no navegador (`__data.json`) — a resposta dele, mesmo só com o
+	// erro, descreveria a estrutura da rota. Recusado, o navegador recarrega a página
+	// inteira, e ela chega na tela de 404.
+	const painelNegado =
+		event.url.pathname.startsWith('/admin') && !ehAdminDaPlataforma(event.locals.user?.id);
+	const navegacao =
+		(event.request.method === 'GET' || event.request.method === 'HEAD') && !event.isDataRequest;
+	if (painelNegado && !navegacao) {
 		return new Response('Not found', { status: 404 });
 	}
 
@@ -92,7 +107,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// "+error.svelte — 404 e 500").
 	const rotaExiste = event.route.id !== null;
 
-	if (rotaExiste && !isPublicPath(event.url.pathname) && !event.locals.user) {
+	if (rotaExiste && !painelNegado && !isPublicPath(event.url.pathname) && !event.locals.user) {
 		// GET (navegação de página ou o fetch de dado que o router do SvelteKit
 		// dispara ao trocar de rota): manda pra tela de entrar, com o caminho
 		// original pra voltar depois do login — SvelteKit segue redirect() de

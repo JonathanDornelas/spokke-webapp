@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CUSTO_IA } from '$lib/billing/catalogo';
+import { custoDaGeracao, type FonteDaIa } from '$lib/billing/ia';
 import type { MotivoDoBloqueio } from '$lib/billing/motivos';
 import type { ContentUnitKind } from '$lib/kernel/content/types';
 import { materiais } from '$lib/server/db/repos/content-units';
@@ -8,12 +9,25 @@ import { usoDeIa } from '$lib/server/db/repos/uso-de-ia';
 import { getGerador } from './index';
 import { jsonSchemaDaResposta, validarProposta } from './schemas';
 import type { PedidoDeMateriais } from './prompt';
-import type { GeradorDeMateriais, RespostaDoModelo } from './provider';
+import type { AnexoDaIa, GeradorDeMateriais, RespostaDoModelo } from './provider';
 
 type TeacherScope = { id: string };
 
 /** Quanto se espera pelo modelo antes de desistir e estornar. */
 const TIMEOUT_MS = 45_000;
+/** Com arquivo, o modelo lê a foto ou até dez minutos de fala antes de escrever: mais folga. */
+const TIMEOUT_COM_ARQUIVO_MS = 90_000;
+
+/** De onde a geração partiu, pelo arquivo que veio junto. */
+export function fonteDoPedido(anexo: AnexoDaIa | undefined): FonteDaIa {
+	if (!anexo) return 'prompt';
+	return anexo.tipo === 'imagem' ? 'imagem' : 'video';
+}
+
+const O_QUE_NAO_LE: Record<AnexoDaIa['tipo'], string> = {
+	imagem: 'A IA ligada neste servidor não lê imagem.',
+	audio: 'A IA ligada neste servidor não lê a fala de vídeo.'
+};
 
 export interface PropostaDaIa {
 	id: string;
@@ -77,6 +91,8 @@ async function registrarUso(
 			kind: entrada.kind,
 			requested: entrada.quantos,
 			accepted: aceitas,
+			source: fonteDoPedido(entrada.anexo),
+			mediaSeconds: entrada.anexo?.tipo === 'audio' ? Math.round(entrada.anexo.segundos) : null,
 			inputTokens: resposta.uso?.entrada ?? null,
 			outputTokens: resposta.uso?.saida ?? null,
 			thoughtsTokens: resposta.uso?.raciocinio ?? null
@@ -89,15 +105,18 @@ async function registrarUso(
 /**
  * Pede propostas de material à IA (docs/adr-003-ia-gemini.md):
  *
- * 1. Debita `quantos × CUSTO_IA` créditos, idempotente pelo `requestId`.
+ * 1. Debita o custo da geração, idempotente pelo `requestId`: as propostas pedidas e, com
+ *    arquivo, a leitura dele (`custoDaGeracao`, a mesma conta do botão da tela).
  * 2. Chama o provedor FORA de qualquer transação, com teto de tempo.
  * 3. Valida cada proposta contra o schema do kernel e descarta repetidas.
- * 4. Estorna o que não veio ou não serviu — o professor paga só pelo que pode usar.
- * 5. Grava os tokens que o provedor informou (`registrarUso`).
+ * 4. Estorna o que não veio ou não serviu — o professor paga só pelo que pode usar. A leitura do
+ *    arquivo fica cobrada quando ao menos uma proposta serviu (o modelo leu, e o professor levou
+ *    material); sem nenhuma, volta tudo, leitura junto.
+ * 5. Grava os tokens que o provedor informou (`registrarUso`), com a fonte.
  *
  * **Nada é gravado na biblioteca aqui.** A IA propõe; o professor marca e
  * confirma (`aceitarPropostasIa`), e só aí o material entra — pela mesma porta
- * da autoria manual, com a cota de estoque.
+ * da autoria manual, com a cota de estoque. O arquivo não é gravado em lugar nenhum.
  */
 export async function gerarPropostas(
 	teacher: TeacherScope,
@@ -105,16 +124,24 @@ export async function gerarPropostas(
 	gerador: GeradorDeMateriais | null = getGerador()
 ): Promise<ResultadoDaGeracao> {
 	if (!gerador) return { ok: false, error: 'A geração por IA ainda não está ligada.' };
+	// Antes de cobrar: um arquivo que nenhum provedor ligado lê não pode custar crédito nenhum.
+	if (entrada.anexo && !gerador.le.has(entrada.anexo.tipo)) {
+		return { ok: false, error: O_QUE_NAO_LE[entrada.anexo.tipo] };
+	}
 
-	const custo = entrada.quantos * CUSTO_IA.porProposta;
-	const debito = await debitar(teacher, custo, entrada.requestId);
+	const custo = custoDaGeracao({
+		quantos: entrada.quantos,
+		fonte: fonteDoPedido(entrada.anexo),
+		segundos: entrada.anexo?.tipo === 'audio' ? entrada.anexo.segundos : null
+	});
+	const debito = await debitar(teacher, custo.total, entrada.requestId);
 	if (!debito.ok) {
 		return {
 			ok: false,
 			motivo: debito.motivo,
 			error:
 				debito.motivo === 'creditos'
-					? `Seus créditos deste ciclo não cobrem ${custo} propostas (saldo: ${debito.saldo}).`
+					? `Seus créditos deste ciclo não cobrem os ${custo.total} desta geração (saldo: ${debito.saldo}).`
 					: debito.motivo === 'ia'
 						? 'Gerar material com IA é dos planos Pro e Super.'
 						: 'Seu plano não permite gerar material agora.'
@@ -128,10 +155,10 @@ export async function gerarPropostas(
 	try {
 		resposta = await gerador.propor(entrada, {
 			schema: jsonSchemaDaResposta(entrada.kind, entrada.quantos),
-			timeoutMs: TIMEOUT_MS
+			timeoutMs: entrada.anexo ? TIMEOUT_COM_ARQUIVO_MS : TIMEOUT_MS
 		});
 	} catch (e) {
-		await estornar(teacher, custo, entrada.requestId, debito.cicloInicio);
+		await estornar(teacher, custo.total, entrada.requestId, debito.cicloInicio);
 		return {
 			ok: false,
 			error: `${e instanceof Error ? e.message : 'A IA não respondeu.'} Os créditos foram devolvidos.`
@@ -151,7 +178,10 @@ export async function gerarPropostas(
 		validas.push(dados);
 	}
 
-	const estornados = (entrada.quantos - validas.length) * CUSTO_IA.porProposta;
+	// Nenhuma serviu: volta tudo, a leitura do arquivo junto — o professor não levou nada. Com ao
+	// menos uma, volta só o que não serviu, e a leitura fica (o modelo leu o arquivo inteiro).
+	const estornados =
+		validas.length === 0 ? custo.total : (entrada.quantos - validas.length) * CUSTO_IA.porProposta;
 	await estornar(teacher, estornados, entrada.requestId, debito.cicloInicio);
 	await registrarUso(teacher, gerador, entrada, validas.length, resposta);
 
@@ -170,7 +200,7 @@ export async function gerarPropostas(
 	return {
 		ok: true,
 		propostas,
-		debitados: custo - estornados,
+		debitados: custo.total - estornados,
 		estornados,
 		saldo: debito.saldo + estornados
 	};

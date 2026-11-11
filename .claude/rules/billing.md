@@ -30,6 +30,12 @@ Super R$ 99 por mês, o anual a dez mensalidades. O Scholar não tem preço publ
 escola. **Os preços dependem dos créditos e do raciocínio do modelo**: mudar `creditosPorCiclo` ou
 o `thinkingConfig` do Gemini é refazer a conta (`docs/adr-002-billing.md` "Preços").
 
+**O custo de uma geração por IA é `custoDaGeracao`** (`src/lib/billing/ia.ts`), com os valores de
+`CUSTO_IA` no catálogo: as propostas pedidas mais, com foto ou vídeo, a leitura do arquivo (um
+crédito pela foto, um por minuto de fala começado). A mesma função desenha o botão e faz o débito,
+e a conta de por que cada valor cabe no preço dos planos está em `docs/adr-003-ia-gemini.md`,
+seção 6. Mudar um valor de `CUSTO_IA` é refazer essa conta.
+
 **Os limites são de ESTOQUE** — contam o que existe agora. Atividade arquivada não conta; material
 reaproveitado (`findEquivalent`) não ocupa vaga nova. Créditos renovam por ciclo mensal e não
 acumulam.

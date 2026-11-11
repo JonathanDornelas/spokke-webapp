@@ -66,6 +66,9 @@ Os que vieram com planos, módulos e escola, cada um com o seu guard:
 - `(studio)/conta/conta.remote.ts` — `solicitarPlano`, `cancelarPedido`, `agendarCancelamento`,
   `desfazerCancelamento`, `sairDaEscola`. O id vem da sessão.
 - `(studio)/materiais/ia.remote.ts` — `gerarPropostasIa` e `aceitarPropostasIa` (ver "IA" abaixo).
+  Gerar a partir de FOTO ou VÍDEO vai por `(studio)/materiais/ia/arquivo/+server.ts`, um endpoint
+  multipart pelo mesmo motivo da fala do aluno (arquivo em base64 dentro de JSON infla 33%), com
+  o guard do professor e o mesmo `gerarPropostas`.
 - `(studio)/materiais/traducao.remote.ts` — `sugerirTraducao`, a tradução sugerida enquanto o
   professor digita; não grava nada (ver "Tradução do material" abaixo).
 - `(studio)/modulos/modulos.remote.ts` — CRUD de módulo (com `duplicarModulo`: atividades e ordem, sem
@@ -419,7 +422,19 @@ worker da publicação tenta de novo com backoff.
 recusou: …`), o 503 de sobrecarga ganha UMA nova tentativa, e a tela diz o que fazer: sobrecarga
   ("tente em alguns minutos"), limite da chave (429) ou recusa.
 - Cada geração respondida grava os tokens em `AiUsage` (`registrarUso`), DEPOIS do estorno e sem
-  nunca derrubar a geração: medir não pode custar ao professor o que ele pediu.
+  nunca derrubar a geração: medir não pode custar ao professor o que ele pediu. Grava também a
+  fonte (`prompt`, `imagem`, `video`) e os segundos de fala.
+- **Foto e vídeo** (adr-003, seção 6). A foto vai inteira (reduzida e recodificada em JPEG no
+  navegador); do vídeo vai só a FALA do trecho escolhido, num WAV mono de 16 kHz e 8 bits montado no
+  navegador — o vídeo em si não sobe, e dez minutos de fala cabem nos 10M do `BODY_SIZE_LIMIT`. O
+  servidor decide o tipo da foto pelos bytes e a duração da fala pelo cabeçalho do WAV
+  (`$lib/ia/arquivo.ts`, o mesmo módulo que o navegador usa para montar). Cada provedor declara o
+  que LÊ (`GeradorDeMateriais.le`): o Claude lê imagem, o Gemini lê imagem e áudio, e a fila de
+  reserva só passa o pedido a quem lê aquele tipo. Arquivo que ninguém ligado lê é recusado ANTES
+  de cobrar. **Nada é guardado**: nem bucket, nem banco.
+- **O custo é UMA conta**, `custoDaGeracao` (`$lib/billing/ia.ts`), no botão da tela e no débito:
+  as propostas mais a leitura do arquivo (`CUSTO_IA.porImagem`, `CUSTO_IA.porMinutoDeFala` por
+  minuto começado). Sem nenhuma proposta que sirva, volta tudo, leitura junto.
 
 ## Tradução do material
 

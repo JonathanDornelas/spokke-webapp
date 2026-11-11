@@ -1,6 +1,34 @@
-import { GoogleGenAI, ThinkingLevel, type ThinkingConfig } from '@google/genai';
-import { instrucoesDoSistema, mensagemDoProfessor } from './prompt';
-import { FalhaDoProvedor, type GeradorDeMateriais } from './provider';
+import { GoogleGenAI, ThinkingLevel, type Content, type ThinkingConfig } from '@google/genai';
+import { instrucoesDoSistema, mensagemDoProfessor, type PedidoDeMateriais } from './prompt';
+import {
+	base64DoAnexo,
+	FalhaDoProvedor,
+	type GeradorDeMateriais,
+	type TipoDeAnexo
+} from './provider';
+
+/** O Gemini lê a foto e a fala do vídeo (adr-003 "Imagem e vídeo"). */
+const LE_NO_GEMINI: ReadonlySet<TipoDeAnexo> = new Set(['imagem', 'audio']);
+
+/**
+ * O conteúdo da mensagem do professor: só o texto, ou o arquivo INLINE antes do texto. Sem
+ * `mediaResolution`: o padrão do Gemini 3 para imagem já é o maior nível comum (1.120 tokens, que é
+ * a conta de `CUSTO_IA.porImagem`), e o áudio custa 25 tokens por segundo em qualquer nível.
+ * Pura, para o teste conferir o que vai ao modelo sem chamar a API.
+ */
+export function conteudoParaGemini(pedido: PedidoDeMateriais): string | Content[] {
+	const texto = mensagemDoProfessor(pedido);
+	if (!pedido.anexo) return texto;
+	return [
+		{
+			role: 'user',
+			parts: [
+				{ inlineData: { mimeType: pedido.anexo.mime, data: base64DoAnexo(pedido.anexo) } },
+				{ text: texto }
+			]
+		}
+	];
+}
 
 /**
  * A IA pelo Gemini (`@google/genai`), com SAÍDA ESTRUTURADA: o JSON Schema da
@@ -21,13 +49,15 @@ export function criarGemini(config: { apiKey: string; model: string }): GeradorD
 
 	return {
 		nome: `gemini:${config.model}`,
+		le: LE_NO_GEMINI,
 		async propor(pedido, { schema, timeoutMs }) {
 			const abortar = new AbortController();
 			const relogio = setTimeout(() => abortar.abort(), timeoutMs);
+			const contents = conteudoParaGemini(pedido);
 			const chamar = () =>
 				cliente.models.generateContent({
 					model: config.model,
-					contents: mensagemDoProfessor(pedido),
+					contents,
 					config: {
 						systemInstruction: instrucoesDoSistema(pedido),
 						responseMimeType: 'application/json',

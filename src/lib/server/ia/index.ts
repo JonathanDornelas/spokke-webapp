@@ -98,3 +98,13 @@ export function getGerador(): GeradorDeMateriais | null {
 export function isIaConfigurada(): boolean {
 	return nomesPedidos().every(ehProvedor) && completos().length > 0;
 }
+
+/**
+ * As fontes que a IA ligada LÊ, para a tela (adr-003 "Imagem e vídeo"): a foto precisa de um
+ * provedor que leia imagem, e o vídeo, de um que leia áudio. É a mesma resposta que a fila dá ao
+ * pedido (`reserva.ts`), então a tela nunca oferece o que o servidor recusaria.
+ */
+export function fontesDaIa(): { imagem: boolean; video: boolean } {
+	const gerador = isIaConfigurada() ? getGerador() : null;
+	return { imagem: !!gerador?.le.has('imagem'), video: !!gerador?.le.has('audio') };
+}

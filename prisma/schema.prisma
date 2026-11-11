@@ -752,6 +752,11 @@ model AiUsage {
   /// Quantas propostas foram pedidas e quantas serviram (o que ficou cobrado).
   requested Int
   accepted  Int
+  /// De onde a IA partiu: `prompt`, `imagem` ou `video` (adr-003 "Imagem e vídeo"). É o que separa,
+  /// na conta dos preços, os tokens de ler um arquivo dos de escrever as propostas.
+  source       String @default("prompt")
+  /// Os segundos de fala que o vídeo mandou — os que a leitura cobrou. Nulo fora do vídeo.
+  mediaSeconds Int?
 
   /// Nulos quando o provedor não informa.
   inputTokens    Int?

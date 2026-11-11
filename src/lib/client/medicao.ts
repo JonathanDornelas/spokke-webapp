@@ -7,7 +7,7 @@
  * dados de turma, muitas vezes de menores de idade, e o Player tem orçamento
  * de peso).
  *
- * A escolha fica no aparelho (`spokke-medicao`, listada na página de Cookies)
+ * A escolha fica no aparelho (`spokke-medicao`; a página de Cookies a descreve pela finalidade)
  * e se desfaz pelo "Preferências de cookies" do rodapé, que dispara
  * `EVENTO_DE_PREFERENCIAS`.
  */

@@ -16,6 +16,8 @@
  * precisam ser criadas (docs/operacao.md).
  */
 
+import { CUSTO_IA } from '$lib/billing/catalogo';
+
 export interface LegalSection {
 	t: string;
 	p: string[];
@@ -25,6 +27,11 @@ export interface LegalSection {
 
 function P(t: string, p: string[], extra?: { l?: string[]; note?: string }): LegalSection {
 	return { t, p, ...extra };
+}
+
+/** "um crédito", "3 créditos": o custo da IA na ajuda sai de `CUSTO_IA`, o mesmo que o servidor cobra. */
+function creditos(n: number): string {
+	return n === 1 ? 'um crédito' : `${n} créditos`;
 }
 
 /** O nome que o rodapé e os documentos usam. */
@@ -160,7 +167,7 @@ export const privacidade: LegalSection[] = [
 			l: [
 				'Hospedagem e armazenamento: onde ficam o banco de dados e os arquivos de áudio.',
 				'Resend, o serviço de e-mail: recebe o endereço e o texto dos convites, dos avisos de conta e dos links de recuperação de senha.',
-				'Anthropic, pelo Claude, e Google, pelo Gemini: só quando você usa "Gerar com IA", e só o pedido que você escreveu com os nomes dos idiomas. O pedido vai ao Claude; ao Gemini, só quando o Claude não está disponível.',
+				'Anthropic, pelo Claude, e Google, pelo Gemini: só quando você usa "Gerar com IA", e só o que você manda: o pedido escrito, os nomes dos idiomas e, se você escolher, a foto de uma página ou a fala do trecho de um vídeo. O pedido vai ao Claude, e ao Gemini só quando o Claude não está disponível. A fala do vídeo vai sempre ao Gemini, porque o Claude não lê áudio.',
 				'Google, no login: só quando você escolhe "Continuar com o Google". Ele confirma quem você é; nada do Spokke vai para ele além do pedido de entrada.',
 				'Google, pelo Google Analytics: só nas páginas públicas e só com o seu aceite. Recebe dados de navegação, como a página visitada, o tipo de aparelho e de onde veio a visita, sem nome nem e-mail.',
 				'Mercado Pago: os dados da cobrança, nos planos pagos.',
@@ -183,6 +190,7 @@ export const privacidade: LegalSection[] = [
 	P('Seu material e a IA', [
 		'As questões da atividade são montadas pelo próprio Spokke a partir do material que você cadastra, por regras fixas, sem modelo de linguagem e sem enviar o seu material a ninguém.',
 		'"Gerar com IA" é opcional e existe nos planos Pro e Super. Quando você usa, o pedido que você escreveu vai ao Claude, da Anthropic, para ele propor materiais (ou ao Gemini, do Google, quando o Claude não está disponível). Nenhum dado de aluno vai junto, e nada entra na sua biblioteca antes de você marcar e confirmar.',
+		'Se você parte de uma foto ou de um vídeo, a foto vai junto do pedido. Do vídeo vai só a fala do trecho que você escolheu: o vídeo em si não sai do seu computador. A IA lê o arquivo uma vez para propor o material, e o Spokke não guarda nem a foto nem o áudio. Por isso, use material seu ou didático, sem imagem nem voz de aluno.',
 		'Usamos as modalidades pagas dos dois, em que o que é enviado não treina modelos. Nós também não usamos o seu material nem as respostas dos alunos para isso.',
 		'O material e as atividades são seus: você edita e apaga quando quiser.',
 		'Se você faz parte de uma escola no plano Scholar, a coordenação vê números das suas turmas, nunca o nome de um aluno nem uma resposta.'
@@ -221,7 +229,7 @@ export const privacidade: LegalSection[] = [
 		note: 'Respondemos em até 15 dias, como a lei pede. Antes, confirmamos que o pedido é seu, para não entregar dados à pessoa errada.'
 	}),
 	P('Cookies', [
-		'Usamos o necessário para o produto funcionar, como manter a sua sessão e lembrar onde o aluno parou. Nas páginas públicas, os cookies de medição do Google Analytics só são gravados se você aceitar o aviso. Não há cookie de publicidade, e cada um está descrito na página de Cookies.'
+		'Usamos o necessário para o produto funcionar, como manter a sua sessão e lembrar onde o aluno parou. Nas páginas públicas, os cookies de medição do Google Analytics só são gravados se você aceitar o aviso. Não há cookie de publicidade, e a página de Cookies explica para que serve cada tipo.'
 	]),
 	P('Encarregado de dados', [
 		'Pedidos sobre dados pessoais vão para privacidade@spokke.com.br.',
@@ -290,32 +298,29 @@ export const cookies: LegalSection[] = [
 	P(
 		'Cookies essenciais',
 		[
-			'Sem eles a plataforma não funciona, por isso não há como recusá-los. Nenhum serve para medir audiência ou mostrar anúncio.'
+			'Sem eles a plataforma não funciona, por isso não há como recusá-los. Nenhum serve para medir audiência ou mostrar anúncio. Usamos esses cookies para:'
 		],
 		{
 			l: [
-				'better-auth.session_token: mantém o professor conectado. Vale 7 dias e se renova enquanto você usa.',
-				'spokke-aluno.session_token: o mesmo, para quem entra com a conta de aluno.',
-				'better-auth.state e spokke-aluno.state: só durante a entrada pelo Google, para conferir que a volta é da mesma ida. Vale 5 minutos.',
-				'spokke_anon: identifica o aparelho que respondeu, para o aluno continuar de onde parou e, se criar conta, levar as respostas junto. Vale 180 dias.',
-				'spokke_attempt_<atividade>: a tentativa em andamento naquela atividade. Vale 7 dias.',
-				'spokke_aluno_<atividade>: quem chegou pelo link pessoal do convite, para a resposta sair com o nome certo. Vale 30 dias.',
-				'spokke_code_<atividade>: o código de acesso já digitado, para a atividade não pedir de novo. Vale 1 dia.'
+				'manter você conectado, seja na conta de professor, seja na conta de aluno;',
+				'dar segurança à entrada com a conta Google;',
+				'lembrar a atividade que o aluno está respondendo, para ele continuar de onde parou;',
+				'reconhecer o aluno que chegou pelo convite do professor, para a resposta aparecer com o nome certo;',
+				'não pedir de novo o código de acesso que o aluno acabou de digitar.'
 			],
-			note: 'Em conexão segura, o navegador mostra os dois primeiros com o prefixo __Secure-.'
+			note: 'Eles duram o tempo que a tarefa pede: o da sessão se renova enquanto você usa, e os de uma atividade expiram em poucos dias.'
 		}
 	),
 	P(
 		'Armazenamento local',
-		['Fica só no seu aparelho e guarda preferências e trabalho em andamento:'],
+		['Fica só no seu aparelho e guarda preferências e trabalho em andamento, como:'],
 		{
 			l: [
-				'spokke-theme: o tema claro ou escuro que você escolheu.',
-				'spokke-volume: o volume do som de acerto e de erro.',
-				'spokke-pronuncia: se o teclado virtual mostra a pronúncia nas teclas.',
-				'spokke-mapa-<módulo>: até onde o personagem do mapa já andou, para a animação não se repetir.',
-				'spokke:draft:<tentativa>: o rascunho de uma resposta longa, para ele não sumir se a página recarregar.',
-				'spokke-medicao: a sua resposta ao aviso de medição das páginas públicas (aceitou ou recusou).'
+				'as preferências de tela, como o tema claro ou escuro e o volume dos sons;',
+				'os ajustes do teclado virtual;',
+				'o que o aluno já viu no mapa dos módulos;',
+				'o rascunho de uma resposta longa, para ele não se perder se a página recarregar;',
+				'a sua escolha no aviso de medição das páginas públicas.'
 			]
 		}
 	),
@@ -323,13 +328,9 @@ export const cookies: LegalSection[] = [
 		'Cookies de medição e de publicidade',
 		[
 			'De publicidade, não usamos nenhum: não há pixel de rede social nem rastreamento entre sites.',
-			'Para saber quais páginas públicas ajudam os professores (a página inicial, os planos e o blog), o site pode usar o Google Analytics, e só depois que você aceita o aviso dessas páginas. Sem o aceite, nenhum cookie de medição é gravado, e a medição nunca roda no painel do professor nem nas atividades dos alunos.'
+			'Para saber quais páginas públicas ajudam os professores (a página inicial, os planos e o blog), o site pode usar o Google Analytics, e só depois que você aceita o aviso dessas páginas. Esses cookies contam as visitas de forma anônima. Sem o aceite, nenhum deles é gravado, e a medição nunca roda no painel do professor nem nas atividades dos alunos.'
 		],
 		{
-			l: [
-				'_ga: distingue as visitas de forma anônima para o Google Analytics. Vale 2 anos.',
-				'_ga_<identificador>: guarda o estado da visita para o Google Analytics. Vale 2 anos.'
-			],
 			note: 'Para mudar de ideia, use "Preferências de cookies" no rodapé das páginas públicas: recusar apaga esses cookies e para a medição.'
 		}
 	),
@@ -437,7 +438,7 @@ export const faqGrupos: FaqGroup[] = [
 		items: [
 			[
 				'Preciso preparar o material antes?',
-				'Não. Cole o que você já usa: a lista de frases do caderno, o texto da aula passada, o vocabulário da unidade. Escreva a frase no idioma que você ensina, e a tradução vem preenchida para você conferir. Nos planos Pro e Super, a IA também propõe material a partir de um pedido seu.'
+				'Não. Cole o que você já usa: a lista de frases do caderno, o texto da aula passada, o vocabulário da unidade. Escreva a frase no idioma que você ensina, e a tradução vem preenchida para você conferir. Nos planos Pro e Super, a IA também propõe material a partir de um pedido seu, da foto de uma página ou da fala de um vídeo.'
 			],
 			[
 				'Como o aluno recebe a atividade?',
@@ -500,7 +501,7 @@ export const faqGrupos: FaqGroup[] = [
 			],
 			[
 				'O que são os créditos de IA?',
-				'Nos planos Pro e Super, a IA propõe materiais a partir de um pedido seu. Cada proposta custa um crédito, e a que não servir é devolvida. Os créditos renovam todo mês, no dia em que o plano foi ativado, e não acumulam.'
+				`Nos planos Pro e Super, a IA propõe materiais a partir de um pedido seu, de uma foto ou de um vídeo. Cada proposta custa ${creditos(CUSTO_IA.porProposta)}, e a que não servir é devolvida. Ler uma foto custa ${creditos(CUSTO_IA.porImagem)} a mais, e cada minuto de fala de um vídeo, ${creditos(CUSTO_IA.porMinutoDeFala)}; o botão de gerar mostra o total antes do clique. Os créditos renovam todo mês, no dia em que o plano foi ativado, e não acumulam.`
 			],
 			[
 				'E se o meu plano vencer?',

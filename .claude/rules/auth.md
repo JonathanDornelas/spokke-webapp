@@ -64,9 +64,13 @@ para quem não a acessa, e um 403 confirmaria que ela está ali.
 - `requirePlatformAdmin(locals)` → `AdminScope`. A lista é `PLATFORM_ADMIN_IDS`: **ids de `Teacher`,
   nunca e-mails** — o cadastro não verifica e-mail, e uma lista de endereços daria o painel a quem se
   cadastrasse primeiro com o e-mail do dono.
-- `hooks.server.ts` devolve 404 em `/admin` ANTES do redirecionamento de login. É defesa em
-  profundidade: remote function não passa pelo hook (a rota dela é `/_app/remote/...`), então toda
-  função de `admin.remote.ts` abre com o guard.
+- `hooks.server.ts` trata `/admin` ANTES do redirecionamento de login: o que não é navegação (POST
+  e afins) leva 404 ali mesmo, e o GET segue até a página, cujo load abre com `requirePlatformAdmin`
+  — o 404 dele sai pela tela de "página não encontrada" (`+error.svelte`), a mesma de qualquer
+  endereço que não existe (um "Not found" em texto puro, só nesta rota, confirmava que havia algo
+  ali). Por isso TODA página do painel tem o guard no próprio load, e `auth/painel-interno.test.ts`
+  falha se uma não tiver. Remote function não passa pelo hook (a rota dela é `/_app/remote/...`),
+  então toda função de `admin.remote.ts` abre com o guard.
 - `repos/admin.ts` expõe conta, cobrança, contagens e auditoria. **Nunca dado de aluno** nem conteúdo
   de atividade (`admin.test.ts` confere).
 
@@ -127,8 +131,8 @@ repositório, 2026-11-09), cada uma com a sua URL de retorno (`/api/auth/callbac
 - **Quem nasceu pelo Google cria a senha pelo link de "esqueci a senha"**, não por um campo na
   Conta: uma sessão roubada não ganha, assim, uma porta permanente. O cadastro pelo Google passa
   pelos mesmos hooks — trial e avatar sorteado no professor.
-- O cookie `<prefixo>.state` vive os 5 minutos da ida e volta ao Google (Cookies, em
-  `institucional.ts`).
+- O cookie `<prefixo>.state` vive os 5 minutos da ida e volta ao Google. A página de Cookies o
+  descreve pela finalidade ("dar segurança à entrada com a conta Google"), sem nome nem mecânica.
 
 ## Superfície pública
 

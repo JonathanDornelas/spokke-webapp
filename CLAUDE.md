@@ -211,9 +211,12 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   kernel.md.
 - **"Gerar com IA" é o Claude, com o Gemini de reserva** (`LLM_PROVIDER="claude,gemini"`, uma fila
   em ordem — `docs/adr-003-ia-gemini.md`): o Gemini só responde quando o Claude falha (sem
-  créditos, sobrecarga, recusa). A IA propõe material a partir de um pedido, o professor marca e
-  confirma, e cada proposta custa um crédito (estornado se não servir). Só o modo "prompt" existe —
-  imagem e vídeo pedem leitura de arquivo. **As chaves precisam ser de conta com faturamento**: a
+  créditos, sobrecarga, recusa). A IA propõe material a partir de um pedido, da FOTO de uma página
+  ou da FALA de um vídeo, o professor marca e confirma, e cada proposta custa um crédito (estornado
+  se não servir). Ler o arquivo custa à parte, um crédito pela foto e um por minuto de fala, numa
+  conta só para o botão e o débito (`custoDaGeracao`, adr-003 seção 6). O vídeo não sobe: o
+  navegador manda só a fala do trecho, até 10 minutos, e ela vai ao Gemini (o Claude não lê áudio).
+  Nada do arquivo fica guardado. **As chaves precisam ser de conta com faturamento**: a
   política de privacidade promete que os dados não treinam modelos, o que não vale na camada
   gratuita do Gemini.
 - **A tradução do material é automática** (`TRANSLATE_PROVIDER=audiotext`,

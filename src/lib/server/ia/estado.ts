@@ -3,7 +3,7 @@ import type { EstadoDaIa } from '$lib/billing/ia';
 import { labelForTag } from '$lib/kernel/language/profiles';
 import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { motivoDoBloqueio } from '$lib/server/billing/entitlements';
-import { isIaConfigurada } from './index';
+import { fontesDaIa, isIaConfigurada } from './index';
 
 /**
  * O estado da geração por IA para a tela: se há provedor, se o plano deixa
@@ -22,6 +22,7 @@ export async function estadoDaIa(
 		motivo,
 		saldo: estado.creditos.saldo,
 		custoPorProposta: CUSTO_IA.porProposta,
+		fontes: fontesDaIa(),
 		idiomas: idiomas
 			? `Em ${labelForTag(idiomas.alvo)}, com tradução para ${labelForTag(idiomas.origem)}.`
 			: null

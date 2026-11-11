@@ -19,7 +19,19 @@
 	import { resolve } from '$app/paths';
 	import type { MotivoDoBloqueio } from '$lib/billing/motivos';
 	import type { ContentUnitKind } from '$lib/kernel/content/types';
-	import type { EstadoDaIa, RespostaDaGeracao } from '$lib/billing/ia';
+	import {
+		custoDaGeracao,
+		MAXIMO_DE_FALA_S,
+		type EstadoDaIa,
+		type RespostaDaGeracao
+	} from '$lib/billing/ia';
+	import {
+		decodificarFala,
+		falaParaEnviar,
+		prepararImagem,
+		type FalaDecodificada
+	} from '$lib/client/arquivo-ia';
+	import { formatarDuracao, problemaDoTrecho, segundosDoTrecho } from '$lib/ia/arquivo';
 	import { tokenize } from '$lib/kernel/language/tokenize';
 	import { shuffleWithSeed } from '$lib/kernel/random';
 	import { previewRawLines, RAW_SEPARATORS } from '$lib/kernel/content/parse-raw';
@@ -112,11 +124,15 @@
 		fecharSoNoCelular?: boolean;
 		/** Estado da geração por IA. Sem ele, o modo IA fica travado. */
 		ia?: EstadoDaIa;
-		/** A PÁGINA chama a remote function — o componente não conhece nenhuma (Convenções). */
+		/**
+		 * A PÁGINA fala com o servidor — o componente não conhece nenhuma remote function nem endpoint
+		 * (Convenções). Com `arquivo`, a foto já reduzida ou o WAV do trecho do vídeo, prontos aqui.
+		 */
 		ongerarIa?: (pedido: {
 			kind: ContentUnitKind;
 			texto: string;
 			quantos: 5 | 10 | 20;
+			arquivo?: { fonte: 'imagem' | 'video'; blob: Blob };
 		}) => Promise<RespostaDaGeracao>;
 		/** Grava as marcadas. Devolve se deu certo — aí a lista de propostas se esvazia. */
 		onaceitarIa?: (kind: ContentUnitKind, dados: Record<string, unknown>[]) => Promise<boolean>;
@@ -421,13 +437,115 @@
 		}
 	}
 
-	// ── gerar com IA ── A página pede ao servidor (`ia.remote.ts`), que debita os
-	// créditos, chama o provedor e devolve as propostas já validadas. Nada entra
-	// na biblioteca antes de o professor marcar e confirmar (paginas.md "Studio").
+	// ── gerar com IA ── A página pede ao servidor (`ia.remote.ts`, ou o endpoint do
+	// arquivo), que debita os créditos, chama o provedor e devolve as propostas já
+	// validadas. Nada entra na biblioteca antes de o professor marcar e confirmar
+	// (paginas.md "Studio"). A foto e o vídeo são preparados AQUI, no navegador: a foto
+	// reduzida, e do vídeo só a fala do trecho (`$lib/client/arquivo-ia.ts`).
 	type Fonte = 'prompt' | 'imagem' | 'video';
 	let fonte = $state<Fonte>('prompt');
 	let promptIa = $state('');
 	let quantos = $state<5 | 10 | 20>(10);
+
+	// O arquivo escolhido e o que já foi lido dele. `$state.raw`: são blobs e um
+	// Float32Array de minutos de áudio, que não precisam de proxy profundo.
+	let nomeDoArquivo = $state<string | null>(null);
+	let fotoIa = $state.raw<Blob | null>(null);
+	let previaDaFoto = $state<string | null>(null);
+	let falaIa = $state.raw<FalaDecodificada | null>(null);
+	let lendoArquivo = $state(false);
+	let erroArquivo = $state<string | null>(null);
+	let inicioTrecho = $state('');
+	let fimTrecho = $state('');
+	let arrastando = $state(false);
+	/** Cada escolha de arquivo ganha um número: a leitura que terminar depois de outra escolha é descartada. */
+	let leitura = 0;
+	// O que o seletor do aparelho oferece. HEIC (a foto do iPhone) só abre no Safari; nos
+	// outros, a mensagem de erro de `prepararImagem` pede um JPEG.
+	const ACEITA_IMAGEM = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
+	const ACEITA_VIDEO = 'video/mp4,video/quicktime,video/*,audio/*,.mp4,.mov,.m4a,.mp3';
+
+	// A miniatura da foto é um endereço local; ele é liberado quando a foto muda ou a tela sai.
+	$effect(() => {
+		const url = previaDaFoto;
+		return () => {
+			if (url) URL.revokeObjectURL(url);
+		};
+	});
+
+	function esquecerArquivo() {
+		leitura++;
+		nomeDoArquivo = null;
+		fotoIa = null;
+		previaDaFoto = null;
+		falaIa = null;
+		erroArquivo = null;
+		lendoArquivo = false;
+		inicioTrecho = '';
+		fimTrecho = '';
+	}
+
+	function escolherFonte(f: Fonte) {
+		if (f === fonte) return;
+		// A foto não serve ao vídeo, nem o vídeo à foto: trocar de fonte começa do zero.
+		esquecerArquivo();
+		fonte = f;
+	}
+
+	async function escolherArquivo(arquivo: File | null | undefined) {
+		if (!arquivo || fonte === 'prompt') return;
+		esquecerArquivo();
+		const minha = leitura;
+		nomeDoArquivo = arquivo.name;
+		lendoArquivo = true;
+		try {
+			if (fonte === 'imagem') {
+				const foto = await prepararImagem(arquivo);
+				if (minha !== leitura) return;
+				fotoIa = foto;
+				previaDaFoto = URL.createObjectURL(foto);
+			} else {
+				const fala = await decodificarFala(arquivo);
+				if (minha !== leitura) return;
+				falaIa = fala;
+			}
+		} catch (e) {
+			if (minha !== leitura) return;
+			erroArquivo = e instanceof Error ? e.message : 'Não deu para ler este arquivo.';
+			nomeDoArquivo = null;
+		} finally {
+			if (minha === leitura) lendoArquivo = false;
+		}
+	}
+
+	function soltarArquivo(e: DragEvent) {
+		e.preventDefault();
+		void escolherArquivo(e.dataTransfer?.files?.[0]);
+	}
+
+	// O trecho do vídeo: em branco é o vídeo inteiro; `false` é o que não deu para ler.
+	const inicioS = $derived(segundosDoTrecho(inicioTrecho));
+	const fimS = $derived(segundosDoTrecho(fimTrecho));
+	const trechoIlegivel = $derived(inicioS === false || fimS === false);
+	const inicioNum = $derived(typeof inicioS === 'number' ? inicioS : 0);
+	const fimNum = $derived(typeof fimS === 'number' ? fimS : null);
+	const problemaNoTrecho = $derived.by(() => {
+		if (!falaIa) return null;
+		if (trechoIlegivel) return 'Escreva o tempo como 2:30 (minutos e segundos).';
+		return problemaDoTrecho(falaIa.duracao, inicioNum, fimNum);
+	});
+	/** Os segundos de fala que vão para a IA: é deles que sai o custo da leitura. */
+	const segundosDeFala = $derived.by(() => {
+		if (!falaIa || problemaNoTrecho) return null;
+		return Math.min(fimNum ?? falaIa.duracao, falaIa.duracao) - inicioNum;
+	});
+
+	const fonteLida = $derived(
+		fonte === 'prompt' || (fonte === 'imagem' ? !!ia?.fontes?.imagem : !!ia?.fontes?.video)
+	);
+	const arquivoPronto = $derived(
+		fonte === 'imagem' ? !!fotoIa : fonte === 'video' ? !!falaIa && !problemaNoTrecho : true
+	);
 	interface Proposta {
 		id: string;
 		esq: string;
@@ -443,15 +561,18 @@
 	/** O saldo depois da última geração; antes dela, o que a página mandou. */
 	let saldoIa = $state<number | null>(null);
 	const saldoAgora = $derived(saldoIa ?? ia?.saldo ?? 0);
-	const custoDaGeracao = $derived(quantos * (ia?.custoPorProposta ?? 1));
+	// A MESMA conta que o servidor debita (`custoDaGeracao`, $lib/billing/ia.ts): o que
+	// o botão diz é o que sai do saldo.
+	const custo = $derived(custoDaGeracao({ quantos, fonte, segundos: segundosDeFala }));
 	const podeGerar = $derived(
 		!!ia?.configurada &&
 			!!ia.pode &&
 			!!ongerarIa &&
-			fonte === 'prompt' &&
-			promptIa.trim().length >= 3 &&
-			saldoAgora >= custoDaGeracao &&
-			!gerandoIa
+			fonteLida &&
+			(fonte === 'prompt' ? promptIa.trim().length >= 3 : arquivoPronto) &&
+			saldoAgora >= custo.total &&
+			!gerandoIa &&
+			!lendoArquivo
 	);
 
 	async function gerarComIa() {
@@ -459,7 +580,17 @@
 		gerandoIa = true;
 		erroIa = null;
 		try {
-			const r = await ongerarIa({ kind: KIND_TO_KERNEL[kind], texto: promptIa, quantos });
+			let arquivo: { fonte: 'imagem' | 'video'; blob: Blob } | undefined;
+			if (fonte === 'imagem' && fotoIa) arquivo = { fonte: 'imagem', blob: fotoIa };
+			if (fonte === 'video' && falaIa) {
+				const fala = falaParaEnviar(falaIa, inicioNum, fimNum);
+				if ('erro' in fala) {
+					erroIa = { texto: fala.erro, motivo: null };
+					return;
+				}
+				arquivo = { fonte: 'video', blob: fala.blob };
+			}
+			const r = await ongerarIa({ kind: KIND_TO_KERNEL[kind], texto: promptIa, quantos, arquivo });
 			if (!r.ok) {
 				erroIa = { texto: r.error, motivo: r.motivo ?? null };
 				return;
@@ -1446,7 +1577,7 @@
 						{@const sel = f.id === fonte}
 						<button
 							type="button"
-							onclick={() => (fonte = f.id)}
+							onclick={() => escolherFonte(f.id)}
 							aria-pressed={sel}
 							class="flex min-w-[104px] flex-1 items-center gap-2 rounded-field border-[1.5px] px-3 py-2.5 text-start transition-[border-color,background-color,transform,translate,scale] duration-150 hover:-translate-y-0.5
 							       {sel ? 'border-primary bg-primary/6' : 'border-line bg-base-100 hover:border-primary'}"
@@ -1500,57 +1631,145 @@
 						{/each}
 					</div>
 				{:else}
-					<div
-						class="grid place-items-center gap-2 rounded-box border-[1.5px] border-dashed border-line px-4 py-6 text-center"
+					{@const ehVideo = fonte === 'video'}
+					<!-- A área inteira é o seletor: tocar abre o do aparelho, e arrastar o arquivo
+					     para cima dela também serve. O input fica escondido mas focável, então o
+					     teclado chega aqui pelo Tab e abre o seletor com Espaço. -->
+					<label
+						class="grid cursor-pointer place-items-center gap-2 rounded-box border-[1.5px] border-dashed px-4 py-6 text-center transition-colors has-[:focus-visible]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/30
+						       {arrastando ? 'border-primary bg-primary/6' : 'border-line hover:border-primary'}"
+						ondragover={(e) => {
+							e.preventDefault();
+							arrastando = true;
+						}}
+						ondragleave={() => (arrastando = false)}
+						ondrop={(e) => {
+							arrastando = false;
+							soltarArquivo(e);
+						}}
 					>
-						<span
-							class="grid size-[38px] place-items-center rounded-field bg-accent/12 text-accent"
-						>
-							<svg class="size-[19px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-								<path
-									d={FONTES.find((f) => f.id === fonte)?.icon}
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								/>
-							</svg>
+						<input
+							type="file"
+							class="sr-only"
+							accept={ehVideo ? ACEITA_VIDEO : ACEITA_IMAGEM}
+							onchange={(e) => {
+								const campo = e.currentTarget;
+								void escolherArquivo(campo.files?.[0]);
+								// Esvaziar deixa escolher o MESMO arquivo de novo depois de um erro.
+								campo.value = '';
+							}}
+						/>
+						{#if previaDaFoto && !ehVideo}
+							<img
+								src={previaDaFoto}
+								alt="A foto escolhida"
+								class="max-h-40 rounded-field border border-line object-contain"
+							/>
+						{:else}
+							<span
+								class="grid size-[38px] place-items-center rounded-field bg-accent/12 text-accent"
+							>
+								<svg class="size-[19px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+									<path
+										d={FONTES.find((f) => f.id === fonte)?.icon}
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</span>
+						{/if}
+						<span class="flex max-w-full items-center gap-2 text-[14px] font-bold">
+							{#if lendoArquivo}
+								<Loading variant="fila" size={12} label="Lendo o arquivo" />
+								{ehVideo ? 'Lendo o áudio do vídeo…' : 'Preparando a foto…'}
+							{:else if nomeDoArquivo}
+								<span class="truncate">{nomeDoArquivo}</span>
+							{:else}
+								{ehVideo
+									? 'Arraste um vídeo ou toque para escolher'
+									: 'Arraste uma foto ou toque para escolher'}
+							{/if}
 						</span>
-						<span class="text-[14px] font-bold"
-							>{fonte === 'video' ? 'Arraste um vídeo' : 'Arraste uma imagem'}</span
-						>
 						<span
 							class="max-w-[46ch] text-[12.5px] leading-normal text-pretty text-base-content/65"
 						>
-							{fonte === 'video'
-								? 'mp4 ou mov, até 10 minutos. A fala é transcrita e vira a base das frases.'
-								: 'Foto da página do livro, da lousa ou do caderno. O texto é lido da imagem.'}
+							{#if falaIa}
+								Vídeo de {formatarDuracao(falaIa.duracao)}. Toque para trocar.
+							{:else if fotoIa}
+								Pronta para a IA ler. Toque para trocar.
+							{:else if ehVideo}
+								mp4 ou mov, ou só o áudio (mp3, m4a). A fala vira a base das frases, até {MAXIMO_DE_FALA_S /
+									60} minutos por geração.
+							{:else}
+								Foto da página do livro, da lousa ou do caderno. A IA lê o texto da imagem.
+							{/if}
 						</span>
-					</div>
-					{#if fonte === 'video'}
-						<div
-							class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2.5 rounded-field border border-line bg-base-200 px-3.5 py-3"
-						>
-							<span class="min-w-[150px] flex-1 text-[12.5px] leading-normal text-base-content/65">
-								Trecho a usar — deixe em branco para o vídeo inteiro
-							</span>
-							<span class="flex shrink-0 items-center gap-1.5">
-								<input
-									type="text"
-									placeholder="00:00"
-									class="input h-10 w-[74px] px-2 text-center font-mono text-[13px]"
-									aria-label="Início do trecho"
-								/>
-								<span class="text-[12.5px] text-base-content/65">até</span>
-								<input
-									type="text"
-									placeholder="02:30"
-									class="input h-10 w-[74px] px-2 text-center font-mono text-[13px]"
-									aria-label="Fim do trecho"
-								/>
-							</span>
+					</label>
+					{#if erroArquivo}
+						<p class="mt-2 text-[12.5px] font-semibold text-error" role="alert">{erroArquivo}</p>
+					{/if}
+
+					{#if ehVideo}
+						<div class="mt-2.5 rounded-field border border-line bg-base-200 px-3.5 py-3">
+							<div class="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+								<span
+									class="min-w-[150px] flex-1 text-[12.5px] leading-normal text-base-content/65"
+								>
+									Trecho a usar. Em branco, o vídeo inteiro.
+								</span>
+								<span class="flex shrink-0 items-center gap-1.5">
+									<input
+										type="text"
+										bind:value={inicioTrecho}
+										placeholder="0:00"
+										class="input h-10 w-[74px] px-2 text-center font-mono text-[13px]"
+										aria-label="Início do trecho"
+										aria-describedby="mf-trecho"
+									/>
+									<span class="text-[12.5px] text-base-content/65">até</span>
+									<input
+										type="text"
+										bind:value={fimTrecho}
+										placeholder={falaIa
+											? formatarDuracao(Math.min(falaIa.duracao, MAXIMO_DE_FALA_S))
+											: '2:30'}
+										class="input h-10 w-[74px] px-2 text-center font-mono text-[13px]"
+										aria-label="Fim do trecho"
+										aria-describedby="mf-trecho"
+									/>
+								</span>
+							</div>
+							{#if falaIa}
+								<p id="mf-trecho" class="mt-2 text-[12px] text-base-content/65" role="status">
+									{#if problemaNoTrecho}
+										<span class="font-semibold text-error">{problemaNoTrecho}</span>
+									{:else if segundosDeFala !== null}
+										{formatarDuracao(segundosDeFala)} de fala vão para a IA.
+									{/if}
+								</p>
+							{/if}
 						</div>
 					{/if}
+
+					<label for="mf-foco" class="mt-3 mb-1.5 block text-[12.5px] font-bold"
+						>Foco do material <span class="font-normal text-base-content/65">· opcional</span
+						></label
+					>
+					{#if ia?.idiomas}
+						<p class="-mt-1 mb-1.5 text-[12px] text-base-content/65">{ia.idiomas}</p>
+					{/if}
+					<input
+						id="mf-foco"
+						bind:value={promptIa}
+						maxlength="1000"
+						class="input w-full text-[14px]"
+						placeholder={ehVideo
+							? 'Só as frases com verbos no passado'
+							: 'Só o vocabulário da lousa'}
+					/>
+
 					<div class="mt-2.5 flex gap-2.5 rounded-field border border-line bg-base-200 px-3.5 py-3">
 						<svg
 							class="mt-px size-4 shrink-0 text-accent"
@@ -1567,9 +1786,9 @@
 							/>
 						</svg>
 						<p class="text-[12.5px] leading-normal text-pretty text-base-content/65">
-							{fonte === 'video'
-								? 'O vídeo não é guardado nem entra na atividade — ele é lido uma vez para virar material de texto. O aluno nunca vê o arquivo.'
-								: 'A imagem não é guardada nem entra na atividade — ela é lida uma vez para virar material de texto. O aluno nunca vê a foto.'}
+							{ehVideo
+								? 'O vídeo não sai do seu computador. Só a fala do trecho vai para a IA, que a lê uma vez para propor o material, e nada fica guardado. Use um vídeo seu ou de material didático, sem gravação de aluno.'
+								: 'A foto vai para a IA, que a lê uma vez para propor o material, e nada fica guardado. O aluno nunca vê a foto.'}
 						</p>
 					</div>
 				{/if}
@@ -1616,7 +1835,7 @@
 								stroke-linejoin="round"
 							/>
 						</svg>
-						Gerar {quantos} propostas · {custoDaGeracao} créditos
+						Gerar {quantos} propostas · {custo.total} créditos
 					{/if}
 				</button>
 				<!-- Botão travado SEMPRE diz por quê (paginas.md): um botão cinza sem
@@ -1636,13 +1855,31 @@
 								>Ver os planos</a
 							>
 						{/if}
-					{:else if fonte !== 'prompt'}
-						Imagem e vídeo chegam depois — por enquanto, descreva o que quer no prompt.
-					{:else if saldoAgora < custoDaGeracao}
-						Saldo de {saldoAgora} créditos: escolha menos propostas.
-					{:else}
+					{:else if !fonteLida}
+						{fonte === 'imagem'
+							? 'A IA ligada neste servidor não lê imagem.'
+							: 'A IA ligada neste servidor não lê a fala de vídeo.'} Descreva o que quer no prompt.
+					{:else if fonte !== 'prompt' && lendoArquivo}
+						Lendo o arquivo…
+					{:else if fonte !== 'prompt' && !fotoIa && !falaIa}
+						{fonte === 'imagem'
+							? 'Escolha a foto que a IA vai ler.'
+							: 'Escolha o vídeo que a IA vai ouvir.'}
+					{:else if fonte === 'video' && problemaNoTrecho}
+						Ajuste o trecho do vídeo.
+					{:else if saldoAgora < custo.total}
+						Saldo de {saldoAgora} créditos: escolha menos propostas{fonte === 'video'
+							? ' ou um trecho menor'
+							: ''}.
+					{:else if fonte === 'prompt'}
 						Saldo: {saldoAgora} créditos. Cada proposta custa {ia.custoPorProposta}; a que não
 						servir é devolvida.
+					{:else}
+						Saldo: {saldoAgora} créditos. São {custo.propostas} das propostas e {custo.leitura}
+						{fonte === 'imagem'
+							? 'da leitura da foto'
+							: `da leitura de ${custo.minutos} min de fala`}. A proposta que não servir é
+						devolvida.
 					{/if}
 				</p>
 				{#if erroIa}

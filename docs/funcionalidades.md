@@ -23,7 +23,7 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 | Quatro tipos de material | Par de frases, vocabulário, texto com perguntas, diálogo                                    | etapa 2 do wizard, biblioteca    |
 | Colar uma lista          | Frases ou vocabulário colados de uma vez, com prévia linha a linha e o separador escolhido  | `MaterialForm`                   |
 | Tradução automática      | Escreve só no idioma que ensina; a tradução para a língua do aluno vem pronta para conferir | `MaterialForm`, adr-006          |
-| Gerar material com IA    | A IA propõe material a partir de um pedido; o professor marca o que entra (Pro e Super)     | `MaterialForm`, `ia.remote.ts`   |
+| Gerar material com IA    | A IA propõe material a partir de um pedido, da foto de uma página ou da fala de um vídeo (até 10 min por geração); o professor marca o que entra (Pro e Super) | `MaterialForm`, `ia.remote.ts`, `materiais/ia/arquivo` |
 | Gerador de questões      | Do material saem os exercícios (7 geradores de frase, 1 de vocabulário, texto e diálogo)    | etapa 3                          |
 | Escolher quantas e quais | Quantidade de questões e habilidades da atividade; teto de 15, fala e escuta até 5 cada     | etapa 1                          |
 | Editor de questão        | Enunciado, resposta certa, respostas aceitas, lacuna pela seleção, como corrigir            | `atividades/[id]/itens/[itemId]` |
@@ -111,7 +111,7 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 
 - Mercado Pago ligado de verdade (o código está pronto; faltam as credenciais e o teste no sandbox); preços da vitrine são placeholder.
 - Login com Google em produção: o código está pronto; falta criar o cliente OAuth no Google Cloud (docs/operacao.md).
-- Upload de áudio próprio, de imagem e de vídeo; IA a partir de imagem ou vídeo.
+- Upload de áudio próprio, de imagem e de vídeo PARA A ATIVIDADE (a foto e o vídeo do "Gerar com IA" só viram material de texto, e não ficam guardados).
 - Oito geradores da tabela do kernel (`vocab-image-choice`, `speak-vocab` e outros).
 - Correção de escrita livre por IA (a rubrica é do professor).
 - Encerrar a conta pela tela (mock); material compartilhado entre professores da escola.
