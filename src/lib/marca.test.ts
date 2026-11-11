@@ -82,7 +82,7 @@ describe('a marca', () => {
 	it('o Logo e o favicon declaram fill-rule evenodd', () => {
 		const logo = readFileSync('src/lib/components/Logo.svelte', 'utf8');
 		expect(logo).toMatch(/fill-rule="evenodd"/);
-		const favicon = readFileSync('src/lib/assets/favicon.svg', 'utf8');
+		const favicon = readFileSync('static/favicon.svg', 'utf8');
 		expect(favicon).toMatch(/fill-rule:\s*evenodd/);
 	});
 });

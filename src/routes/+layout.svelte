@@ -1,6 +1,5 @@
 <script lang="ts">
 	import '../app.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import NavigationProgress from '$lib/components/NavigationProgress.svelte';
 	import MedicaoDoSite from '$lib/components/MedicaoDoSite.svelte';
 	import { env } from '$env/dynamic/public';
@@ -17,9 +16,14 @@
 <svelte:head>
 	<!-- O .ico vem antes e com `sizes`: sem isso o Chrome fica com ele em vez do
 	     SVG. O SVG troca de azul no tema escuro; o .ico e o ícone do iPhone são o
-	     fallback de quem não lê SVG. Os três saem do traço de `$lib/marca`. -->
+	     fallback de quem não lê SVG. Todos saem do traço de `$lib/marca`.
+	     O SVG é ARQUIVO (`static/`), não import: importado, o Vite o embutia na
+	     página como `data:`, e o Google não busca ícone embutido. O PNG de 192 px
+	     é para a busca, que pede ícone com lado múltiplo de 48 — o .ico (32) e o
+	     do iPhone (180) não servem (scripts/gerar-favicon-png.mjs). -->
 	<link rel="icon" href="/favicon.ico" sizes="32x32" />
-	<link rel="icon" href={favicon} type="image/svg+xml" />
+	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+	<link rel="icon" href="/favicon-192.png" sizes="192x192" type="image/png" />
 	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 	{#if verificacaoGoogle}<meta name="google-site-verification" content={verificacaoGoogle} />{/if}
 	{#if verificacaoBing}<meta name="msvalidate.01" content={verificacaoBing} />{/if}
