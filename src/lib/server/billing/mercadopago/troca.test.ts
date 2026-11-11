@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '$lib/server/db/client';
+import { reais } from '$lib/billing/precos';
 import { ErroDoMercadoPago, type ClienteMercadoPago, type FaturaMp } from './cliente';
 import { chaveDaTroca } from './sincronizar';
 import {
@@ -20,15 +21,21 @@ import {
  *
  * O que se prova: a parte não usada é a do instante da troca e nunca um centavo
  * a mais; cada pagamento devolve UMA vez; nada volta antes de o plano novo estar
- * pago; devolução feita por fora não sai de novo; e a assinatura ativada DEPOIS
- * da nova não é tocada pelo job dela.
+ * pago; devolução feita por fora não sai de novo; a que o Mercado Pago recusa
+ * (o anual depois do prazo) vai para a equipe com o valor calculado; e a
+ * assinatura ativada DEPOIS da nova não é tocada pelo job dela.
  */
 
 const RODADA = String(Date.now());
 const EM = '2026-11-10T12:00:00.000Z';
 const AGORA = new Date(EM);
 
-function falso(faturas: FaturaMp[], jaDevolvido: Record<string, number> = {}) {
+function falso(
+	faturas: FaturaMp[],
+	jaDevolvido: Record<string, number> = {},
+	/** Pagamentos cuja devolução o Mercado Pago recusa — antigos demais, como o anual depois do prazo. */
+	recusados: string[] = []
+) {
 	const canceladas: string[] = [];
 	const devolucoes: { pagamento: string; valor: number; chave: string }[] = [];
 	const cliente: ClienteMercadoPago = {
@@ -57,6 +64,12 @@ function falso(faturas: FaturaMp[], jaDevolvido: Record<string, number> = {}) {
 			};
 		},
 		async devolver(pagamento, valor, chave) {
+			if (recusados.includes(pagamento)) {
+				throw new ErroDoMercadoPago(
+					400,
+					`POST /v1/payments/${pagamento}/refunds: 400 {"message":"payment-too-old-to-be-refunded"}`
+				);
+			}
 			devolucoes.push({ pagamento, valor, chave });
 			return { id: `r-${pagamento}`, amount: valor, status: 'approved' };
 		}
@@ -240,7 +253,7 @@ describe('processarTroca — o job da troca de plano', () => {
 		]);
 
 		const d = await processarTroca({ nova, em: EM }, cliente, AGORA);
-		expect(d).toEqual({ canceladas: 1, devolvidas: 1, aguardando: false });
+		expect(d).toEqual({ canceladas: 1, devolvidas: 1, porFora: 0, aguardando: false });
 		expect(canceladas).toEqual([antiga]);
 		const esperado = Math.floor((5_900 * 21) / 30);
 		expect(devolucoes).toEqual([
@@ -258,7 +271,7 @@ describe('processarTroca — o job da troca de plano', () => {
 		// O mesmo job de novo — a retentativa, ou a fatura atrasada que o chama outra
 		// vez: nada sai em dobro.
 		const deNovo = await processarTroca({ nova, em: EM }, cliente, AGORA);
-		expect(deNovo).toEqual({ canceladas: 0, devolvidas: 0, aguardando: false });
+		expect(deNovo).toEqual({ canceladas: 0, devolvidas: 0, porFora: 0, aguardando: false });
 		expect(devolucoes).toHaveLength(1);
 		expect(canceladas).toEqual([antiga]);
 		expect(canceladas).not.toContain(depois);
@@ -284,7 +297,7 @@ describe('processarTroca — o job da troca de plano', () => {
 
 		const d = await processarTroca({ nova: semPagamento, em: EM }, cliente, AGORA);
 		// Cancelar não espera: duas assinaturas ativas seriam duas cobranças.
-		expect(d).toEqual({ canceladas: 1, devolvidas: 0, aguardando: true });
+		expect(d).toEqual({ canceladas: 1, devolvidas: 0, porFora: 0, aguardando: true });
 		expect(canceladas).toEqual([velha]);
 		expect(devolucoes).toHaveLength(0);
 		const seguinte = await prisma.job.findFirst({
@@ -364,8 +377,63 @@ describe('processarTroca — o job da troca de plano', () => {
 			)
 		).toBeLessThan(DEVOLUCAO_MINIMA_CENTAVOS);
 		const d = await processarTroca({ nova: atual, em: EM }, cliente, AGORA);
-		expect(d).toEqual({ canceladas: 1, devolvidas: 0, aguardando: false });
+		expect(d).toEqual({ canceladas: 1, devolvidas: 0, porFora: 0, aguardando: false });
 		expect(devolucoes).toHaveLength(0);
+	});
+
+	it('anual depois do prazo de devolução: o Mercado Pago recusa, e a equipe recebe o valor para devolver por fora', async () => {
+		const z = await professor('G');
+		const anual = await assinatura(z.id, 'anual-antigo', {
+			plano: 'pro',
+			ciclo: 'anual',
+			status: 'authorized',
+			ativadaEm: '2026-03-10T12:00:00Z'
+		});
+		const atual = await assinatura(z.id, 'anual-antigo-nova', {
+			plano: 'super',
+			ciclo: 'anual',
+			status: 'authorized',
+			ativadaEm: EM
+		});
+		const pago = pagamento('anual-antigo');
+		const { cliente, devolucoes } = falso(
+			[
+				fatura(anual, pago, 590, '2026-03-10T12:00:00Z'),
+				fatura(atual, pagamento('anual-antigo-nova'), 990, '2026-11-10T12:30:00Z')
+			],
+			{},
+			[pago]
+		);
+
+		const d = await processarTroca({ nova: atual, em: EM }, cliente, AGORA);
+		expect(d).toEqual({ canceladas: 1, devolvidas: 0, porFora: 1, aguardando: false });
+		expect(devolucoes).toHaveLength(0);
+		// De 10/11 a 10/3 do ano seguinte sobram 120 dos 365 dias do anual.
+		const valor = Math.floor((59_000 * 120) / 365);
+		expect(
+			await prisma.providerEvent.findUnique({ where: { id: chaveDaDevolucao(pago) } })
+		).toMatchObject({ type: 'devolucao_por_fora' });
+		const historico = await prisma.auditEvent.findFirstOrThrow({
+			where: { teacherId: z.id, type: 'devolucao_por_fora' }
+		});
+		expect(historico.data).toMatchObject({ valor, plano: 'pro', ciclo: 'anual' });
+		const avisos = () =>
+			prisma.job.findMany({
+				where: {
+					type: 'aviso-equipe',
+					payload: { path: ['assunto'], string_contains: `para Troca G ${RODADA}` }
+				}
+			});
+		const [aviso, ...outros] = await avisos();
+		expect(outros).toHaveLength(0);
+		// O e-mail já leva o valor calculado e o pagamento: a equipe não refaz a conta.
+		expect(aviso?.payload).toMatchObject({ assunto: expect.stringContaining(reais(valor)) });
+		expect(JSON.stringify(aviso?.payload)).toContain(pago);
+
+		// O job de novo não pede outra vez nem manda outro e-mail.
+		const deNovo = await processarTroca({ nova: atual, em: EM }, cliente, AGORA);
+		expect(deNovo.porFora).toBe(0);
+		expect(await avisos()).toHaveLength(1);
 	});
 
 	it('planoEmVigor: só existe quando quem paga é o Mercado Pago', async () => {

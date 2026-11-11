@@ -54,6 +54,8 @@ export function textoDoEvento(tipo: string, dadosBrutos: unknown): string {
 			return `Checkout do plano ${nomeDoPlano(d.plano)} (${d.ciclo ?? 'mensal'}) aberto no Mercado Pago`;
 		case 'devolucao':
 			return `${reais(d.valor ?? 0)} da parte não usada do plano ${nomeDoPlano(d.plano)} devolvidos ao cartão`;
+		case 'devolucao_por_fora':
+			return `${reais(d.valor ?? 0)} da parte não usada do plano ${nomeDoPlano(d.plano)}: a equipe devolve por Pix ou transferência`;
 		case 'plano_ativado':
 			return d.de && d.de !== d.para
 				? `Plano trocado de ${nomeDoPlano(d.de)} para ${nomeDoPlano(d.para)}, até ${dataCurta(d.ate)}`

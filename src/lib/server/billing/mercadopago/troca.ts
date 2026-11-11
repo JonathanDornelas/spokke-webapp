@@ -4,11 +4,17 @@ import {
 	enqueueTrocaMercadoPago,
 	trocaMercadoPagoJobSchema
 } from '$lib/server/queue';
-import { ehCiclo, ehPlanoPago, type CicloDeCobranca } from '$lib/billing/catalogo';
+import { NOME_DO_PLANO, ehCiclo, ehPlanoPago, type CicloDeCobranca } from '$lib/billing/catalogo';
+import { reais } from '$lib/billing/precos';
 import type { PlanoEmVigor } from '$lib/billing/troca';
 import { fimDoPeriodo, registrar } from '../assinaturas';
 import type { ProviderSubscription as Assinatura } from '../../../../../generated/prisma/client.ts';
-import { clienteMercadoPago, type ClienteMercadoPago, type FaturaMp } from './cliente';
+import {
+	ErroDoMercadoPago,
+	clienteMercadoPago,
+	type ClienteMercadoPago,
+	type FaturaMp
+} from './cliente';
 import { PROVEDOR, chaveDaTroca, normalizarStatus } from './sincronizar';
 
 /**
@@ -24,7 +30,11 @@ import { PROVEDOR, chaveDaTroca, normalizarStatus } from './sincronizar';
  *    partir do instante em que o ciclo novo começou — mas só depois de o
  *    PRIMEIRO pagamento da nova ser aprovado. A autorização chega antes da
  *    cobrança, e devolver em cima de um cartão que depois recusa seria dar o
- *    plano novo e o dinheiro do antigo.
+ *    plano novo e o dinheiro do antigo;
+ * 3. **o que o Mercado Pago não devolve sai POR FORA** — pagamento antigo demais
+ *    (o anual trocado depois do prazo de devolução dele) ou devolução parcial
+ *    que o meio não aceita: a equipe recebe um e-mail com o valor já calculado
+ *    e devolve por Pix ou transferência (decisão do dono, 2026-11-11).
  *
  * Tudo idempotente: cancelar o que já está cancelado não acontece, e cada
  * pagamento devolve UMA vez (`ProviderEvent` `mercadopago:devolucao:<id>`, mais
@@ -118,9 +128,74 @@ async function substituidasPor(nova: Assinatura, em: Date): Promise<Assinatura[]
 export type DesfechoDaTroca = {
 	canceladas: number;
 	devolvidas: number;
+	/** Recusadas pelo Mercado Pago e entregues à equipe, para devolver por Pix ou transferência. */
+	porFora: number;
 	/** Ficou para depois: o primeiro pagamento da nova ainda não foi aprovado. */
 	aguardando: boolean;
 };
+
+/**
+ * O Mercado Pago RECUSOU esta devolução (400 ou 422): pagamento antigo demais
+ * para devolver, ou devolução parcial que o meio de pagamento não aceita. Pedir
+ * de novo não muda a resposta. Token errado (401/403), limite (429) e o
+ * provedor fora (5xx) continuam erro: a fila tenta de novo e, esgotada, avisa a
+ * equipe.
+ */
+function ehRecusaDaDevolucao(err: unknown): err is ErroDoMercadoPago {
+	return err instanceof ErroDoMercadoPago && (err.status === 400 || err.status === 422);
+}
+
+/**
+ * A devolução que o Mercado Pago não faz sai POR FORA (decisão do dono,
+ * 2026-11-11): a equipe recebe o valor já calculado e devolve por Pix ou
+ * transferência, combinando com o professor pela resposta do e-mail. A marca
+ * entra na mesma transação — o job não pede de novo nem manda outro e-mail — e
+ * o histórico do professor diz que a devolução está com a equipe.
+ */
+async function devolverPorFora(
+	d: { antiga: Assinatura; pagamentoId: string; centavos: number; marca: string },
+	recusa: string
+): Promise<void> {
+	const professor = await prisma.teacher.findUnique({
+		where: { id: d.antiga.teacherId },
+		select: { name: true, email: true }
+	});
+	const nome = professor?.name ?? d.antiga.teacherId;
+	const plano = ehPlanoPago(d.antiga.plano) ? NOME_DO_PLANO[d.antiga.plano] : d.antiga.plano;
+	await prisma.$transaction(async (tx) => {
+		await tx.providerEvent.create({ data: { id: d.marca, type: 'devolucao_por_fora' } });
+		await registrar(tx, {
+			teacherId: d.antiga.teacherId,
+			actor: 'provedor',
+			type: 'devolucao_por_fora',
+			data: {
+				plano: d.antiga.plano,
+				ciclo: d.antiga.ciclo,
+				valor: d.centavos,
+				pagamento: d.pagamentoId,
+				assinatura: d.antiga.id
+			}
+		});
+		await enqueueAvisoEquipe(
+			{
+				assunto: `Devolução por fora: ${reais(d.centavos)} para ${nome}`.slice(0, 200),
+				texto: [
+					`O Mercado Pago não deixou devolver a parte não usada da assinatura antiga de ${nome}${professor ? ` <${professor.email}>` : ''}, depois de uma troca de plano.`,
+					`Resposta do Mercado Pago: ${recusa.slice(0, 500)}`,
+					'',
+					`Valor a devolver: ${reais(d.centavos)}, a parte não usada do plano ${plano} (${d.antiga.ciclo}).`,
+					`Pagamento no Mercado Pago: ${d.pagamentoId}. Assinatura antiga: ${d.antiga.id}, já cancelada.`,
+					'',
+					'Devolva por Pix ou transferência. Responder este e-mail fala direto com o professor.'
+				]
+					.join('\n')
+					.slice(0, 10_000),
+				...(professor ? { replyTo: professor.email } : {})
+			},
+			tx
+		);
+	});
+}
 
 /** O job `mercadopago-troca`. */
 export async function processarTroca(
@@ -130,7 +205,12 @@ export async function processarTroca(
 ): Promise<DesfechoDaTroca> {
 	const job = trocaMercadoPagoJobSchema.parse(payload);
 	const em = new Date(job.em);
-	const desfecho: DesfechoDaTroca = { canceladas: 0, devolvidas: 0, aguardando: false };
+	const desfecho: DesfechoDaTroca = {
+		canceladas: 0,
+		devolvidas: 0,
+		porFora: 0,
+		aguardando: false
+	};
 	const nova = await prisma.providerSubscription.findUnique({ where: { id: job.nova } });
 	if (!nova || nova.provider !== PROVEDOR) return desfecho;
 
@@ -195,7 +275,14 @@ export async function processarTroca(
 			await prisma.providerEvent.create({ data: { id: d.marca, type: 'devolucao_externa' } });
 			continue;
 		}
-		await cliente.devolver(d.pagamentoId, d.centavos / 100, `spokke-devolucao-${d.pagamentoId}`);
+		try {
+			await cliente.devolver(d.pagamentoId, d.centavos / 100, `spokke-devolucao-${d.pagamentoId}`);
+		} catch (err) {
+			if (!ehRecusaDaDevolucao(err)) throw err;
+			await devolverPorFora(d, err.message);
+			desfecho.porFora += 1;
+			continue;
+		}
 		await prisma.$transaction(async (tx) => {
 			await tx.providerEvent.create({ data: { id: d.marca, type: 'devolucao' } });
 			await registrar(tx, {

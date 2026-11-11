@@ -194,6 +194,11 @@ usada do último pagamento dela. Escolher o plano e o ciclo que já renovam sozi
 checkout. A devolução só sai depois de o primeiro pagamento do plano novo ser aprovado. Regras do
 código em `billing.md` "Troca de plano".
 
+**O anual depois do prazo de devolução** (decisão do dono, no mesmo dia). O Mercado Pago tem limite
+de idade para devolver um pagamento, e a documentação não diz qual. Quando ele recusa, a troca não
+muda de regra: a equipe recebe o valor calculado por e-mail e devolve por fora, por Pix ou
+transferência. A alternativa posta (fazer a troca valer no fim do ano, sem devolução) ficou de fora.
+
 ## Pendências
 
 - Ligar o Mercado Pago (credenciais e webhook — `docs/operacao.md`) e conferir no sandbox os

@@ -229,12 +229,14 @@ async function processMercadoPago(payload: unknown): Promise<void> {
 
 /**
  * A troca de plano (`troca.ts`): cancela lá as assinaturas que a nova substituiu
- * e devolve a parte não usada delas, depois de o plano novo estar pago.
+ * e devolve a parte não usada delas, depois de o plano novo estar pago. O que o
+ * Mercado Pago recusa devolver vai para a equipe, por fora.
  */
 async function processTrocaMercadoPago(payload: unknown): Promise<void> {
 	const d = await processarTroca(payload);
 	console.info(
 		`[mercadopago] troca: ${d.canceladas} cancelada(s), ${d.devolvidas} devolução(ões)` +
+			(d.porFora ? `, ${d.porFora} por fora (e-mail para a equipe)` : '') +
 			(d.aguardando ? ', esperando o primeiro pagamento da nova' : '')
 	);
 }

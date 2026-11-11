@@ -1095,8 +1095,9 @@ página decide o que "escolher" faz.
 do mesmo plano e ciclo diz "Seu plano agora" e não tem ação (renova sozinho), e os outros dizem
 "Mudar para o Super" / "Mudar para o anual" ("Assinar de novo" quando a renovação foi cancelada),
 com a linha de baixo dizendo o que acontece: ciclo novo hoje, com o valor cheio, e a parte não
-usada do plano atual de volta no cartão. A conta da equipe vê os cartões sem ação. Recusa do
-servidor (mesmo plano, equipe, provedor fora) aparece escrita acima da tabela.
+usada do plano atual de volta no cartão. O seletor de ciclo abre no ciclo de quem assina. A conta
+da equipe vê os cartões sem ação. Recusa do servidor (mesmo plano, equipe, provedor fora) aparece
+escrita acima da tabela.
 
 Motivo de LIMITE (`criar`, `materiais`, `creditos`) mostra "seu plano permite N, você tem M" e o
 caminho (arquivar uma atividade, abrir a biblioteca), nunca "sua assinatura está ativa".

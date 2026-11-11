@@ -948,7 +948,8 @@ A tabela de planos, UMA para a home (seção `#planos`) e para `(site)/planos`. 
 **O botão diz o que o clique faz** (`acaoDoCartao`): pedido enviado, "Seu plano agora" sem ação (o
 plano e o ciclo que o Mercado Pago já renova — `ehOPlanoEmVigor`, a mesma regra de `solicitarPlano`),
 "Mudar para o …" com a linha da troca (billing.md "Troca de plano"), ou o CTA de assinar. Cartão sem
-ação fica `btn-plain` e desabilitado.
+ação fica `btn-plain` e desabilitado. **O seletor de ciclo abre no ciclo do plano em vigor** (só o
+valor inicial): aberto no mensal, quem assina o anual via o próprio plano como "Mudar para o mensal".
 
 **Os preços chegam por `$lib/content/planos.ts` (que os lê de `$lib/billing/precos.ts`), nunca
 daqui** — ver paginas.md "Planos e preços". O componente desenha o que aquele arquivo diz.

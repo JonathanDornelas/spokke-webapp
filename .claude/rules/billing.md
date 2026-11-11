@@ -163,6 +163,13 @@ créditos proporcionais) e "ciclo novo sem devolução" (jogava fora meses pagos
   de idempotência do Mercado Pago (`spokke-devolucao-<pagamento>`) e, antes de pedir, o que já voltou
   no próprio pagamento (`transaction_amount_refunded`) — devolução feita à mão pelo painel do Mercado
   Pago não sai de novo. A devolução entra no histórico (`AuditEvent` `devolucao`).
+- **O que o Mercado Pago recusa devolver sai POR FORA** (decisão do dono, 2026-11-11). Pagamento
+  antigo demais — o anual trocado depois do prazo de devolução dele, que a documentação não diz
+  qual é — ou devolução parcial que o meio não aceita volta 400/422, e pedir de novo não muda nada:
+  o job grava a marca `devolucao_por_fora`, põe no histórico do professor que a equipe devolve por
+  Pix ou transferência, e manda à equipe o e-mail "Devolução por fora" com o valor já calculado, o
+  pagamento e o Reply-To do professor. Token errado, limite e provedor fora continuam erro, com a
+  retentativa da fila.
 - **Job que esgota as tentativas vai para a equipe por e-mail** (`avisarTrocaQueFalhou`, no
   worker), além do painel interno: é assinatura antiga cobrando ou dinheiro do professor parado.
   Teste: `mercadopago/troca.test.ts`.

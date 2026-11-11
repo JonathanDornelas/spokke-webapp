@@ -243,6 +243,13 @@ Mercado Pago: confira se a assinatura antiga do professor está cancelada e devo
 pagamento, a parte não usada do último pagamento dela. Devolução feita à mão não sai de novo: antes
 de devolver, o job olha o que já voltou no pagamento.
 
+**Devolução por fora.** Quando o Mercado Pago não aceita devolver — pagamento antigo demais (é o
+caso do anual trocado depois de muitos meses) ou devolução parcial que o meio de pagamento não
+aceita —, chega um e-mail "Devolução por fora: R$ X para <professor>" com o valor já calculado e o
+pagamento. A assinatura antiga já está cancelada. Responda o e-mail (ele vai direto para o
+professor), combine a chave Pix ou a conta, e devolva por Pix ou transferência. O histórico da
+assinatura do professor já mostra que a equipe vai devolver.
+
 Com o gateway ligado, o painel continua podendo ativar, estender e cancelar à mão — as mesmas
 funções, com o ator `admin:<id>`. Cuidado: cancelar pelo painel NÃO cancela no Mercado Pago (só o
 botão do professor e a própria conta do pagador no Mercado Pago fazem isso).

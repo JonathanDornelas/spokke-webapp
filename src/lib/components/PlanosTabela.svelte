@@ -21,6 +21,7 @@
 	// **O plano ATUAL ganha o destaque de "seu plano agora"**, e o destaque de
 	// marketing cede a vez: dizer "o mais escolhido" no cartão de quem já
 	// assinou aquele plano é propaganda para dentro.
+	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import Loading from './Loading.svelte';
 	import { ehPlanoPago } from '$lib/billing/catalogo';
@@ -85,7 +86,10 @@
 
 	// Mensal é o padrão porque é o número que a pessoa compara primeiro; o anual
 	// é a economia, e ela só interessa depois de o mensal parecer aceitável.
-	let ciclo = $state<CicloDeCobranca>('mensal');
+	// **Quem já assina abre no ciclo dele**: aberto no mensal, o assinante do
+	// anual via o próprio plano como "Mudar para o mensal" até achar o seletor.
+	// Só o valor INICIAL — depois, o seletor é de quem lê.
+	let ciclo = $state<CicloDeCobranca>(untrack(() => planoEmVigor?.ciclo ?? 'mensal'));
 
 	// ── o carrossel ──
 	// Os planos passam como num carrossel: o cartão escolhido fica no centro, em
