@@ -46,7 +46,7 @@ Preencha conforme avança. Só o que não é sigiloso:
 | E-mail do Let's Encrypt (`ACME_EMAIL`) |                        |
 | ID do cliente OAuth do Google          |                        |
 | ID de medição do GA4 (`G-...`)         |                        |
-| Endpoint do R2 (backup)                |                        |
+| Dia do backup semanal da Hostinger     |                        |
 
 ### O que nunca fazer no servidor
 
@@ -78,7 +78,7 @@ rede docker "spokke":  spokke-caddy · spokke-web · spokke-worker · spokke-pos
 | Áudio e tradução               | `../audiotext-service` + override               | 7 GB           |
 | Total, de 16 GB + 4 GB de swap |                                                 | ~12 GB         |
 
-Quatro decisões, todas reversíveis:
+Cinco decisões, todas reversíveis:
 
 - **Em produção os composes conversam pela rede Docker `spokke`**, não pelas portas do host. Em
   desenvolvimento (Docker Desktop) eles usam `host.docker.internal`; num Linux exposto à internet
@@ -91,6 +91,10 @@ Quatro decisões, todas reversíveis:
 - **A cobrança abre manual** (`BILLING_PROVIDER` vazio): "Assinar" vira um pedido atendido no
   `/admin`. O Mercado Pago liga na semana, depois do sandbox (Parte 4).
 - **A intranet fica para depois.** O `/admin` cobre a operação do dia 1.
+- **O backup sai da máquina pela Hostinger.** O dump do banco é feito todo dia e fica no disco do
+  servidor; o backup automático semanal da Hostinger leva o servidor inteiro, com esses dumps. O
+  preço: perder a máquina pode custar até uma semana de dados, e a cópia fica na mesma empresa. Um
+  destino externo diário é uma linha no cron quando isso pesar (Parte 5).
 
 ## Parte 1 — Véspera
 
@@ -183,12 +187,13 @@ Para mudar um dia: troque os números em `src/lib/billing/precos.ts` (em **centa
 
 Falta só, se já existirem, os dados da empresa em `src/lib/content/institucional.ts`.
 
-### 1.5 O código no GitLab e no GitHub
+### 1.5 O código no GitHub
 
-O servidor baixa o código de dois lugares: o GitLab (`Joltromundo/entendo-webapp`, o Spokke) e o
-GitHub (`JonathanDornelas/audiotext-service`, o serviço de áudio). Hoje o `main` do GitLab ainda está
-no primeiro commit, o trabalho está no `motion` só na sua máquina, os arquivos deste roteiro não
-estão commitados, e o serviço de áudio tem um commit (`65bce73`) sem push.
+O servidor baixa o código de dois repositórios do GitHub: `JonathanDornelas/entendo-webapp` (o
+Spokke) e `JonathanDornelas/audiotext-service` (o serviço de áudio), sempre do `main`. O trabalho
+está no `motion`; o `main` do GitHub tem um commit que o `motion` não tem — um merge antigo
+("Merge branch 'criandoV2'"), cujo conteúdo o `motion` já traz —, então juntar os dois não dá
+conflito, só cria um commit de merge.
 
 **No seu computador**, na pasta do projeto:
 
@@ -196,26 +201,26 @@ estão commitados, e o serviço de áudio tem um commit (`65bce73`) sem push.
 git status
 ```
 
-Confira que só aparece o que é do deploy (e dos preços, se você mudou). Então:
+**Deve aparecer:** `nothing to commit, working tree clean`. Se aparecer arquivo, commite antes. Então:
 
 ```powershell
-git add deploy docs/deploy.md docs/operacao.md CLAUDE.md docker-compose.yml .env.example src/lib/billing/precos.ts
-git commit -m "Roteiro de deploy, arquivos de produção e preços"
+git fetch origin
 git checkout main
-git merge --ff-only motion
-git push gitlab main
+git merge --ff-only origin/main
+git merge --no-edit motion
+git push origin main
 git checkout motion
 git -C ..\audiotext-service push origin main
 ```
 
-**Deve aparecer:** no `merge`, a palavra `Fast-forward`; em cada `push`, uma linha terminando em
-`main -> main`.
+**Deve aparecer:** no primeiro `merge`, `Fast-forward`; no segundo, `Merge made by the 'ort'
+strategy`; em cada `push`, uma linha terminando em `main -> main`.
 
-**Se o `merge` recusar** (`Not possible to fast-forward`): o `main` local tem algo que o `motion` não
-tem. Pare e me chame — não force.
+**Se algum `merge` falar em conflito** (`CONFLICT`): rode `git merge --abort`, pare e me chame — não
+force.
 
-**Confira no navegador:** no GitLab, projeto `entendo-webapp`, branch `main`: o último commit é o que
-você acabou de fazer, e a pasta `deploy/` aparece. No GitHub, o `audiotext-service` mostra o commit
+**Confira no navegador:** no GitHub, repositório `entendo-webapp`, branch `main`: o último commit é o
+merge que você acabou de fazer, e a pasta `deploy/` aparece. O `audiotext-service` mostra o commit
 "Traduções alternativas no /v1/translate".
 
 ### 1.6 DNS: os três endereços
@@ -374,21 +379,17 @@ Não instale a tag pelo assistente do Google: o código já está no site e liga
 `PUBLIC_GA_ID`, só nas páginas públicas e só depois do "Aceitar" no aviso. Os eventos principais e as
 dimensões são amanhã, com dado chegando (passo 2.19).
 
-### 1.13 Bucket de backup (R2)
+### 1.13 Backup automático da Hostinger
 
 O backup diário do banco precisa sair do servidor: um backup que mora na mesma máquina não sobrevive
-à perda da máquina. O R2 da Cloudflare dá 10 GB grátis, e para isto não precisa mover o DNS.
+à perda da máquina. Quem o tira de lá é o backup automático da Hostinger, que copia o servidor
+inteiro uma vez por semana, com os dumps do banco dentro (passo 2.17).
 
-1. Crie a conta em cloudflare.com.
-2. No menu, **R2**. A ativação pede um cartão mesmo no plano grátis; até 10 GB não há cobrança.
-3. **Create bucket** › nome `spokke-backups` › Create.
-4. Dentro do bucket: **Settings › Object lifecycle rules › Add rule**: nome `30 dias`, aplicar a todos
-   os objetos, apagar objetos depois de **30 dias** › Save.
-5. Volte ao R2 › **Manage R2 API Tokens** (gerenciar tokens) › **Create API token**: nome
-   `spokke-backup`, permissão **Object Read & Write**, "Apply to specific buckets only" ›
-   `spokke-backups`, validade "Forever" › Create.
-6. Copie para o gerenciador o **Access Key ID** e o **Secret Access Key** (o segredo aparece uma vez
-   só), e para a ficha o **endpoint** `https://<id-da-conta>.r2.cloudflarestorage.com`, que aparece na
+1. No painel da Hostinger, abra a página do VPS › **Backups** (no menu do VPS; o nome da seção pode
+   variar entre "Backups" e "Snapshots e backups").
+2. Confira que o **backup automático semanal** está ativo. Ele vem no plano.
+3. Anote na ficha o dia da semana em que ele roda.
+4. Se perder até uma semana de dados não for aceitável, o **backup diário** é um adicional pago, na
    mesma tela.
 
 ### 1.14 Monitor e opcionais
@@ -400,17 +401,17 @@ O backup diário do banco precisa sair do servidor: um backup que mora na mesma 
 
 ### 1.15 Conferência da véspera
 
-- [ ] Chave SSH criada e o `ssh root@<IP>` entrando sem senha.
-- [ ] Preços reais commitados (ou a decisão de abrir sem divulgar a página de planos).
-- [ ] `main` no GitLab com a pasta `deploy/`, e o `audiotext-service` com push.
-- [ ] Os três registros A respondendo o IP do servidor no `8.8.8.8`.
-- [ ] Resend com o domínio **Verified** e a chave `re_...` no gerenciador.
-- [ ] E-mail para `suporte@spokke.com.br` chegando no seu Gmail.
-- [ ] DMARC criado.
-- [ ] Search Console verificado.
-- [ ] Cliente OAuth do Google criado e o app **publicado**.
-- [ ] GA4 criado, com a medição do histórico desligada.
-- [ ] Bucket `spokke-backups` e o token no gerenciador.
+- [ x] Chave SSH criada e o `ssh root@<IP>` entrando sem senha.
+- [ x] Preços reais commitados (ou a decisão de abrir sem divulgar a página de planos).
+- [ ] `main` no GitHub com a pasta `deploy/`, e o `audiotext-service` com push.
+- [ x] Os três registros A respondendo o IP do servidor no `8.8.8.8`.
+- [ x] Resend com o domínio **Verified** e a chave `re_...` no gerenciador.
+- [x ] E-mail para `suporte@spokke.com.br` chegando no seu Gmail.
+- [x ] DMARC criado.
+- [ x] Search Console verificado.
+- [x ] Cliente OAuth do Google criado e o app **publicado**.
+- [ x] GA4 criado, com a medição do histórico desligada.
+- [ x] Backup automático da Hostinger ativo, com o dia anotado na ficha.
 
 ## Parte 2 — Dia D
 
@@ -436,7 +437,7 @@ ssh root@<IP>
 
 ```bash
 apt update && apt -y full-upgrade
-apt -y install ufw fail2ban unattended-upgrades rclone git curl dnsutils
+apt -y install ufw fail2ban unattended-upgrades git curl dnsutils
 ```
 
 Durante a atualização, se aparecer uma tela roxa perguntando quais serviços reiniciar, aperte Enter
@@ -597,32 +598,51 @@ ssh deploy@<IP>
 ```bash
 sudo install -d -o deploy -g deploy /srv/spokke
 cd /srv/spokke && mkdir -p env backups
-ssh-keygen -t ed25519 -N "" -C "deploy@spokke-vps" -f ~/.ssh/id_ed25519
-cat ~/.ssh/id_ed25519.pub
+ssh-keygen -t ed25519 -N "" -C "spokke-vps:entendo-webapp" -f ~/.ssh/deploy_spokke
+ssh-keygen -t ed25519 -N "" -C "spokke-vps:audiotext-service" -f ~/.ssh/deploy_audiotext
+cat >> ~/.ssh/config <<'EOF'
+Host github-spokke
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/deploy_spokke
+  IdentitiesOnly yes
+
+Host github-audiotext
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/deploy_audiotext
+  IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config
 ```
 
-Essa é a chave com que o SERVIDOR baixa o código — diferente da sua. Selecione a linha que apareceu
-(começa com `ssh-ed25519`) e copie. Cadastre-a como **deploy key só de leitura** nos dois lugares:
+São as chaves com que o SERVIDOR baixa o código — diferentes da sua. **Duas, uma por repositório,
+porque o GitHub não aceita a mesma deploy key em dois repositórios** ("Key is already in use"); o
+`~/.ssh/config` diz qual chave vale para cada um.
 
-1. **GitLab:** projeto `entendo-webapp` › Settings › Repository › **Deploy keys** › Add new key.
-   Título `spokke-vps`, cole a chave, deixe **desmarcado** "Grant write permissions" › Add key.
-2. **GitHub:** repositório `audiotext-service` › Settings › **Deploy keys** › Add deploy key. Título
-   `spokke-vps`, cole a chave, deixe **desmarcado** "Allow write access" › Add key.
+Cadastre cada uma como **deploy key só de leitura** no seu repositório. Para ver a chave, rode o
+`cat` no servidor, selecione a linha que aparecer (começa com `ssh-ed25519`) e copie:
+
+1. `cat ~/.ssh/deploy_spokke.pub` › no GitHub, repositório `entendo-webapp` › Settings › **Deploy
+   keys** › Add deploy key. Título `spokke-vps`, cole a chave, deixe **desmarcado** "Allow write
+   access" › Add key.
+2. `cat ~/.ssh/deploy_audiotext.pub` › repositório `audiotext-service`, o mesmo caminho e o mesmo
+   título.
 
 **No servidor:**
 
 ```bash
-ssh-keyscan gitlab.com github.com >> ~/.ssh/known_hosts
-git clone git@gitlab.com:Joltromundo/entendo-webapp.git spokke-service
-git clone git@github.com:JonathanDornelas/audiotext-service.git
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+git clone git@github-spokke:JonathanDornelas/entendo-webapp.git spokke-service
+git clone git@github-audiotext:JonathanDornelas/audiotext-service.git
 git -C spokke-service log --oneline -1
 ls spokke-service/deploy
 ```
 
 **Deve aparecer:** o commit do passo 1.5 e as pastas `caddy  compose  env  scripts`.
 
-**Se o clone der `Permission denied (publickey)`:** a deploy key não foi salva naquele repositório.
-Confira o passo acima e repita o `git clone`.
+**Se o clone der `Permission denied (publickey)`:** a deploy key não foi salva naquele repositório,
+ou a chave de um foi parar no outro. Confira o passo acima e repita o `git clone`.
 
 ### 2.8 A rede e os arquivos de ambiente
 
@@ -645,6 +665,33 @@ São quatro arquivos porque são quatro composes: o banco e o MinIO (`env/infra.
 (`spokke-service/.env`), o serviço de áudio (`audiotext-service/.env`) e o Caddy
 (`deploy/caddy/.env`). Cada um tem comentários explicando cada linha.
 
+**Preparou o `.env` da aplicação no seu computador?** (O `.env.prod`: uma cópia do
+`deploy/env/app.env.exemplo` com os valores das contas da véspera, e os segredos internos ainda como
+`TROCAR`.) Mande-o agora, por cima da cópia do modelo. **No seu computador**, na pasta do projeto:
+
+```powershell
+scp .env.prod deploy@<IP>:/srv/spokke/spokke-service/.env
+```
+
+**No servidor:**
+
+```bash
+sed -i 's/\r$//' /srv/spokke/spokke-service/.env
+chmod 600 /srv/spokke/spokke-service/.env
+```
+
+O `sed` tira a quebra de linha do Windows, se ela tiver vindo junto. Três cuidados:
+
+- **Nunca monte esse arquivo a partir do `.env` de desenvolvimento.** Os endereços de lá são
+  `localhost`, as variáveis `_DOCKER` vêm vazias e faltam as do proxy. E o `STORAGE_PUBLIC_URL`
+  errado fica gravado no banco em todo áudio publicado.
+- **Mande uma vez só.** Depois do passo 2.9, o arquivo do servidor tem os segredos internos, que o
+  seu `.env.prod` não tem. Mandar de novo por cima apaga a senha do banco do `.env`, e a aplicação
+  para de conectar. Para mudar algo depois, edite no servidor (Parte 3, "Mudar uma configuração").
+- **Apague o `.env.prod` do computador** quando o site estiver no ar, ou guarde-o no gerenciador de
+  senhas: ele tem as chaves do Resend, do Google e do Gemini, e a pasta do projeto sincroniza com o
+  OneDrive.
+
 ### 2.9 Os segredos
 
 **Os internos** — a senha do banco, a do MinIO, o segredo do login e o token do serviço de áudio —
@@ -659,7 +706,13 @@ bash /srv/spokke/spokke-service/deploy/scripts/gerar-segredos.sh
 
 **Deve aparecer:** `Gerados e gravados: senha do banco, senha do MinIO, segredo do Better Auth, token
 do áudio.`, seguido da lista do que falta preencher à mão: `SMTP_URL`, `CONTATO_PARA` e
-`ACME_EMAIL`.
+`ACME_EMAIL`. Se você mandou o `.env.prod`, a lista traz só o `ACME_EMAIL`, e a tabela abaixo serve
+para conferir.
+
+**Se aparecer `Só parte dos segredos está como TROCAR`:** algum segredo interno do `.env` da
+aplicação já tinha valor (`BETTER_AUTH_SECRET`, `STORAGE_SECRET_ACCESS_KEY`, `AUDIOTEXT_TOKEN` ou a
+senha dentro das duas `DATABASE_URL`). Volte cada um para `TROCAR`, como está no modelo, e rode de
+novo. Nada foi mudado.
 
 **Os externos** vêm das contas da véspera. Abra o arquivo da aplicação:
 
@@ -927,41 +980,15 @@ Tudo passou? Siga. Algo falhou? Parte 3, "Se algo der errado", antes de seguir.
 
 ### 2.17 Backup automático
 
-**No servidor**, primeiro o destino fora do servidor (o R2 do passo 1.13):
+**No servidor**, primeiro um backup de verdade, para provar o caminho:
 
 ```bash
-rclone config
+bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh
+ls -lh /srv/spokke/backups/
 ```
 
-É interativo — o segredo não fica no histórico do terminal. Responda:
-
-1. `n` (new remote) e Enter.
-2. `name>`: `r2`.
-3. `Storage>`: digite `s3` e Enter.
-4. `provider>`: digite `Cloudflare` e Enter.
-5. `env_auth>`: Enter (false).
-6. `access_key_id>`: cole o Access Key ID.
-7. `secret_access_key>`: cole o Secret Access Key.
-8. `region>`: digite `auto` e Enter.
-9. `endpoint>`: cole o endpoint (`https://<id-da-conta>.r2.cloudflarestorage.com`).
-10. As perguntas seguintes: Enter em todas (os padrões servem).
-11. `Edit advanced config?`: `n`. `Keep this "r2" remote?`: `y`. Depois `q` para sair.
-
-```bash
-rclone lsd r2:
-```
-
-**Deve aparecer:** uma linha com `spokke-backups`.
-
-Agora um backup de verdade, para provar o caminho inteiro:
-
-```bash
-REMOTO=r2:spokke-backups bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh
-rclone ls r2:spokke-backups
-```
-
-**Deve aparecer:** `ok <tamanho> /srv/spokke/backups/spokke-<data>.dump → r2:spokke-backups`, e o
-mesmo arquivo listado no R2.
+**Deve aparecer:** `ok <tamanho> /srv/spokke/backups/spokke-<data>.dump`, e o mesmo arquivo na
+listagem.
 
 Por fim, o agendamento diário:
 
@@ -973,11 +1000,14 @@ Na primeira vez ele pergunta o editor: digite `1` (nano). Vá até o fim do arqu
 (06:15 UTC são 03:15 em Brasília):
 
 ```
-15 6 * * * REMOTO=r2:spokke-backups bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1
+15 6 * * * bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1
 ```
 
 Salve (Ctrl+O, Enter) e saia (Ctrl+X). Confira com `crontab -l`. Amanhã de manhã, a última linha de
 `/srv/spokke/backups/backup.log` tem de ser um `ok` do dia.
+
+Os dumps ficam 14 dias em `/srv/spokke/backups`, e o backup semanal da Hostinger (passo 1.13) os leva
+para fora da máquina junto com o resto do disco.
 
 ### 2.18 Monitor e snapshot
 
@@ -1016,7 +1046,7 @@ Divulgue quando todos estes forem verdade:
 - [ ] HTTPS com nota A, e `http://` e `www` caindo no endereço certo.
 - [ ] O teste de fumaça inteiro passou, inclusive no celular em 4G.
 - [ ] Os e-mails chegam na caixa de entrada, não no spam.
-- [ ] O backup rodou e o arquivo está no R2.
+- [ ] O backup rodou, o arquivo está em `/srv/spokke/backups` e o automático da Hostinger está ativo.
 - [ ] Os preços da página de planos são os reais.
 - [ ] De fora, só 22, 80 e 443 respondem.
 - [ ] O snapshot foi feito.
@@ -1025,7 +1055,8 @@ Divulgue quando todos estes forem verdade:
 
 ### Atualizar uma versão
 
-Com o código novo no `main` do GitLab (`git push gitlab main` no seu computador):
+Com o código novo no `main` do GitHub (no seu computador: `git checkout main`,
+`git merge --no-edit motion`, `git push origin main`, `git checkout motion`):
 
 **No servidor:**
 
@@ -1089,9 +1120,10 @@ snapshot antes.
 
 ### Backup e restauração
 
-O backup roda sozinho todo dia (passo 2.17): 14 dias guardados no servidor e 30 no R2. É só do banco,
-o único dado que não se recria: o áudio das atividades é identificado pelo conteúdo e a entrada do
-Player o gera de novo, e a voz dos alunos vive 7 dias de propósito.
+O dump do banco roda sozinho todo dia (passo 2.17) e fica 14 dias no servidor; o backup automático
+da Hostinger leva o servidor inteiro, com esses dumps, uma vez por semana (passo 1.13). O dump é só do
+banco, o único dado que não se recria: o áudio das atividades é identificado pelo conteúdo e a entrada
+do Player o gera de novo, e a voz dos alunos vive 7 dias de propósito.
 
 **Restaurar** (com a aplicação parada, para nada escrever no meio):
 
@@ -1102,7 +1134,11 @@ docker exec -i spokke-postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGR
 spk start worker web
 ```
 
-Se o arquivo estiver só no R2: `rclone copy r2:spokke-backups/<arquivo>.dump /srv/spokke/backups/`.
+**Se a máquina se perdeu:** restaure o backup mais recente da Hostinger pelo painel (página do VPS ›
+Backups). Ele sobrescreve o servidor inteiro, então é só para esse caso — para desfazer um erro no
+banco, use os dumps acima. O banco volta junto com o disco; se o Postgres não subir limpo (a cópia do
+disco pode ter pego uma escrita no meio), restaure o `.dump` mais recente que veio na cópia, com os
+comandos acima. O que foi escrito entre esse backup e a perda não volta.
 
 **Uma vez por mês, prove que o backup restaura** — num banco de teste, sem tocar no de verdade:
 
@@ -1221,6 +1257,10 @@ espera este gateway.
   pasta); a regra de 7 dias em `fala/`; copiar o que existe (`rclone copy`); trocar `STORAGE_*` e
   reescrever `MediaAsset.url` (o caminho perde o `/spokke-midia`); tirar o bloco `midia` do Caddyfile
   e desligar o MinIO.
+- **Backup fora da Hostinger.** Hoje a cópia que sai da máquina é a semanal da Hostinger, na mesma
+  conta do servidor. Um destino externo diário é uma linha: `REMOTO=<destino do rclone>` na frente do
+  comando do cron (o script já aceita) e o `rclone` instalado e configurado. O Backblaze B2 dá 10 GB
+  grátis e não depende do DNS.
 - **DMARC** de `p=none` para `p=quarantine`, depois de umas semanas de relatório limpo.
 - **Postgres:** ajustar `shared_buffers` e afins quando houver carga para medir.
 - **HSTS preload** (`hstspreload.org`), só depois de meses com tudo em HTTPS — é difícil de desfazer.

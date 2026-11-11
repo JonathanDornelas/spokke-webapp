@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Backup do banco — docs/deploy.md "Backup". Feito para o cron, uma vez por dia:
 #
-#   15 6 * * * REMOTO=r2:spokke-backups bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1
+#   15 6 * * * bash /srv/spokke/spokke-service/deploy/scripts/backup-postgres.sh >> /srv/spokke/backups/backup.log 2>&1
 #
 # `pg_dump -Fc` de dentro do container (o usuário e o banco vêm do ambiente
 # dele), num arquivo por dia em /srv/spokke/backups, apagando os mais velhos que
-# MANTER_DIAS. Com REMOTO (um destino do rclone, como `r2:spokke-backups`), o
-# arquivo também sai do servidor: um backup que mora na mesma máquina não
-# sobrevive à perda da máquina.
+# MANTER_DIAS. Um backup que mora na mesma máquina não sobrevive à perda da
+# máquina: hoje quem leva estes arquivos para fora é o backup automático semanal
+# da Hostinger, que copia o disco inteiro. Com REMOTO (um destino do rclone, como
+# `b2:spokke-backups`), o arquivo também sai do servidor no mesmo dia.
 #
 # O banco é o único dado que não se recria. O áudio das atividades (`tts/`) é
 # identificado pelo conteúdo e a entrada do Player o gera de novo; a voz dos
