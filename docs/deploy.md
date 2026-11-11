@@ -1330,7 +1330,10 @@ espera este gateway.
 
 ## Parte 5 — Depois do lançamento
 
-- **Intranet.** VPN (Tailscale) no servidor e nas máquinas da equipe; a intranet escutando só no IP
+- **Intranet, hoje:** roda na máquina de quem opera, com o banco e o MinIO do servidor chegando por
+  túnel SSH — o passo a passo é o README de `../spokke-intranet`, "Produção pela própria máquina".
+  Nada abre porta na internet.
+- **Intranet, definitiva.** VPN (Tailscale) no servidor e nas máquinas da equipe; a intranet escutando só no IP
   da VPN, sem DNS público; o banco dela e o papel de leitura no do Spokke
   (`../spokke-intranet/infra/*.sql`, rodados com `docker exec -i spokke-postgres psql`); uma chave
   só de leitura no MinIO para o termômetro do bucket. Ela ainda não tem Dockerfile — eu preparo
