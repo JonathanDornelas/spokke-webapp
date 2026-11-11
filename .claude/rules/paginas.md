@@ -1275,8 +1275,10 @@ o único ponto de extensão do componente.
 `../spokke-seo`). Saíram a história e a equipe inventadas, a encarregada de dados com nome
 fictício, o endereço e a razão social de exemplo, os nomes de cookie que não existiam e as respostas
 da ajuda que não batiam com o produto (módulo mandando e-mail, código de seis letras, alemão na
-lista de idiomas, fila de correção, "distratores mais escolhidos"). A página de Cookies lista os
-cookies e as chaves de armazenamento local de VERDADE — mudou um nome no código, muda lá.
+lista de idiomas, fila de correção, "distratores mais escolhidos"). **A página de Cookies diz PARA
+QUE serve cada tipo**, de cookie e de armazenamento local, sem os nomes nem a mecânica (pedido do
+dono, 2026-11-11): a lista por nome, com o que cada um guardava, descrevia o funcionamento interno
+do produto. Cookie novo com outra FINALIDADE entra lá como finalidade; trocar um nome não muda nada.
 **A página de Status saiu**: mostrava uptime e incidentes que ninguém media, e um "Online" verde no
 rodapé do painel. Ela volta quando houver monitoramento de verdade por trás (docs/selos-e-seguranca.md).
 O CNPJ, a razão social e o endereço entram quando existirem; o CNPJ fica fora do site a pedido do

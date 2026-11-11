@@ -221,7 +221,7 @@ export const privacidade: LegalSection[] = [
 		note: 'Respondemos em até 15 dias, como a lei pede. Antes, confirmamos que o pedido é seu, para não entregar dados à pessoa errada.'
 	}),
 	P('Cookies', [
-		'Usamos o necessário para o produto funcionar, como manter a sua sessão e lembrar onde o aluno parou. Nas páginas públicas, os cookies de medição do Google Analytics só são gravados se você aceitar o aviso. Não há cookie de publicidade, e cada um está descrito na página de Cookies.'
+		'Usamos o necessário para o produto funcionar, como manter a sua sessão e lembrar onde o aluno parou. Nas páginas públicas, os cookies de medição do Google Analytics só são gravados se você aceitar o aviso. Não há cookie de publicidade, e a página de Cookies explica para que serve cada tipo.'
 	]),
 	P('Encarregado de dados', [
 		'Pedidos sobre dados pessoais vão para privacidade@spokke.com.br.',
@@ -290,32 +290,29 @@ export const cookies: LegalSection[] = [
 	P(
 		'Cookies essenciais',
 		[
-			'Sem eles a plataforma não funciona, por isso não há como recusá-los. Nenhum serve para medir audiência ou mostrar anúncio.'
+			'Sem eles a plataforma não funciona, por isso não há como recusá-los. Nenhum serve para medir audiência ou mostrar anúncio. Usamos esses cookies para:'
 		],
 		{
 			l: [
-				'better-auth.session_token: mantém o professor conectado. Vale 7 dias e se renova enquanto você usa.',
-				'spokke-aluno.session_token: o mesmo, para quem entra com a conta de aluno.',
-				'better-auth.state e spokke-aluno.state: só durante a entrada pelo Google, para conferir que a volta é da mesma ida. Vale 5 minutos.',
-				'spokke_anon: identifica o aparelho que respondeu, para o aluno continuar de onde parou e, se criar conta, levar as respostas junto. Vale 180 dias.',
-				'spokke_attempt_<atividade>: a tentativa em andamento naquela atividade. Vale 7 dias.',
-				'spokke_aluno_<atividade>: quem chegou pelo link pessoal do convite, para a resposta sair com o nome certo. Vale 30 dias.',
-				'spokke_code_<atividade>: o código de acesso já digitado, para a atividade não pedir de novo. Vale 1 dia.'
+				'manter você conectado, seja na conta de professor, seja na conta de aluno;',
+				'dar segurança à entrada com a conta Google;',
+				'lembrar a atividade que o aluno está respondendo, para ele continuar de onde parou;',
+				'reconhecer o aluno que chegou pelo convite do professor, para a resposta aparecer com o nome certo;',
+				'não pedir de novo o código de acesso que o aluno acabou de digitar.'
 			],
-			note: 'Em conexão segura, o navegador mostra os dois primeiros com o prefixo __Secure-.'
+			note: 'Eles duram o tempo que a tarefa pede: o da sessão se renova enquanto você usa, e os de uma atividade expiram em poucos dias.'
 		}
 	),
 	P(
 		'Armazenamento local',
-		['Fica só no seu aparelho e guarda preferências e trabalho em andamento:'],
+		['Fica só no seu aparelho e guarda preferências e trabalho em andamento, como:'],
 		{
 			l: [
-				'spokke-theme: o tema claro ou escuro que você escolheu.',
-				'spokke-volume: o volume do som de acerto e de erro.',
-				'spokke-pronuncia: se o teclado virtual mostra a pronúncia nas teclas.',
-				'spokke-mapa-<módulo>: até onde o personagem do mapa já andou, para a animação não se repetir.',
-				'spokke:draft:<tentativa>: o rascunho de uma resposta longa, para ele não sumir se a página recarregar.',
-				'spokke-medicao: a sua resposta ao aviso de medição das páginas públicas (aceitou ou recusou).'
+				'as preferências de tela, como o tema claro ou escuro e o volume dos sons;',
+				'os ajustes do teclado virtual;',
+				'o que o aluno já viu no mapa dos módulos;',
+				'o rascunho de uma resposta longa, para ele não se perder se a página recarregar;',
+				'a sua escolha no aviso de medição das páginas públicas.'
 			]
 		}
 	),
@@ -323,13 +320,9 @@ export const cookies: LegalSection[] = [
 		'Cookies de medição e de publicidade',
 		[
 			'De publicidade, não usamos nenhum: não há pixel de rede social nem rastreamento entre sites.',
-			'Para saber quais páginas públicas ajudam os professores (a página inicial, os planos e o blog), o site pode usar o Google Analytics, e só depois que você aceita o aviso dessas páginas. Sem o aceite, nenhum cookie de medição é gravado, e a medição nunca roda no painel do professor nem nas atividades dos alunos.'
+			'Para saber quais páginas públicas ajudam os professores (a página inicial, os planos e o blog), o site pode usar o Google Analytics, e só depois que você aceita o aviso dessas páginas. Esses cookies contam as visitas de forma anônima. Sem o aceite, nenhum deles é gravado, e a medição nunca roda no painel do professor nem nas atividades dos alunos.'
 		],
 		{
-			l: [
-				'_ga: distingue as visitas de forma anônima para o Google Analytics. Vale 2 anos.',
-				'_ga_<identificador>: guarda o estado da visita para o Google Analytics. Vale 2 anos.'
-			],
 			note: 'Para mudar de ideia, use "Preferências de cookies" no rodapé das páginas públicas: recusar apaga esses cookies e para a medição.'
 		}
 	),

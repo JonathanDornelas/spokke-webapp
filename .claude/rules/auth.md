@@ -131,8 +131,8 @@ repositório, 2026-11-09), cada uma com a sua URL de retorno (`/api/auth/callbac
 - **Quem nasceu pelo Google cria a senha pelo link de "esqueci a senha"**, não por um campo na
   Conta: uma sessão roubada não ganha, assim, uma porta permanente. O cadastro pelo Google passa
   pelos mesmos hooks — trial e avatar sorteado no professor.
-- O cookie `<prefixo>.state` vive os 5 minutos da ida e volta ao Google (Cookies, em
-  `institucional.ts`).
+- O cookie `<prefixo>.state` vive os 5 minutos da ida e volta ao Google. A página de Cookies o
+  descreve pela finalidade ("dar segurança à entrada com a conta Google"), sem nome nem mecânica.
 
 ## Superfície pública
 
