@@ -8,6 +8,13 @@
 #
 # Em produção o storage continua sendo o R2 preferido de server.md — este arquivo
 # é o equivalente local dele, INCLUSIVE a regra de ciclo de vida.
+#
+# **A imagem é a SILO (`pgsty/silo`), não a `minio/minio`.** A MinIO parou de
+# publicar imagem em 2025 e as do Docker Hub sumiram em setembro de 2026 ("pull
+# access denied"); a SILO é o fork mantido pela PGSTY, com as mesmas variáveis
+# `MINIO_*`, o mesmo `server /data` e o mesmo formato de dados. O cliente vem
+# dentro dela (`mc` aponta para o `mcli`), então o `init` usa a mesma imagem.
+# Versão FIXA: subir de versão é trocar a tag aqui, de propósito.
 
 # **Os limites são de um servidor real: 4 vCPU, 16 GB.** Eles não estão aqui
 # para economizar, e sim para que nenhum processo consiga derrubar os outros —
@@ -20,7 +27,7 @@ name: spokke-minio
 
 services:
   minio:
-    image: minio/minio:latest
+    image: pgsty/silo:RELEASE.2026-11-09T00-00-00Z
     container_name: spokke-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -35,7 +42,9 @@ services:
     volumes:
       - dados:/data
     healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
+      # A sonda própria da SILO. `mc ready` não serve: ele espera para sempre
+      # até o servidor responder, em vez de dizer "ainda não".
+      test: ['CMD', 'silo', 'healthcheck', 'ready']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -49,7 +58,7 @@ services:
   # Cria o bucket e escreve a REGRA DE CICLO DE VIDA. Roda até o fim e sai — não
   # é um serviço de pé.
   init:
-    image: minio/mc:latest
+    image: pgsty/silo:RELEASE.2026-11-09T00-00-00Z
     container_name: spokke-minio-init
     depends_on:
       minio:
