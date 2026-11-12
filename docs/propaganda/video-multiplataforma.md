@@ -11,14 +11,14 @@ Anexos: `spokke-marca.svg`, `spokke-icone.svg` e as capturas da seção 5
 
 ## 1. Formato
 
-| O quê       | Valor                                                                        |
-| ----------- | ---------------------------------------------------------------------------- |
-| Proporção   | **16:9**, 1920 × 1080: é o quadro em que três aparelhos cabem lado a lado    |
-| Duração     | 35 a 45 s                                                                    |
-| Corte extra | Opcional: 1:1, 1080 × 1080, com os blocos 1, 3, 4 e o final                  |
-| Tema        | Claro, com uma passagem pelo escuro no bloco 7                               |
-| Som         | Funciona no mudo                                                             |
-| Arquivo     | `spokke-multiplataforma-16x9.mp4`                                            |
+| O quê       | Valor                                                                     |
+| ----------- | ------------------------------------------------------------------------- |
+| Proporção   | **16:9**, 1920 × 1080: é o quadro em que três aparelhos cabem lado a lado |
+| Duração     | 35 a 45 s                                                                 |
+| Corte extra | Opcional: 1:1, 1080 × 1080, com os blocos 1, 3, 4 e o final               |
+| Tema        | Claro, com uma passagem pelo escuro no bloco 7                            |
+| Som         | Funciona no mudo                                                          |
+| Arquivo     | `spokke-multiplataforma-16x9.mp4`                                         |
 
 Especificação do `.mp4` e animação HTML determinística: seção 1 de `animacao-celular.md`. Área
 segura em 16:9: 96 px nas laterais e 64 px em cima e embaixo para toda legenda.
@@ -42,9 +42,10 @@ igual (a pergunta, a correção, o "quase") fica igual; o que muda (o leiaute, o
 é o assunto da cena.
 
 **A atividade é a "Present perfect" das outras propagandas** (`telas-e-funcionalidades.md`
-seção 2), criada à mão na conta de demonstração com as quatro frases de lá e publicada com o
-serviço de áudio no ar. A captura usa o link de aluno dela (`/a/[slug]`), e não o `/exemplo`: a
-atividade de exemplo do site tem leiaute próprio e não mostra a legenda de atalhos do computador.
+seção 2), criada pelo roteiro de captura no wizard, como a professora faria: as quatro frases de lá
+coladas (a quarta sem tradução), o código **KTRM** e o áudio gerado pelo serviço de voz. A captura
+usa o link de aluno dela (`/a/[slug]`), e não o `/exemplo`: a atividade de exemplo do site tem
+leiaute próprio e não mostra a legenda de atalhos do computador.
 
 ---
 
@@ -71,17 +72,21 @@ ficam parados (é a regra do produto: a página não rola). Toque na alternativa
 ### Bloco 4 · 14 a 19 s · No computador
 
 O notebook ocupa o centro, com a mesma questão em duas colunas: o áudio ou o apoio à esquerda, a
-resposta à direita, e a ação na barra do cartão. Embaixo, a legenda de atalhos do produto
-(**"1 2 3 escolher"**, **"Espaço tocar de novo"**, **"Enter verificar"**). Teclas desenhadas na camada de
-movimento acendem quando "pressionadas": o 2 escolhe, o Enter verifica.
+resposta à direita, e a ação na barra do cartão. As legendas de atalho do produto ficam sob cada
+lado: **"1 2 3 4 escolher pelo número"**, **"Espaço tocar de novo"** e **"Enter verificar"**.
+Teclas desenhadas na camada de movimento acendem quando "pressionadas": o **4** escolhe (na captura,
+a certa é a quarta alternativa), o Enter verifica.
 
 ### Bloco 5 · 19 a 25 s · O teclado de cada idioma
 
 Três celulares em sequência rápida, numa questão de escrever no idioma estudado:
 
-- **japonês**: a grade de kana encaixada acima do rodapé;
-- **espanhol**: a barra de acentos;
-- **árabe**: o texto correndo da direita para a esquerda.
+- **japonês** ("Japonês 1 — cumprimentos"): "Complete a frase." com おはようご＿います。, a grade
+  de kana encaixada acima do rodapé e ざ digitado, com a "Leitura" (za) sob o campo;
+- **espanhol** ("Español 1 — saludos"): ¿De ＿ eres? com **dónde** digitado e a barra de acentos
+  sob o campo;
+- **árabe** ("Árabe 1 — saudações"): صباح الخير ＿ أستاذ, a frase correndo da direita para a
+  esquerda, a grade árabe e يا digitado.
 
 ### Bloco 6 · 25 a 30 s · O professor, nos dois tamanhos
 
@@ -112,17 +117,17 @@ Fundo escuro, logo claro, a legenda final e o CTA.
 Na voz do Spokke (`../spokke-seo/project/brain/voice.md`): direta, em segunda pessoa, sem
 travessão, sem exclamação e sem superlativo.
 
-| Bloco | Legenda principal                                    | Linha menor                                                    |
-| ----- | ---------------------------------------------------- | -------------------------------------------------------------- |
-| 1     | A mesma atividade, em qualquer tela.                 | Abre no navegador, sem nada para instalar.                     |
-| 2     | Projete o QR e a turma entra pelo celular.           | Ou dite o código de 4 letras.                                  |
-| 3     | No celular, uma pergunta por tela.                   | O botão de verificar fica no rodapé, ao alcance do polegar.    |
-| 4     | No computador, dá para responder só pelo teclado.    | Números escolhem, Espaço repete o áudio, Enter verifica.       |
-| 5     | Cada idioma traz o teclado de que precisa.           | Kana no japonês, pinyin com tom no mandarim, acentos no espanhol. |
-| 6     | Você monta no computador e confere no celular.       | Os resultados cabem na tela pequena, entre uma aula e outra.   |
-| 7     | Claro ou escuro, como você preferir.                 | A escolha fica guardada.                                       |
-| 8     | Com conta, o aluno reencontra o histórico em qualquer aparelho. | Sem conta, o link continua bastando.                 |
-| 9     | Funciona no celular que o aluno já tem.              | Teste grátis por 14 dias · spokke.com.br                       |
+| Bloco | Legenda principal                                               | Linha menor                                                                |
+| ----- | --------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 1     | A mesma atividade, em qualquer tela.                            | Abre no navegador, sem nada para instalar.                                 |
+| 2     | Projete o QR e a turma entra pelo celular.                      | Ou dite o código de 4 letras.                                              |
+| 3     | No celular, uma pergunta por tela.                              | O botão de verificar fica no rodapé, ao alcance do polegar.                |
+| 4     | No computador, dá para responder só pelo teclado.               | Números escolhem, Espaço repete o áudio, Enter verifica.                   |
+| 5     | Cada idioma traz o teclado de que precisa.                      | Kana no japonês, acentos no espanhol e o árabe da direita para a esquerda. |
+| 6     | Você monta no computador e confere no celular.                  | Os resultados cabem na tela pequena, entre uma aula e outra.               |
+| 7     | Claro ou escuro, como você preferir.                            | A escolha fica guardada.                                                   |
+| 8     | Com conta, o aluno reencontra o histórico em qualquer aparelho. | Sem conta, o link continua bastando.                                       |
+| 9     | Funciona no celular que o aluno já tem.                         | Teste grátis por 14 dias · spokke.com.br                                   |
 
 ---
 
@@ -133,30 +138,42 @@ redesenho provaria só que o desenho se adapta. Cada aparelho mostra o PNG do pr
 tamanho, dentro da moldura, e a animação põe por cima apenas a legenda, o círculo de toque, as
 teclas do bloco 4 e a cortina do bloco 7 (`captura-das-telas.md`).
 
-| #  | Tela                                           | Estados                                             | Aparelhos                     | Precisa de            |
-| -- | ---------------------------------------------- | --------------------------------------------------- | ----------------------------- | --------------------- |
-| 01 | `/a/[slug]/q/[n]` da Present perfect, a escuta | sem resposta · escolhida · "Verificando…" · veredito | celular, tablet, computador  | áudio                 |
-| 02 | Detalhe de uma atividade publicada, "No ar"    | o QR e o código (recorte do cartão)                 | computador                    | seed, código ligado   |
-| 03 | `/a/[slug]`, entrada                           | campo do nome vazio e preenchido                    | celular                       | seed                  |
-| 04 | Questão de escrever em japonês                 | com a grade de kana aberta                          | celular                       | seed (Japonês 1)      |
-| 05 | Questão de escrever em espanhol                | com a barra de acentos                              | celular                       | seed (Español 1)      |
-| 06 | Questão em árabe                               | texto da direita para a esquerda                    | celular                       | uma atividade em árabe |
-| 07 | `/resultados/[activityId]`                     | a mesma atividade                                   | computador, celular           | seed                  |
-| 08 | A captura 07 no tema escuro                    | a mesma atividade                                   | computador                    | `spokke-theme` = `dark` |
-| 09 | `/aluno`                                       | histórico com algumas atividades                    | tablet, celular               | conta de aluno        |
+As capturas saem de `scripts/capturas/video-multiplataforma.ts` (`captura-das-telas.md` diz como
+rodar), em `capturas/multiplataforma/`.
 
-Observações para a captura:
+| Arquivo                                               | Bloco   | Estado                                                                                                              |
+| ----------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `01-escuta-sem-resposta@{celular,tablet,computador}`  | 1, 3, 4 | a escuta da Present perfect (questão 8 de 12), "Ouça e escolha o que você ouviu."                                   |
+| `01-escuta-escolhida@…`                               | 3, 4    | "Have you ever been to London?" escolhida; no computador, pela tecla 4                                              |
+| `01-escuta-verificando@…`                             | 3, 4    | o véu "Verificando sua resposta" e o botão "Verificando…"                                                           |
+| `01-escuta-veredito@…`                                | 3, 4    | "Correto." e o botão "Próxima questão"                                                                              |
+| `02-no-ar-qr-e-codigo@computador`                     | 2       | o cartão "Como a turma entra": QR, link `spokke.com.br/a/…` e o código KTRM                                         |
+| `02-qr-do-exemplo.png`                                | 2       | o QR que entra no vídeo (abaixo)                                                                                    |
+| `03-codigo@celular`                                   | 2       | "Digite o código da turma" com K T R M                                                                              |
+| `03-entrada-vazia@celular`, `03-entrada-nome@celular` | 2       | a entrada da Present perfect, com o campo do nome vazio e com "Ana"                                                 |
+| `04-japones-kana-aberto@celular`, `-digitado`         | 5       | a lacuna em japonês, a grade de kana vazia e com ざ                                                                 |
+| `05-espanhol-acentos@celular`                         | 5       | a lacuna em espanhol, "dónde" e a barra de acentos                                                                  |
+| `06-arabe-aberto@celular`, `-digitado`                | 5       | a lacuna em árabe, a grade árabe vazia e com يا                                                                     |
+| `07-resultados@{computador,celular}`                  | 6       | os resultados de "Viagem 2 — no hotel" (10 tentativas do seed); no celular, as abas embaixo e o menu de três traços |
+| `07-resultados-pagina-inteira@celular`                | 6       | a página toda, para rolar dentro da moldura                                                                         |
+| `08-resultados-escuro@computador`                     | 7       | a mesma tela no tema escuro                                                                                         |
+| `09-aluno@{tablet,celular}`, `-pagina-inteira`        | 8       | a área da Ana: o avatar, o 8º A, o módulo Frutas concluído e "Como você vem indo"                                   |
+
+As três telas da escuta mostram as alternativas na mesma ordem, e a certa é a quarta nas três.
+
+Observações:
 
 - **O leiaute de computador do aluno começa em 1024 px.** O tablet em pé (820 px) mostra o leiaute
-  de toque, mais largo; deitado (1180 px), mostra o de computador. Use o tablet em pé: ele mostra
-  a terceira forma, a que não é nem celular nem notebook.
-- **Japonês e espanhol precisam de uma questão de digitar.** Confira se as atividades do seed têm
-  uma. Se não tiverem, crie uma atividade com o tipo de material que gera "digitar a tradução".
-- **O seed não tem atividade em árabe.** Ela é criada à mão para a captura (sem serviço de voz, o
-  árabe sai sem questão de escuta, e tudo bem). Se der trabalho, o árabe sai do bloco 5 e o
-  mandarim entra no lugar.
-- **A tela da sala de aula** é uma moldura genérica com a captura 02 ampliada dentro. O QR precisa
-  continuar legível, sem desfoque.
+  de toque, mais largo; deitado (1180 px), mostra o de computador. O tablet das capturas está em
+  pé: ele mostra a terceira forma, a que não é nem celular nem notebook.
+- **A atividade em árabe é criada pelo roteiro** (o seed não tem nenhuma), com cinco saudações de
+  livro didático. Sem voz para o árabe, ela sai sem questão de escuta, e tudo bem. **Um falante
+  confere as frases antes de a peça ir ao ar.**
+- **A tela da sala de aula** é uma moldura genérica com a captura 02 ampliada dentro. **O QR da
+  captura não entra:** ele leva a uma atividade que só existe na máquina onde as capturas foram
+  feitas. No lugar dele vai o `02-qr-do-exemplo.png`, o mesmo desenho do produto apontando para
+  `https://spokke.com.br/exemplo`, a atividade de exemplo do site. Quem apontar a câmera para o vídeo
+  cai numa atividade de verdade. O QR continua legível, sem desfoque.
 
 ---
 

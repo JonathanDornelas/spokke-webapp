@@ -12,13 +12,13 @@ Anexos: `spokke-marca.svg`, `spokke-icone.svg` e as capturas da seção 5
 
 ## 1. Formato
 
-| O quê     | Valor                                                                      |
-| --------- | -------------------------------------------------------------------------- |
-| Proporção | **9:16**, 1080 × 1920 (Reels, Stories, TikTok, Shorts)                     |
-| Duração   | 36 a 40 s, com o último quadro voltando ao primeiro (loop)                 |
-| Tema      | Claro. O cartão final usa a superfície escura                              |
-| Som       | Funciona no mudo                                                           |
-| Arquivo   | `spokke-modulos-9x16.mp4`                                                  |
+| O quê     | Valor                                                      |
+| --------- | ---------------------------------------------------------- |
+| Proporção | **9:16**, 1080 × 1920 (Reels, Stories, TikTok, Shorts)     |
+| Duração   | 36 a 40 s, com o último quadro voltando ao primeiro (loop) |
+| Tema      | Claro. O cartão final usa a superfície escura              |
+| Som       | Funciona no mudo                                           |
+| Arquivo   | `spokke-modulos-9x16.mp4`                                  |
 
 Especificação do `.mp4`, área segura e animação HTML determinística: seção 1 de
 `animacao-celular.md`, sem mudança.
@@ -46,13 +46,13 @@ séria de um lado e de jogo do outro.
 
 **Os dados são os do seed de demonstração**, para a captura sair do produto:
 
-| O quê    | Valor                                                                              |
-| -------- | ---------------------------------------------------------------------------------- |
-| Módulo   | **Frutas**, etiqueta teal, "Vocabulário de frutas, da feira à receita."            |
-| Fases    | Frutas 1 — vocabulário · Frutas 2 — na feira · Frutas 3 — receita · Frutas 4 — diálogo |
-| Turma    | **8º A — inglês**                                                                  |
-| Ritmo    | Por semana, toda quarta, 08:00, horário de Brasília                                |
-| Aluna    | **Ana**, a mesma das outras propagandas, com o avatar em pixel art dela            |
+| O quê  | Valor                                                                                  |
+| ------ | -------------------------------------------------------------------------------------- |
+| Módulo | **Frutas**, etiqueta teal, "Vocabulário de frutas, da feira à receita."                |
+| Fases  | Frutas 1 — vocabulário · Frutas 2 — na feira · Frutas 3 — receita · Frutas 4 — diálogo |
+| Turma  | **8º A — inglês**                                                                      |
+| Ritmo  | Por semana, toda quarta, 08:00, horário de Brasília                                    |
+| Aluna  | **Ana**, a mesma das outras propagandas, com o avatar em pixel art dela                |
 
 ---
 
@@ -69,15 +69,17 @@ está parado na fase 2.
 ### Bloco 2 · 3 a 8 s · Montar a sequência (professor)
 
 Pílula em "Você". A bandeja de criar módulo: nome **"Frutas"**, a etiqueta teal com a sigla, e as
-quatro atividades marcadas uma a uma, na ordem. Depois, o bloco **"Atividades, na ordem"** do
-módulo aberto, com uma linha sendo arrastada para a posição certa.
+quatro atividades marcadas uma a uma, na ordem, cada uma ganhando o número da posição. Depois, o
+bloco **"Atividades, na ordem"** do módulo aberto, com uma linha sendo arrastada para a posição
+certa (o arraste é refeito por cima da captura 03).
 
 ### Bloco 3 · 8 a 14 s · Turma e ritmo (professor)
 
-**"Adicionar turmas"** com o 8º A marcado. Abre a programação da turma: em **"Quando sai"**,
-**"Por semana"** com a quarta marcada e o horário 08:00. A **"Prévia"** se monta linha a linha,
-uma data por atividade. No topo do painel, a frase do produto: a atividade abre no mapa de quem
-tem conta na turma, sem e-mail.
+**"Adicionar turmas"**, cada turma com o tamanho e o idioma, e uma delas marcada. Abre a
+programação do **8º A**: em **"Quando sai"**, **"Por semana"** com a quarta marcada e o horário
+08:00. A **"Prévia"** se monta linha a linha, uma data por atividade: a Frutas 1 já liberada, as
+outras às quartas, e a Frutas 3 com o aviso de que ainda é rascunho. No topo do painel, a frase do
+produto: a atividade abre no mapa do módulo, e ninguém recebe e-mail.
 
 ### Bloco 4 · 14 a 19 s · Trancada, com data (aluno)
 
@@ -126,17 +128,17 @@ Escrito com o Cérebro do agentic-seo (`../spokke-seo/project/brain/voice.md`, v
 confiante") e revisado com o checklist de `brain/review.md` e uma passada de humanização (lista no
 fim desta seção). Use as frases exatamente; nenhuma outra legenda entra.
 
-| Bloco | Legenda principal                                   | Linha menor                                             |
-| ----- | --------------------------------------------------- | ------------------------------------------------------- |
-| 1     | Sua sequência vira um mapa.                         | Cada atividade é uma fase.                              |
-| 2     | Junte as atividades na ordem em que você ensina.    | Arraste para trocar a ordem.                            |
-| 3     | Escolha a turma e o ritmo.                          | A prévia mostra cada data antes de você salvar.         |
-| 4     | A próxima fase já tem data.                         | O mapa aparece para quem tem conta na turma.            |
-| 5     | Quem fez tudo o que abriu está em dia.              | A tela diz quando vem a próxima, sem cobrar.            |
-| 6     | Na quarta, a fase abre e o avatar segue.            | O personagem é o avatar que o aluno montou.             |
-| 7     | Estrela só onde você liberou o resultado.           | Sem isso, a fase fica concluída, sem placar.            |
-| 8     | A última fase leva ao castelo.                      |                                                         |
-| 9     | Do seu lado, quantos abriram e quantos terminaram.  |                                                         |
+| Bloco | Legenda principal                                           | Linha menor                                     |
+| ----- | ----------------------------------------------------------- | ----------------------------------------------- |
+| 1     | Sua sequência vira um mapa.                                 | Cada atividade é uma fase.                      |
+| 2     | Junte as atividades na ordem em que você ensina.            | Arraste para trocar a ordem.                    |
+| 3     | Escolha a turma e o ritmo.                                  | A prévia mostra cada data antes de você salvar. |
+| 4     | A próxima fase já tem data.                                 | O mapa aparece para quem tem conta na turma.    |
+| 5     | Quem fez tudo o que abriu está em dia.                      | A tela diz quando vem a próxima, sem cobrar.    |
+| 6     | Na quarta, a fase abre e o avatar segue.                    | O personagem é o avatar que o aluno montou.     |
+| 7     | Estrela só onde você liberou o resultado.                   | Sem isso, a fase fica concluída, sem placar.    |
+| 8     | A última fase leva ao castelo.                              |                                                 |
+| 9     | Do seu lado, quantos abriram e quantos terminaram.          |                                                 |
 | 10    | Você monta a sequência uma vez. A turma avança fase a fase. | Teste grátis por 14 dias · spokke.com.br        |
 
 Os textos DENTRO das telas ("MUNDO 1", "Jogar", "Você está em dia.", "abre qua 25/11",
@@ -168,27 +170,35 @@ O mapa é o centro do vídeo, e ele **não é redesenhado**: o caminho, os nós,
 saem da captura do produto (`captura-das-telas.md`). A animação refaz por cima só o que se mexe: o
 avatar andando de um nó para o outro, a folha subindo e o castelo acendendo.
 
-| #  | Tela                                             | Estado                                             | Aparelho   | Precisa de           |
-| -- | ------------------------------------------------ | -------------------------------------------------- | ---------- | -------------------- |
-| 01 | `/aluno/modulos/[id]` (Frutas)                   | fase 1 concluída com estrelas, fase 2 liberada, 3 e 4 trancadas com data | celular | conta de aluno |
-| 02 | Bandeja de criar módulo                          | nome, cor e as quatro atividades marcadas na ordem | computador | seed                 |
-| 03 | `/modulos/[id]`, "Atividades, na ordem"          | a lista; uma linha no meio do arraste              | computador | seed                 |
-| 04 | "Adicionar turmas"                               | 8º A marcado                                       | computador | seed                 |
-| 05 | Programação da turma                             | "Por semana", quarta, 08:00, prévia com as datas   | computador | seed                 |
-| 06 | Folha da fase 2                                  | aberta, com "Jogar"                                | celular    | conta de aluno       |
-| 07 | Questão da Frutas 2                              | depois do veredito "Correto."                      | celular    | conta de aluno       |
-| 08 | Mapa                                             | fase 2 concluída, aviso "Você está em dia."        | celular    | conta de aluno       |
-| 09 | Mapa                                             | fase 3 liberada, avatar já na fase 3               | celular    | "Liberar agora" na Frutas 3 |
-| 10 | Mapa                                             | uma fase com estrelas e uma "concluída · sem placar" | celular  | resultado desligado numa atividade |
-| 11 | Mapa                                             | as quatro concluídas, "Módulo concluído."          | celular    | "Liberar agora" nas quatro |
-| 12 | `/modulos/[id]`, "Liberações"                    | as quatro atividades com abriram e terminaram      | computador | tentativas da conta de aluno |
+As capturas saem de `scripts/capturas/video-modulos.ts` (`captura-das-telas.md` diz como rodar),
+em `capturas/modulos/`. O mapa é o da Ana de verdade, com a conta dela no 8º A, e anda pelas ações
+de verdade da professora.
+
+| Arquivo                                  | Bloco | Estado                                                                                                                                                 |
+| ---------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `00-mapa-antes@celular`                  | 1, 4  | fase 1 concluída com três estrelas; 2, 3 e 4 trancadas: "abre qua 18/11", "qua 25/11", "qua 02/12"; "Você está em dia. A próxima fase abre qua 18/11." |
+| `01-mapa-fase-2-liberada@celular`        | 4     | fase 2 liberada ("jogar"), 3 e 4 com cadeado e data                                                                                                    |
+| `02a-novo-modulo-nome@computador`        | 2     | bandeja "Novo módulo": nome, descrição e a etiqueta teal                                                                                               |
+| `02b-novo-modulo-ordem@computador`       | 2     | as quatro Frutas marcadas, com o número da posição (1 a 4)                                                                                             |
+| `03-atividades-na-ordem@computador`      | 2     | o bloco "Atividades, na ordem" do módulo aberto                                                                                                        |
+| `04-adicionar-turmas@computador`         | 3     | bandeja "Adicionar turmas", nada marcado                                                                                                               |
+| `04-adicionar-turmas-marcada@computador` | 3     | a mesma, com o 9º C marcado (o seed já tem o módulo no 7º B e no 8º A)                                                                                 |
+| `05a-programacao-ritmo@computador`       | 3     | programação do 8º A: "Por semana", quarta, 08:00                                                                                                       |
+| `05b-programacao-previa@computador`      | 3     | a prévia: qua 11/11 liberada, qua 18/11, qua 25/11 (com o aviso de rascunho), qua 02/12                                                                |
+| `06-folha-da-fase@celular`               | 5     | a folha da fase 2, com "Jogar"                                                                                                                         |
+| `07-questao-correta@celular`             | 5     | "Monte a frase." da Frutas 2, com "Correto."                                                                                                           |
+| `08-mapa-em-dia@celular`                 | 5     | fase 2 concluída; "Você está em dia. A próxima fase abre qua 25/11."                                                                                   |
+| `09-mapa-fase-3-liberada@celular`        | 6     | fase 3 liberada, o avatar já nela                                                                                                                      |
+| `10-estrelas-e-sem-placar@celular`       | 7     | fase 1 com estrelas, fase 2 "sem placar" (o resultado dela desligado)                                                                                  |
+| `11-modulo-concluido@celular`            | 8     | as quatro concluídas e o castelo, "Módulo concluído."                                                                                                  |
+| `12-liberacoes@computador`               | 9     | o bloco "Liberações": cada atividade, com quantos abriram e quantos terminaram                                                                         |
 
 O avatar andando (bloco 6) é a animação entre as capturas 08 e 09: a posição de partida e a de
-chegada saem do produto, e o passo entre elas é refeito por cima.
+chegada saem do produto, e o passo entre elas é refeito por cima. A fase 3 abriu na captura por
+"Liberar agora"; no vídeo ela abre na quarta, e o mapa fica igual nos dois casos.
 
-Sem a conta de aluno, as capturas 01, 06, 08, 09 e 11 podem sair da prévia do professor
-(`/modulos/[id]/mapa?turma=`), e o progresso entra na animação por cima. É a segunda opção: a
-captura com progresso de verdade é a que vale.
+**As datas são as da rodada de 11/11/2026**, a quarta em que a Frutas 1 abriu. Uma rodada noutro
+dia traz outras datas, e o roteiro e as legendas acompanham as da captura nova.
 
 ---
 

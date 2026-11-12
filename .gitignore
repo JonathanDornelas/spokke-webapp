@@ -26,3 +26,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 # Playwright
 test-results
+
+# Capturas de tela da propaganda (docs/propaganda/captura-das-telas.md): geradas por script, pesadas
+docs/propaganda/capturas/
