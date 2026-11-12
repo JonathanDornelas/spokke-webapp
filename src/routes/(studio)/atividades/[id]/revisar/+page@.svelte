@@ -175,8 +175,8 @@
 	step={3}
 	backHref={resolve('/(studio)/atividades/[id]/materiais', { id: data.activity.id })}
 	backLabel="Materiais"
-	status="{accepted} aceitos de {totalItens}"
-	hint="{accepted} itens entrarão na atividade."
+	status="{accepted} {accepted === 1 ? 'aceita' : 'aceitas'} de {totalItens}"
+	hint="{accepted} {accepted === 1 ? 'questão entrará' : 'questões entrarão'} na atividade."
 >
 	<div class="px-4 py-6 lg:px-[34px] lg:py-[30px]">
 		{#if data.generating}
@@ -186,7 +186,7 @@
 			     conhecida — mostrar o formato informa mais do que só girar. -->
 			<div class="grid max-w-[640px] gap-2">
 				<div class="flex items-center gap-4 rounded-box border border-line px-5 py-[22px]">
-					<Loading variant="orbita" size={48} pace="devagar" label="Gerando os itens" />
+					<Loading variant="orbita" size={48} pace="devagar" label="Gerando as questões" />
 					<div class="min-w-0 flex-1">
 						<p class="mb-1 text-[15px] font-bold">
 							Lendo {data.materialCount} materiais e escrevendo as questões
@@ -204,10 +204,10 @@
 			<div class="mb-6 flex flex-wrap items-center gap-3">
 				<div>
 					<h1 class="mb-1 font-display text-section font-semibold tracking-[-0.02em]">
-						{data.groups.flatMap((g) => g.items).length} itens propostos
+						{data.groups.flatMap((g) => g.items).length} questões propostas
 					</h1>
 					<p class="text-[13.5px] text-base-content/65">
-						Revise cada um. Nada é publicado até você chegar na etapa 4.
+						Revise cada uma. Nada é publicado até você chegar na etapa 4.
 					</p>
 				</div>
 				<div class="flex-1"></div>
@@ -234,7 +234,7 @@
 						<Loading variant="fila" size={11} tone="current" label="Aceitando" />
 						Aceitando…
 					{:else}
-						Aceitar todos{descartados > 0 ? ` (${descartados})` : ''}
+						Aceitar todas{descartados > 0 ? ` (${descartados})` : ''}
 					{/if}
 				</button>
 			</div>
@@ -334,7 +334,7 @@
 														stroke-linejoin="round"
 													/>
 												</svg>
-												Aceito
+												Aceita
 											</span>
 											<a
 												href={resolve('/(studio)/atividades/[id]/itens/[itemId]', {
@@ -387,11 +387,11 @@
 			class="btn h-[46px] flex-1 motion-tap btn-neutral font-semibold lg:flex-none"
 		>
 			{#if criando}
-				<Loading variant="fila" size={11} tone="current" label="Criando o item" />
+				<Loading variant="fila" size={11} tone="current" label="Criando a questão" />
 				Criando…
 			{:else}
-				<span class="lg:hidden">Novo item</span>
-				<span class="hidden lg:inline">Criar item do zero</span>
+				<span class="lg:hidden">Nova questão</span>
+				<span class="hidden lg:inline">Criar questão do zero</span>
 			{/if}
 		</button>
 		<a

@@ -568,7 +568,7 @@ Pendências dentro do que já está ligado:
   (`server/player/runtime.ts`) — a prévia e o Player têm que mostrar a mesma frase.
 - Sem rate limit por IP em `iniciarTentativa`/`responderItem` (server.md pede) — mesmo padrão
   provisório do formulário de contato.
-- "Criar item do zero" nasce com um texto MARCADOR ("Escreva a frase e marque a lacuna com
+- "Criar questão do zero" nasce com um texto MARCADOR ("Escreva a frase e marque a lacuna com
   ___"), não vazio: `clozeAuthoringSchema` exige `masked` e `accepted` não vazios, e um payload
   que não valida rebenta em `toRuntime()` — ou seja, na tela do aluno. Por segurança a prévia
   isola item por item e `publicarAtividade` recusa publicar qualquer um que não valide, já que

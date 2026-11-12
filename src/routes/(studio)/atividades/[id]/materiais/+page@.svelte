@@ -640,7 +640,7 @@
 				<Loading variant="fila" size={13} tone="current" label="Gerando" />
 				Gerando…
 			{:else}
-				Gerar itens
+				Gerar questões
 				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 					<path
 						d="M5 12h13M13 6l6 6-6 6"

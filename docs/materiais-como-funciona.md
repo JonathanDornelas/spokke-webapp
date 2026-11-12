@@ -205,10 +205,10 @@ atividade** (`materiaisDisponiveis`):
 ### Rodapé (barra de ações do wizard)
 
 - **"Usar da biblioteca"** (neutro) — abre/fecha o painel acima.
-- **"Gerar itens"** (primário) — desabilitado sem material; mostra a `fila` enquanto gera e
+- **"Gerar questões"** (primário) — desabilitado sem material; mostra a `fila` enquanto gera e
   leva para a etapa 3 (Revisar). Dica ao lado: "Precisa de ao menos 1 material para avançar."
 
-### O que "Gerar itens" faz com os materiais (`gerarItens`)
+### O que "Gerar questões" faz com os materiais (`gerarItens`)
 
 1. Pega SÓ os materiais ligados a esta atividade.
 2. Roda todos os geradores aplicáveis (kernel.md "Nível 2") sobre cada material, com os dois
