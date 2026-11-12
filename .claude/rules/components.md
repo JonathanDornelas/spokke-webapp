@@ -1160,6 +1160,10 @@ monta os dois também, e só ela usa o snippet `extra` de `SiteHeader` pra acres
 tema manual (home.md "Toggle de tema" — nenhuma outra página pública tem esse controle, seguem
 `prefers-color-scheme` puro).
 
+**No celular o rodapé muda de arranjo, não de tamanho de letra**: a marca ocupa a linha, os links
+vão em duas colunas com 32px de altura de toque (eram 7px entre linhas de 13px), e os selos sobem
+para antes do "©", alinhados à esquerda como o resto.
+
 O rodapé tem, no bloco da marca, os ícones das redes (`redes` em `institucional.ts`: Instagram,
 YouTube e TikTok, cada um com o link do perfil, em nova aba; rede sem `url` fica sem link, com o
 mesmo hover — e os endereços viram o `sameAs` da organização no JSON-LD) e, na linha de baixo,

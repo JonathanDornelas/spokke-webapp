@@ -302,7 +302,7 @@
 	>
 		<div
 			class="ms-[calc(50%-var(--cartao)/2)] flex gap-(--vao) transition-[translate] duration-(--duration-media) ease-in-out-soft
-			       [--cartao:min(340px,calc(100cqw-84px))] [--vao:12px] sm:[--vao:20px]"
+			       [--cartao:min(340px,calc(100cqw-60px))] [--vao:12px] sm:[--vao:20px]"
 			style:translate="calc({-foco} * (var(--cartao) + var(--vao))) 0"
 		>
 			{#each cartoes as p, i (p.id)}

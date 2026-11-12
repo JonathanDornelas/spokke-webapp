@@ -137,6 +137,25 @@ claro por padrão (isso já foi bug no catálogo de dev: abrir com preferência 
 ver a tela clara até clicar). Ao trocar, grava a escolha; visitas seguintes respeitam o que a
 pessoa escolheu da última vez.
 
+## Celular
+
+Abaixo de `sm` (640px) a coluna tem uns 330px, e a home desenhada para o desktop ficava espremida
+e com blocos de três telas. As regras do celular, todas mudando ARRANJO e nenhuma encolhendo letra
+de corpo abaixo de 14px:
+
+- **Nada de cartão dentro de cartão.** "Tudo que vem junto" perde a moldura externa abaixo de
+  `sm`; "Idiomas" mantém a dela, com 20px de respiro em vez de 44.
+- **Os quatro grupos de "Tudo que vem junto" deslizam de lado** (scroll-snap, com a ponta do
+  próximo à vista), em vez de vinte e quatro itens empilhados. A fileira recebe foco e se anuncia
+  (`role="region"` rotulado): quem usa zoom no computador também cai nesse leiaute.
+- **Ícone e número ao lado do título** nos cartões de habilidade e nos passos, com o texto na
+  largura inteira embaixo.
+- **Botões em par ocupam a largura**, do mesmo tamanho (hero, CTA, "Começar o teste").
+- **Título de bloco em `text-chamada`** (28 → 40px). O `text-[40px]` fixo quebrava em seis linhas.
+- **As formas das faixas escura e azul viram uma faixa de 96px**, e o respiro entre blocos cai de
+  72 para 56px; o do topo do hero, de 84 para 36.
+- **O rodapé** segue em components.md ("Casca das páginas públicas").
+
 ## Movimento
 
 Todas as durações e curvas vêm de `design-system.md`. Específico da home:

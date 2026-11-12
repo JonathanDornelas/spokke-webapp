@@ -121,7 +121,8 @@ usam `steps()` em vez de curva — rodando uma vez só, como manda "Movimento".
 Escala: display 56 / title 32 / content 22 (mínimo 20 no Player) / body 16 / label 12 caixa alta.
 
 **Os tamanhos grandes são FLUIDOS, não um par de px por breakpoint.** `text-display`,
-`text-title`, `text-section` e `text-lede` são tokens `@theme` em `clamp()`: o meio da fórmula
+`text-title`, `text-chamada` (o título de bloco da home, 28 → 40), `text-section` e `text-lede`
+são tokens `@theme` em `clamp()`: o meio da fórmula
 cresce com a largura da viewport e os extremos garantem legibilidade num celular estreito e
 tamanho sensato num monitor. `text-[28px] lg:text-[34px]` tinha só DOIS tamanhos e ficava errado
 em toda largura entre eles. O mesmo vale para o respiro de borda: `px-gutter` e `px-gutter-sm`

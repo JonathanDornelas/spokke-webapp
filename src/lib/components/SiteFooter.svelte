@@ -92,10 +92,13 @@
 
 <footer class="border-t border-line bg-base-100">
 	<div class="mx-auto flex max-w-[1200px] flex-col gap-6 px-7 pt-10 pb-[30px]">
+		<!-- No celular a marca fica na largura inteira e as colunas de links dividem a
+		     linha em duas: uma embaixo da outra, as três listas eram uma tela inteira de
+		     rodapé. -->
 		<div
-			class="grid gap-[30px] sm:grid-cols-2 lg:grid-cols-[minmax(220px,1.4fr)_repeat(3,minmax(0,1fr))]"
+			class="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-[minmax(220px,1.4fr)_repeat(3,minmax(0,1fr))] lg:gap-[30px]"
 		>
-			<div class="min-w-0">
+			<div class="col-span-2 min-w-0 sm:col-span-3 lg:col-span-1">
 				<div class="mb-2.5"><Logo size={22} /></div>
 				<p class="max-w-[32ch] text-[13px] leading-relaxed text-base-content/65">
 					Exercícios de idiomas com o material da aula, para professores autônomos e escolas.
@@ -138,12 +141,14 @@
 					<p class="mb-3 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
 						{col.t}
 					</p>
-					<nav class="grid justify-items-start gap-[7px] text-[13.5px]">
+					<!-- No celular cada link ganha altura de toque (32px): com 7px entre
+					     linhas de 13px, o dedo pegava o vizinho. -->
+					<nav class="grid justify-items-start text-[14.5px] lg:gap-[7px] lg:text-[13.5px]">
 						<!-- eslint-disable svelte/no-navigation-without-resolve -- col.links mistura âncora de hash (produto) com rotas já resolvidas por resolve() na montagem do array acima. -->
 						{#each col.links as l (l.href)}
 							<a
 								href={l.href}
-								class="text-base-content/65 no-underline transition-colors hover:text-primary"
+								class="py-1.5 text-base-content/65 no-underline transition-colors hover:text-primary lg:py-0"
 							>
 								{l.label}
 							</a>
@@ -157,7 +162,11 @@
 		<!-- A identificação da empresa (o nome empresarial; o CNPJ não aparece no
 		     site, a pedido do dono do repositório) no lugar do "Todos os sistemas
 		     operando", que era um ponto verde fixo dizendo algo que ninguém media. -->
-		<div class="flex flex-wrap items-center gap-x-[18px] gap-y-2.5 border-t border-line pt-[18px]">
+		<!-- No celular, uma coluna alinhada à esquerda: os selos primeiro (eles não cabem
+		     ao lado do texto e quebravam em degraus) e o copyright por último. -->
+		<div
+			class="flex flex-col items-start gap-4 border-t border-line pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-[18px] sm:gap-y-2.5 sm:pt-[18px]"
+		>
 			<span class="text-[12.5px] text-base-content/65">
 				Copyright © 2026 {empresa.legalName}. Todos os direitos reservados.
 			</span>
@@ -170,13 +179,13 @@
 					Preferências de cookies
 				</button>
 			{/if}
-			<div class="flex-1"></div>
+			<div class="hidden flex-1 sm:block"></div>
 			<!-- Os selos de verificação, no extremo oposto do "©". Cada um leva à
 			     verificação AO VIVO do terceiro para este domínio, e o texto convida
 			     a conferir em vez de afirmar "site seguro". -->
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- a verificação é a página EXTERNA do terceiro. -->
 			<ul
-				class="flex list-none flex-wrap items-center gap-2.5 p-0"
+				class="order-first flex list-none flex-wrap items-center gap-2.5 p-0 sm:order-none"
 				aria-label="Selos de verificação"
 			>
 				{#each verificacoes as selo (selo.nome)}

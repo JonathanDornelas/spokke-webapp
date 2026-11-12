@@ -88,6 +88,11 @@
 	--text-title--line-height: 1.1;
 	--text-section: clamp(1.2rem, 1.05rem + 0.6vw, 1.5rem); /* 19 → 24 */
 	--text-section--line-height: 1.2;
+	/* O título de cada bloco da home. Era 40px fixo: no celular ele quebrava em
+	   seis linhas e empurrava o bloco para baixo da dobra. A partir de ~870px de
+	   largura volta aos 40. */
+	--text-chamada: clamp(1.75rem, 1.2rem + 2.4vw, 2.5rem); /* 28 → 40 */
+	--text-chamada--line-height: 1.08;
 	--text-lede: clamp(0.9rem, 0.86rem + 0.18vw, 1rem); /* 14.4 → 16 */
 	--text-lede--line-height: 1.6;
 
