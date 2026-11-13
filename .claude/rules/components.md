@@ -460,11 +460,27 @@ contador enquanto grava, o "pronto para enviar" depois, e a mensagem de microfon
 navegador sem gravação — cada uma com ícone, nunca cor sozinha. O botão de pular fica **sempre visível** ao lado dele, renderizado
 pela tela: microfone negado ou ambiente barulhento não podem travar a atividade.
 
-`SpeakInteraction` recebe ainda `ouvido` (o que o serviço entendeu, antes de enviar) e `ouvindo`
-(a gravação subiu e a transcrição não voltou): é a prévia que deixa o aluno regravar antes do
-veredito — paginas.md "Player".
+`SpeakInteraction` recebe ainda `ouvido` (o que o serviço entendeu, antes de enviar; texto VAZIO
+quer dizer que ele não reconheceu palavra nenhuma, e a tela diz isso em vez de "pronta"),
+`ouvindo` (a gravação subiu e a transcrição não voltou) e `erro` (o servidor não conseguiu ouvir:
+fila cheia, arquivo vazio, sem conexão — ele toma o lugar do "pronto para enviar"): é a prévia que
+deixa o aluno regravar antes do veredito — paginas.md "Player". Respondida a questão, a tela
+passa `corrigida` e o microfone sai: ali regravar não é mais possível, e prometer o contrário era
+um botão morto.
 
-Props: `{ recording?: boolean; ontoggle?: () => void; size?: 'md' | 'lg'; hint?: string }`.
+**Uma captura por vez, e o estado é UM — o da classe.** `Gravacao` passa por `abrindo` (o toque
+já aconteceu, o navegador abre o microfone) antes de `gravando`, e a trava vale desde o toque:
+conferida depois do `getUserMedia`, um segundo toque abria uma segunda captura, a primeira
+ficava com o microfone aceso e o relógio rodando, e toda gravação seguinte contava o tempo em
+dobro — o "falar de novo não capta" que só recarregar resolvia (`gravacao.test.ts`). Microfone,
+gravador e relógio de cada gravação moram juntos (`Captura`), e o evento de um gravador antigo
+não toca na gravação de agora. A tela nunca guarda um `recording` próprio: deriva de
+`gravacao.estado === 'gravando'` — o booleano local ficava `true` quando a gravação parava
+sozinha, e a onda seguia "captando" com o microfone desligado.
+
+Props: `{ recording?: boolean; abrindo?: boolean; ontoggle?: () => void; size?: 'md' | 'lg'; hint?: string }`.
+`abrindo` é a espera do microfone: o botão fica desabilitado e a `fila` entra no lugar do ícone,
+como em todo botão de ícone que espera ("Espera").
 `hint` é a linha sob o botão, e existe como prop porque o que se promete ali mudou de dono: em
 `speak` a gravação para sozinha, então "toque para parar" seria mentira. Enquanto
 `recording` é `true`, uma waveform de 9 barras (`en-wave`, mesma animação do `AudioPlayer`)

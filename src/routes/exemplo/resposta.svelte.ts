@@ -112,7 +112,7 @@ export class RespostaDoExemplo {
 	}
 
 	get ocupada(): boolean {
-		return this.verificando || this.ouvindo || this.gravando;
+		return this.verificando || this.ouvindo || this.gravando || this.gravacao.estado === 'abrindo';
 	}
 
 	/** Volta ao começo: a questão reaparece em branco, como da primeira vez. */
@@ -211,14 +211,20 @@ export class RespostaDoExemplo {
 	async #aoGravar(blob: Blob | null) {
 		if (blob === this.#ultimoBlob) return;
 		this.#ultimoBlob = blob;
+		// A prévia e o "ouvindo" são de UMA gravação: sem zerar aqui, a prévia
+		// ainda no ar da anterior deixava o "ouvindo" preso.
 		this.ouvido = null;
+		this.ouvindo = false;
 		if (!blob || this.feedback) return;
 
 		this.ouvindo = true;
 		try {
 			const json = (await this.#postarFala(blob, true)) as { transcript?: string };
-			// Regravou no meio: o que voltou é da gravação anterior.
-			if (this.gravacao.blob === blob) this.ouvido = json.transcript ?? null;
+			// Regravou no meio: o que voltou é da gravação anterior. Texto vazio
+			// fica vazio: a tela diz que nenhuma palavra foi reconhecida.
+			if (this.gravacao.blob === blob) {
+				this.ouvido = typeof json.transcript === 'string' ? json.transcript.trim() : null;
+			}
 		} catch (e) {
 			if (this.gravacao.blob === blob) this.erro = mensagemDoErro(e);
 		} finally {

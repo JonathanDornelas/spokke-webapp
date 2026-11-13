@@ -349,9 +349,12 @@ desabilitado — foi um bug real. Três merecem nota:
   interação). Sem provedor de ASR configurado, o servidor omite o item do payload.
   **Quem fala com o `MediaRecorder` é a TELA** (`client/gravacao.svelte.ts`), porque o
   `Recorder` é controlado por desenho — o componente recebe estado e um `ontoggle`. A gravação
-  para sozinha aos 30 s e o contador fica na tela: sem ele o aluno é cortado no meio da frase
-  sem entender por quê. Microfone negado, aparelho sem entrada e navegador que não grava têm
-  cada um a sua mensagem, e nenhuma delas trava o exercício.
+  para sozinha no silêncio depois da fala ou aos 10 s, e o contador fica na tela: sem ele o
+  aluno é cortado no meio da frase sem entender por quê. Microfone negado, aparelho sem entrada
+  e navegador que não grava têm cada um a sua mensagem, e nenhuma delas trava o exercício. **O
+  servidor que não consegue ouvir também se explica**: fila do serviço de áudio cheia (503),
+  gravação vazia ou sem conexão viram uma frase sob o microfone, no lugar do "pronta para
+  enviar", tanto na prévia quanto no "Verificar". Respondida a questão, o microfone sai.
   **A resposta é a única do Player que sobe binário** — vai por `POST /a/[slug]/fala`, não por
   remote function (server.md "ASR"): o `answerSchema` do `speak` é `{ transcript }`, e deixar o
   browser preenchê-lo era deixar o aluno digitar a própria resposta. O veredito volta com **o
