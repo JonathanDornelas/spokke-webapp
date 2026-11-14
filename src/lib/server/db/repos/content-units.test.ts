@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '$lib/server/db/client';
 import { materiais } from './content-units';
+import { uso } from './uso';
 
 // Regra inviolável nº 4 + testing.md "Obrigatório em repositório": todo
 // repositório precisa provar que não devolve dado de outro professor.
@@ -151,6 +152,58 @@ describe('materiais', () => {
 				)
 			).toBe(false);
 			expect(await tagDe(meu.id)).toBe('es-ES');
+		});
+	});
+
+	// Arquivar (a biblioteca, em massa): sai da biblioteca e do limite do plano, e
+	// só os deste professor mudam.
+	describe('arquivar, desarquivar e apagar vários', () => {
+		it('arquiva só os deste professor, e o arquivado sai da biblioteca e da conta do plano', async () => {
+			const um = await materiais(teacherA).create('VocabItem', {
+				term: 'apple',
+				translation: 'maçã'
+			});
+			const dois = await materiais(teacherA).create('VocabItem', {
+				term: 'pear',
+				translation: 'pera'
+			});
+			const antes = (await uso(teacherA).contar()).materiais;
+
+			expect(await materiais(teacherB).arquivar([um.id, dois.id])).toBe(0);
+			expect(await materiais(teacherA).arquivar([um.id, dois.id])).toBe(2);
+			// De novo não muda nada: já estavam arquivados.
+			expect(await materiais(teacherA).arquivar([um.id])).toBe(0);
+
+			expect((await uso(teacherA).contar()).materiais).toBe(antes - 2);
+			const oferecidos = (await materiais(teacherA).list()).map((u) => u.id);
+			expect(oferecidos).not.toContain(um.id);
+			expect(await materiais(teacherA).contarArquivados([um.id, dois.id])).toBe(2);
+
+			expect(await materiais(teacherB).desarquivar([um.id])).toBe(0);
+			expect(await materiais(teacherA).desarquivar([um.id])).toBe(1);
+			expect((await materiais(teacherA).list()).map((u) => u.id)).toContain(um.id);
+		});
+
+		it('o arquivado não é reaproveitado como equivalente', async () => {
+			const dados = { term: 'grape', translation: 'uva' };
+			const velho = await materiais(teacherA).create('VocabItem', dados);
+			expect(await materiais(teacherA).findEquivalent('VocabItem', dados)).toBe(velho.id);
+			await materiais(teacherA).arquivar([velho.id]);
+			expect(await materiais(teacherA).findEquivalent('VocabItem', dados)).toBeNull();
+		});
+
+		it('apaga vários, e nunca o de outro professor', async () => {
+			const daA = await materiais(teacherA).create('VocabItem', {
+				term: 'milk',
+				translation: 'leite'
+			});
+			const doB = await materiais(teacherB).create('VocabItem', {
+				term: 'milk',
+				translation: 'leite'
+			});
+
+			expect(await materiais(teacherA).removerVarios([daA.id, doB.id])).toBe(1);
+			expect(await materiais(teacherB).byIds([doB.id])).toHaveLength(1);
 		});
 	});
 });

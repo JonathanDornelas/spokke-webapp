@@ -19,7 +19,8 @@ export function uso(teacher: TeacherScope, db: Db = prisma) {
 				// Arquivada não ocupa vaga — arquivar é justamente como o professor
 				// libera espaço sem perder os resultados.
 				db.activity.count({ where: { teacherId: teacher.id, archivedAt: null } }),
-				db.contentUnit.count({ where: { teacherId: teacher.id } })
+				// O material arquivado também não ocupa vaga: a mesma regra da atividade.
+				db.contentUnit.count({ where: { teacherId: teacher.id, archivedAt: null } })
 			]);
 			return { atividades, materiais };
 		}

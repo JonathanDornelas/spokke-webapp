@@ -661,6 +661,11 @@ ali dentro — o Svelte anima pela Web Animations API, que a regra global do `ap
 **Painel lateral é sempre a `Bandeja` (abaixo)** — nenhuma tela monta o seu. A gaveta do celular é
 a única que usa `painelLateral` direto (`lado: 'inicio'`).
 
+O bloco que abre NO LUGAR, sob uma linha (a prévia de um material, as bandejas e o código de
+acesso da etapa 4), é uma SANFONA: entra com `desdobrar` e sai com `recolher`, e os dois mexem na
+altura junto com a opacidade e 8px de deslocamento — a exceção a "só transform e opacity", com o
+porquê em design-system.md "Movimento".
+
 ## Bandeja — `Bandeja.svelte`
 
 Todo formulário de CRIAR e EDITAR do Studio que não é atividade abre aqui, pela direita, sobre a
@@ -993,11 +998,12 @@ O formulário de material é UM, para a biblioteca (`(studio)/materiais`, numa `
 sobre a lista) e para a etapa 2 do wizard (`atividades/[id]/materiais`, coluna fixa). O que ele faz
 e por quê está em paginas.md "Studio"; aqui, como se usa.
 
-**A ordem dos campos é a da decisão**: o que o aluno vai fazer (os cartões de tipo, com o rendimento
-logo abaixo), depois idioma e "Como adicionar" (o `Alternador`: um de cada vez, colar uma lista,
-gerar com IA) — os dois mudam o que os campos pedem, então ficam logo antes deles —, os campos, e por
-último "O que o aluno vai ver". Na edição o "Cancelar" FECHA a bandeja da biblioteca; no wizard ele
-devolve a coluna a "Adicionar".
+**A ordem dos campos é a da decisão**: o "Tipo do Material" (os cartões, só com o nome — Sentença,
+Vocabulário, Texto, Diálogo — cada tipo com a sua cor de etiqueta, `PILL_TONE`, sem o azul da marca;
+e o aviso do que falta quando falta), depois idioma e "Como adicionar" (o `Alternador`: um de cada
+vez, colar uma lista, gerar com IA) — os dois mudam o que os campos pedem, então ficam logo antes
+deles — e os campos. A prévia "O que o aluno vai ver" e a "nota do professor" saíram. Na edição o
+"Cancelar" FECHA a bandeja da biblioteca; no wizard ele devolve a coluna a "Adicionar".
 
 **A PÁGINA é dona do `<form>`**, o componente só desenha os campos com os `name` que
 `camposMaterial` espera (mais os hidden de `kind`, `questions` e `lines`). A página envolve
@@ -1019,11 +1025,118 @@ Props: `{ contexto: 'biblioteca' | 'wizard'; conjunto: MaterialRow[]; biblioteca
   `ok: true as const` / `false as const` para a união discriminar.
 - `contentTag` é `'und'` na biblioteca, que não tem idioma: o `Intl.Segmenter` cai no root e a
   prévia de "montar a frase" continua obedecendo à regra nº 5.
+- **Variações da tradução** (par de frases, um de cada vez): o bloco do desenho, idêntico —
+  penduradas na tradução por um filete (`border-s-2` em `base-300`), sem rótulo próprio, cada uma
+  num campo de 40px com o chip "AUTOMÁTICA" (contorno, caixa alta) quando veio do tradutor e o X
+  de 34px; embaixo, "Adicionar variação de tradução" em largura inteira, tracejado na cor da
+  marca. As que o tradutor sugere chegam junto com a tradução (`onsugerirTraducao` devolve
+  `{ traducao, alternativas }`); uma sugestão nova troca as automáticas e nunca as do professor, e
+  a automática editada passa a ser dele. Vão num campo escondido (`variants`, JSON) já como o
+  servidor grava (`limparVariacoes`, `$lib/atividades/variacoes.ts`) — e o aviso de repetido
+  compara com elas, porque o servidor reaproveita por igualdade de jsonb. Não há botão de traduzir
+  nem a frase de apoio do desenho (saiu com as outras frases redundantes): a tradução sai
+  sozinha, e o "Traduzindo…" / "Traduzir de novo" mora na linha do rótulo da tradução, à direita,
+  onde o desenho tinha o botão. Cada variação sugerida vira um campo próprio, igual ao que o
+  professor acrescenta à mão; e quando quem traduz é o servidor (ao gravar), elas vêm junto
+  (server.md "Tradução do material").
+- **Editando, o rodapé é UMA linha**: "Cancelar" e "Salvar alterações" na ponta, da mesma altura
+  (no celular, metade cada), sem a nota de "entra na biblioteca", que é de quem adiciona — com ela
+  os dois botões não cabiam na coluna de 500px e o "Salvar" descia para outra linha.
 
-`MaterialList` é a tabela das duas telas (`{ materiais; contexto; contentTag?; dir?; editandoId?; removendoId?; onedit; onremove }`).
-No celular a pílula e as ações ficam na primeira linha e o conteúdo na segunda, com as posições
-do grid EXPLÍCITAS — item com linha fixa é colocado antes dos automáticos, e sem isso as ações
-caíam na coluna 1. `removendoId` é o id da linha, nunca um booleano ("Espera").
+`MaterialList` é a tabela das duas telas (`{ materiais; contexto; contentTag?; dir?; editandoId?; removendoId?; onedit; onremove; detalhe?; marcados?; acoes? }`).
+**Na biblioteca ela é a tabela das listas do Studio** ("Listas do Studio", acima): com `marcados`
+(`$bindable`) ganha a caixa de marcar e a de "marcar todos" da página; com `acoes` o fim da linha é
+o "⋯" (`MenuDeAcoes`) em vez dos botões de editar e apagar; o conteúdo é um botão que cobre a linha
+e abre a edição; o arquivado mostra "arquivado" no lugar de "Em uso". No celular a caixa, a pílula e
+as ações ficam na primeira linha e o conteúdo na segunda, com as posições do grid EXPLÍCITAS — item
+com linha fixa é colocado antes dos automáticos, e sem isso as ações caíam na coluna 1. `removendoId` é o id da linha, nunca um booleano ("Espera"). **No wizard ela
+não é tabela: é a lista de CARTÕES do desenho** (tipo, conteúdo, "Editar"/"Editando" e remover numa
+linha flex centralizada na vertical), e `detalhe` entra embaixo, dentro do cartão, 20px abaixo do
+texto: o "Gera" do
+material com a prévia (`materiais/TiposDoMaterial.svelte`).
+
+## Listas do Studio — `lista/`
+
+As listas de atividades, materiais e turmas são UM desenho (paginas.md "As três listas do Studio"),
+montado com estas peças, sempre nesta ordem:
+
+- `CabecalhoDaLista.svelte` — `{ titulo; children? (a linha de números); acao? }`. O botão de criar
+  usa `BOTAO_NOVO` com `ICONE_MAIS` (`lista.ts`): largura inteira no celular, na ponta no desktop.
+- `FerramentasDaLista.svelte` — `{ busca: $bindable; rotulo; children? }`: o campo de busca ocupa o
+  que sobra da linha, e os selects de filtro e de ordem vêm em `children`, com `SELECT_DA_LISTA`
+  (no celular eles dividem a linha). O `FiltroIdioma` em formato select tem a mesma altura.
+- `ChipsDaLista.svelte` — `{ opcoes: { id, label, n }[]; valor: $bindable; rotulo; onmudou? }`
+  (genérico no `id`): a situação, com a contagem. Chip de zero some (menos o primeiro e o escolhido),
+  e com uma opção só a fileira inteira some.
+- `BarraDeSelecao.svelte` — `{ quantos; singular; plural; onlimpar; children }`: aparece com algo
+  marcado, entre os chips e a tabela, grudada no topo enquanto a lista rola, com as ações na ponta.
+- A TABELA: `TABELA`, `CABECALHO_DA_TABELA` e `LINHA_DA_TABELA` (`lista.ts`). Sem
+  `overflow-hidden`, de propósito: o menu "⋯" abre para fora dela, e o recorte o cortaria — quem
+  arredonda os cantos são o cabeçalho e a última linha. **A linha inteira abre o item pelo link do
+  TÍTULO** (`LINK_DA_LINHA`, um `::after` que cobre a linha), e a caixa de marcar e o menu ficam
+  por cima (`POR_CIMA_DO_LINK`): âncora não pode conter controle. No celular, cartões
+  (`CARTAO_DA_LISTA`) com as mesmas peças.
+- A caixa de "marcar todos" vale para a PÁGINA (`estadoDaPagina`, `alternarPagina`): marcados de
+  outras páginas continuam. O traço de "alguns" é a propriedade `indeterminate`, posta pela ação
+  `indeterminado` — como atributo do HTML ela não existe.
+- `MenuDeAcoes.svelte` — `{ rotulo; acoes: { rotulo, icone, perigo?, onclick }[]; ocupado? }`: o
+  "⋯" de uma linha. Um menu de verdade (setas, Esc e clique fora fecham, o foco volta ao botão);
+  aberto, ele sobe acima das linhas de baixo (`z-30`), senão a caixa e o "⋯" delas o cobririam.
+  Com a ação daquele item rodando, a `fila` entra no lugar do ícone.
+- `ConfirmarAcao.svelte` — `{ aberto: $bindable; titulo; rotuloDoBotao; perigo?; digitar?; ocupado?;
+erro?; onconfirmar; children }`: o `<dialog>` da confirmação, no molde do `PlanosModal`. A
+  consequência vai escrita em `children`; `digitar` é a palavra que libera o botão.
+- `VazioDaLista.svelte` — `{ texto; onlimpar? }`: o filtro que não achou nada. A lista vazia de
+  verdade é o hero de cada tela.
+
+Paginação de 10 (`POR_PAGINA`), a mesma nas três.
+
+## Questão resumida — `QuestaoResumida.svelte`
+
+Props: `{ questao: QuestaoResumida; dir?; lang?; tamanho?: 'normal' | 'pequena'; inclinacao? }`.
+O cartão do Claude Design que mostra uma questão em miniatura, do jeito que o aluno a vê: o rótulo da
+habilidade com o ícone, o miolo e a legenda do que ele faz ("Ouve e escolhe a frase"). Um desenho
+por forma de questão (`$lib/atividades/questao-resumida.ts`: ouvir e escolher, montar ou digitar;
+falar; ler e escolher; lacuna; montar; digitar; ordenar; associar; tocar na palavra), todos no mesmo
+vocabulário — o círculo de tocar e a onda na cor do áudio, a alternativa certa com a borda da marca
+(tela do professor), a lacuna sublinhada.
+
+- `normal` é o bloco "O que sai daqui" da etapa 1, numa grade de dois, cada um com a sua
+  `inclinacao`; `pequena` é a prévia de um material: um exemplo de cada tipo (`umaPorHabilidade`),
+  os quatro lado a lado quando cabem, rolando de lado numa faixa estreita.
+- **A onda sobe e desce e o cursor pisca**, com as durações e os atrasos do desenho, sem função
+  nenhuma — é a única repetição infinita fora de gravação e carregamento, pedida pelo dono do
+  repositório (design-system.md "Movimento"). `prefers-reduced-motion` para as duas (o
+  `!important` do `app.css` vence o `animation` inline das barras).
+- **O miolo corta, não empurra** (`min-h-0` + `overflow-hidden`, a lacuna em três linhas): na
+  etapa 1 o cartão tem altura FIXA no desktop, e a legenda continua no pé.
+- **Espaço vem do dado, nunca do markup**: a lacuna e a palavra tocada são `antes` + destaque +
+  `depois` sem espaço no template — japonês e chinês não separam palavras por espaço.
+- `entra: false` apaga o cartão (opacidade e cinza): o tipo desligado naquele material.
+
+## O celular do aluno — `CelularDoAluno.svelte`
+
+Props: `{ posicao?: number | null; total?: number; apagado?: boolean; rotulo: string; children: Snippet; rodape?: Snippet }`.
+A moldura de aparelho onde o professor vê UMA questão como o aluno a vê: o palco da revisão, a
+prévia do editor de questão e as questões da tela da atividade. **As medidas são as do celular da home** (home.md): 344 × 600, borda
+de 9px na cor do `bezel`, 40px de raio, e a tela em `zoom: 0.85` — pedido do dono do repositório,
+depois de duas versões que esticavam ou encolhiam com a coluna. Em cima, o círculo, a barra de
+progresso (`scaleX`) e "3/8" (ou "fora", para a questão que ficou de fora); no meio, a questão;
+embaixo, o `rodape` (o "Verificar": de verdade no palco da revisão, decorativo no editor).
+`apagado` deixa o aparelho em cinza e meia opacidade: a questão de fora. Quem centraliza e rola é a
+tela — numa tela baixa o aparelho não encolhe.
+
+- **A questão CABE na tela, sempre** (pedido do dono do repositório): mais alta que a área, ela
+  ganha um segundo `zoom`, o maior que a deixa inteira à vista. É busca binária, não conta de
+  proporção: com menos zoom a questão fica mais LARGA por dentro e quebra menos linhas. Um
+  `ResizeObserver` (a área, a fonte que chegou) e um `MutationObserver` (a peça que foi para a
+  frase, o veredito que entrou, o teclado que abriu, outra questão) refazem a conta no quadro
+  seguinte; o zoom que o próprio ajuste escreve não conta, senão ele se chamaria para sempre. Abaixo
+  de `MENOR_AJUSTE` (0,55) a área rola em vez de encolher mais. A questão cresce até o fim da área
+  (`grow`), para a fala e a escrita livre continuarem empurrando o microfone e o campo para baixo.
+- **Sem `data-surface="player"`**, como o celular da home e o Player de verdade (`a/[slug]/q/[n]`):
+  o alvo de 48px inflava as setas do "ordenar" (22px no desenho), as peças do "montar" e as palavras
+  do "tocar", e a prévia saía diferente do que o aluno vê.
 
 `material-form.ts` guarda o que os dois loaders e as duas páginas compartilham: `MaterialRow`
 (a linha das listas, com os campos crus para editar), `TIPOS` (rótulo, "o que o aluno faz",
@@ -1044,7 +1157,7 @@ exatamente essas quatro etapas e não outras; se um quinto passo aparecer um dia
 
 ---
 
-## Campos adicionais — `select`, `textarea`, `toggle`
+## Campos adicionais — `select`, `textarea`, `toggle`, `range`
 
 Mesma família de `@utility` do `.input` (`app.css`, logo depois do `.fieldset`), para os
 formulários do Studio que `TextField.svelte` não cobre.
@@ -1061,7 +1174,12 @@ formulários do Studio que `TextField.svelte` não cobre.
   publicação (código de acesso, mostrar resultado) e nos flags de correção do editor de item
   (ignorar acento/caixa/pontuação).
 
-Nenhum dos três tem componente Svelte próprio ainda — são só a classe, aplicada direto no
+- `.range` — `<input type="range">` com trilha de 8px e polegar redondo de borda na marca; o
+  trecho escolhido é pintado pelo degradê que lê `--preenchido` (a FRAÇÃO, de 0 a 1, que a tela
+  passa em `style`), parando sob o centro do polegar; no Firefox é o `::-moz-range-progress`.
+  Usado no "Gerar N questões" da etapa 2 (`BlocoDeGeracao.svelte`), ocupando o resto da linha.
+
+Nenhum deles tem componente Svelte próprio ainda — são só a classe, aplicada direto no
 `<select>`/`<textarea>`/`<input type="checkbox">` da tela. Se um padrão de uso se repetir
 (rótulo + erro + hint, como `TextField.svelte` já faz para `input`), vale a pena componentizar
 então — não preventivamente.
@@ -1103,7 +1221,11 @@ decorativa (`aria-hidden`), porque sozinha ela seria um alvo de 20px no celular.
 `MatchInteraction` recebe o `feedback` e é ELE quem mostra a correção: ligação errada pinta os
 dois cartões de vermelho, e o veredito de fora fica só com a linha de estado — ver paginas.md
 "Player". Ele lê `feedback.marks` POR ÍNDICE: o servidor devolve uma marca por par respondido,
-na mesma ordem em que o componente os mandou.
+na mesma ordem em que o componente os mandou. **As duas colunas dividem as LINHAS**
+(`grid-rows-subgrid`, cada coluna ocupando todas): a linha tem a altura do cartão mais alto dos
+dois lados. Com uma grade por coluna, "estante de livros" quebrando em duas linhas descia a coluna
+inteira da direita, e os cartões deixavam de ficar lado a lado. Navegador sem `subgrid` volta às
+duas grades soltas.
 
 `SpeakInteraction.svelte` compõe `Recorder.svelte` (`size="lg"`) em vez de duplicar o botão de
 gravação — mesma lógica de reuso do resto do catálogo. `AssembleInteraction.svelte` usa
@@ -1116,11 +1238,19 @@ de dois arrays, `AssembleInteraction` é a composição específica de item do P
 
 ## Uma questão como o aluno vê — `PreviaDaQuestao.svelte`
 
-Props: `{ runtime: RuntimeDaQuestao; chave: string; compacta?: boolean }`. Desenha UMA questão —
-enunciado, áudio, texto de apoio e a interação — com os componentes do Player, a partir do que
-`buildRuntimeItem` devolveu no servidor. É a mesma na prévia da atividade inteira e no editor de
-questão: duas prévias desenhadas cada uma do seu jeito divergiam do Player no primeiro tipo novo. A
-resposta é estado local (nada é enviado); quem troca de questão remonta com `{#key}`.
+Props: `{ runtime: RuntimeDaQuestao; chave: string; compacta?: boolean; veredito?: ClozeFeedback | null }`.
+Desenha UMA questão — enunciado, áudio, texto de apoio e a interação — com os componentes do Player,
+a partir do que `buildRuntimeItem` devolveu no servidor. É a mesma no editor de questão e no palco
+da revisão (a prévia da atividade inteira é a tela do Player, paginas.md): duas prévias desenhadas cada uma do seu jeito divergiam
+do Player no primeiro tipo novo. **Os detalhes do Player valem aqui**: o "ordenar" começa com as
+falas na ordem embaralhada que o servidor mandou (com a lista vazia a questão aparecia sem fala
+nenhuma), o "associar" leva os nomes dos idiomas nas colunas, a frase do "montar" leva "Em
+português" e a direção da língua do aluno, e na moldura de celular o áudio fica numa linha
+(`emLinha`). A resposta é estado local; quem troca de questão remonta com `{#key}`. **Para
+corrigir** (o palco da revisão), `resposta()` devolve a resposta no formato do `answerSchema` da
+interação — nula quando ainda não há o que corrigir, e na fala e na escrita livre — e `veredito`,
+o que o servidor respondeu, aparece embaixo como no Player (a lacuna e o associar também o usam
+para pintar a própria resposta).
 
 ## Nomes em português — habilidade e tipo de questão
 

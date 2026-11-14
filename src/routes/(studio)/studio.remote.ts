@@ -63,7 +63,8 @@ export const buscarNoStudio = query(
 				: [],
 			quer('material')
 				? prisma.contentUnit.findMany({
-						where: { teacherId: teacher.id },
+						// O arquivado saiu da biblioteca: ele se acha lá, no filtro Arquivados.
+						where: { teacherId: teacher.id, archivedAt: null },
 						orderBy: { createdAt: 'desc' },
 						// O conteúdo do material é JSON: o filtro por texto não vai no
 						// `where` (seria uma expressão sobre `jsonb` por tipo de material,

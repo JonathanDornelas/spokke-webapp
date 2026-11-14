@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import Stepper from './Stepper.svelte';
 	import AmbientShapes from './AmbientShapes.svelte';
+	import { DURACAO } from '$lib/movimento';
 
 	/**
 	 * Casca das quatro etapas de criação. O wizard NÃO usa a barra lateral do
@@ -23,7 +24,9 @@
 		children,
 		actions,
 		aside,
-		rolagem = 'pagina'
+		larguraAside = 'estreita',
+		rolagem = 'pagina',
+		confirmarSaida
 	}: {
 		step: number;
 		backHref: string;
@@ -37,6 +40,11 @@
 		actions: Snippet;
 		aside?: Snippet;
 		/**
+		 * `larga`: o painel ocupa 42% da largura (a proporção do desenho da etapa 1,
+		 * 540 de 1280) e centraliza o conteúdo na vertical. `estreita`: 340px.
+		 */
+		larguraAside?: 'estreita' | 'larga';
+		/**
 		 * `pagina` (padrão): a página rola, com o rodapé grudado embaixo.
 		 * `colunas`: a casca ocupa a altura da tela e quem rola é cada coluna, por
 		 * dentro — a etapa 2, onde o formulário fica fixo ao lado da lista. Ali o
@@ -48,6 +56,11 @@
 		 * coluna que rola, para o texto nunca passar por cima dela.
 		 */
 		rolagem?: 'pagina' | 'colunas';
+		/**
+		 * Com isto, "Cancelar" pergunta antes de sair (a etapa de publicar, quando
+		 * há o que publicar — o desenho "Studio Publicar A"). Sem, ele só sai.
+		 */
+		confirmarSaida?: { titulo: string; texto: string; ficar: string; sair: string };
 	} = $props();
 	const colunas = $derived(rolagem === 'colunas');
 
@@ -59,6 +72,35 @@
 	// Não apaga nada: o rascunho continua salvo e a atividade aparece na lista
 	// como rascunho. É por isso que o rótulo é "Cancelar" e não "Descartar".
 	const sair = resolve('/(studio)/atividades');
+
+	// A confirmação é um `<dialog>` de verdade (foco preso, Esc e véu vêm do
+	// elemento), no molde do `PlanosModal`: a saída anima com ele ainda aberto e o
+	// `close()` vem no fim dela.
+	let dialogo = $state<HTMLDialogElement>();
+	let confirmando = $state(false);
+	let fechando = $state(false);
+	$effect(() => {
+		if (!dialogo) return;
+		if (confirmando && !dialogo.open) {
+			fechando = false;
+			dialogo.showModal();
+		} else if (!confirmando && dialogo.open && !fechando) {
+			fechando = true;
+			const el = dialogo;
+			const terminar = () => {
+				if (!fechando) return;
+				fechando = false;
+				if (!confirmando && el.open) el.close();
+			};
+			el.addEventListener('animationend', terminar, { once: true });
+			setTimeout(terminar, DURACAO.curta + 60);
+		}
+	});
+	function aoCancelar(evento: MouseEvent) {
+		if (!confirmarSaida) return;
+		evento.preventDefault();
+		confirmando = true;
+	}
 </script>
 
 <div class="flex flex-col bg-base-100" class:min-h-screen={!colunas} class:h-dvh={colunas}>
@@ -126,7 +168,8 @@
 			<!-- O painel de apoio fica à direita no desktop e vira um bloco no fim
 			     do conteúdo no celular. -->
 			<aside
-				class="relative overflow-hidden border-t border-line bg-base-200 lg:w-[340px] lg:shrink-0 lg:border-s lg:border-t-0"
+				class="relative overflow-hidden border-t border-line bg-base-200 lg:shrink-0 lg:border-s lg:border-t-0
+				       {larguraAside === 'larga' ? 'flex flex-col lg:w-[42%]' : 'lg:w-[340px]'}"
 			>
 				{@render aside()}
 			</aside>
@@ -138,6 +181,7 @@
 	>
 		<a
 			href={sair}
+			onclick={aoCancelar}
 			class="order-last shrink-0 rounded-field px-3 py-2.5 text-[13.5px] font-semibold text-base-content/65 no-underline transition-colors hover:bg-base-200 hover:text-base-content lg:order-first"
 			title="Sai da criação. O rascunho continua salvo na lista de atividades."
 		>
@@ -150,3 +194,45 @@
 		{@render actions()}
 	</footer>
 </div>
+
+{#if confirmarSaida}
+	<dialog
+		bind:this={dialogo}
+		onclose={() => (confirmando = false)}
+		oncancel={(e) => {
+			e.preventDefault();
+			confirmando = false;
+		}}
+		onclick={(e) => {
+			if (e.target === dialogo) confirmando = false;
+		}}
+		aria-labelledby="sair-titulo"
+		aria-describedby="sair-texto"
+		class="m-auto w-[calc(100vw-2rem)] max-w-[420px] rounded-box border border-line bg-base-100 p-6 text-base-content shadow-[0_30px_60px_-30px_rgba(15,20,32,0.5)] backdrop:bg-overlay backdrop:backdrop-blur-[3px]
+		       {fechando
+			? 'animate-modal-saida backdrop:animate-veu-saida'
+			: 'backdrop:animate-veu open:animate-entrada-curta'}"
+	>
+		<p id="sair-titulo" class="mb-2 font-display text-[20px] font-semibold tracking-[-0.02em]">
+			{confirmarSaida.titulo}
+		</p>
+		<p id="sair-texto" class="mb-5 text-[13.5px] leading-relaxed text-pretty text-base-content/65">
+			{confirmarSaida.texto}
+		</p>
+		<div class="flex flex-wrap gap-2.5">
+			<button
+				type="button"
+				onclick={() => (confirmando = false)}
+				class="btn min-h-[46px] min-w-[8rem] flex-1 motion-tap btn-plain font-semibold"
+			>
+				{confirmarSaida.ficar}
+			</button>
+			<a
+				href={sair}
+				class="btn min-h-[46px] min-w-[8rem] flex-1 motion-tap btn-primary font-bold no-underline"
+			>
+				{confirmarSaida.sair}
+			</a>
+		</div>
+	</dialog>
+{/if}

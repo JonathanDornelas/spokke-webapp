@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import { contentUnitKinds } from '$lib/kernel/content/types';
 import { campoIdioma } from '$lib/idiomas';
+import { limparVariacoes } from '$lib/atividades/variacoes';
+import { getProfile } from '$lib/kernel/language/profiles';
 import {
 	TraducaoIndisponivel,
 	completarTraducoes,
 	type ParDeIdiomas,
 	type Tradutor
 } from '$lib/server/traducao';
+import { variantesDasFrases } from '$lib/server/atividades/variantes-aceitas';
 
 /**
  * Os campos que um formulário de material manda, e como eles viram o
@@ -35,6 +38,11 @@ export const camposMaterial = {
 	/** `[{ speaker, text }]` do `Dialogue`. */
 	lines: z.string().optional(),
 	/**
+	 * As outras formas certas de traduzir um par de frases, em JSON (`string[]`):
+	 * as que o tradutor sugeriu e o professor manteve, mais as que ele escreveu.
+	 */
+	variants: z.string().optional(),
+	/**
 	 * A tag de idioma, só na BIBLIOTECA — no wizard o material é da atividade e
 	 * o idioma dela vale. Vazio = sem idioma.
 	 */
@@ -55,6 +63,7 @@ export type CamposMaterial = {
 	example?: string;
 	questions?: string;
 	lines?: string;
+	variants?: string;
 	idioma?: string | null;
 	linguaDoAluno?: string | null;
 };
@@ -68,6 +77,10 @@ export const AVISO_SEM_TRADUTOR =
  * automático (docs/adr-006-traducao.md). O que o professor escreveu nunca é
  * tocado, e sem tradutor nada muda: `montarMaterial` continua pedindo a
  * tradução, como sempre pediu.
+ *
+ * **No par de frases, as variações vêm junto** — as mesmas que a tela mostraria
+ * se a sugestão tivesse chegado antes de ele salvar (`variantesDasFrases`),
+ * somadas às que ele escreveu. Falhar nelas não impede gravar.
  *
  * `par` nulo é material sem idioma na biblioteca — não há de onde traduzir.
  */
@@ -92,7 +105,24 @@ export async function preencherTraducao(
 			par,
 			tradutor
 		);
-		return { campos: { ...campos, source: unidades[0].source }, traduzida: traduzidas > 0 };
+		const source = unidades[0].source;
+		if (campos.kind !== 'SentencePair' || traduzidas === 0) {
+			return { campos: { ...campos, source }, traduzida: traduzidas > 0 };
+		}
+		const [automaticas] = await variacoesAutomaticas(
+			[{ original: texto(campos.target), principal: source }],
+			par,
+			tradutor
+		);
+		const doProfessor = variantesDe(campos.variants, source);
+		return {
+			campos: {
+				...campos,
+				source,
+				variants: JSON.stringify(limparVariacoes([...doProfessor, ...(automaticas ?? [])], source))
+			},
+			traduzida: true
+		};
 	} catch (erro) {
 		if (erro instanceof TraducaoIndisponivel) return { error: AVISO_SEM_TRADUTOR };
 		throw erro;
@@ -124,7 +154,23 @@ export async function traduzirLote(
 		return { unidades: registros.filter((u) => texto(u[campos.traducao])), traduzidas: 0 };
 	}
 	try {
-		return await completarTraducoes(registros, campos, par, tradutor);
+		const embranco = new Set(registros.flatMap((u, i) => (texto(u[campos.traducao]) ? [] : [i])));
+		const traduzido = await completarTraducoes(registros, campos, par, tradutor);
+		if (kind !== 'SentencePair') return traduzido;
+		// As linhas que o tradutor completou ganham as variações também, num pedido
+		// para a lista toda (`variantesDasFrases`).
+		const alvos = traduzido.unidades.flatMap((u, i) => {
+			if (!embranco.has(i) || typeof u !== 'object' || u === null) return [];
+			const registro = u as Record<string, unknown>;
+			return [{ i, original: texto(registro.target), principal: texto(registro.source) }];
+		});
+		const variacoes = await variacoesAutomaticas(alvos, par, tradutor);
+		const unidades = [...traduzido.unidades];
+		alvos.forEach(({ i, principal }, n) => {
+			const lista = limparVariacoes(variacoes[n] ?? [], principal);
+			if (lista.length > 0) unidades[i] = { ...(unidades[i] as object), variants: lista };
+		});
+		return { unidades, traduzidas: traduzido.traduzidas };
 	} catch (erro) {
 		if (erro instanceof TraducaoIndisponivel) {
 			return {
@@ -136,12 +182,39 @@ export async function traduzirLote(
 	}
 }
 
+/**
+ * As variações que o tradutor propõe para as frases que ELE traduziu, pelo
+ * mesmo funil das questões. Nunca derruba a gravação: sem resposta, nenhuma.
+ */
+async function variacoesAutomaticas(
+	frases: { original: string; principal: string }[],
+	par: ParDeIdiomas,
+	tradutor: Tradutor
+): Promise<string[][]> {
+	if (frases.length === 0) return [];
+	return variantesDasFrases(
+		frases,
+		{ alvo: getProfile(par.de), origem: getProfile(par.para) },
+		tradutor
+	).catch(() => frases.map(() => []));
+}
+
 /** Lista montada na tela; JSON quebrado aqui é bug de código, não do professor. */
 function listaDeJson(bruto: string | undefined): Record<string, unknown>[] {
 	if (!bruto) return [];
 	try {
 		const valor: unknown = JSON.parse(bruto);
 		return Array.isArray(valor) ? (valor as Record<string, unknown>[]) : [];
+	} catch {
+		return [];
+	}
+}
+
+/** As variações do campo escondido (JSON), como vão ser gravadas (`limparVariacoes`). */
+function variantesDe(bruto: string | undefined, traducao: string): string[] {
+	if (!bruto) return [];
+	try {
+		return limparVariacoes(JSON.parse(bruto), traducao);
 	} catch {
 		return [];
 	}
@@ -163,7 +236,15 @@ export function montarMaterial(campos: CamposMaterial): { dados: unknown } | { e
 	if (campos.kind === 'SentencePair') {
 		if (!alvo || !traducao) return { error: 'Preencha a frase e a tradução.' };
 		const nota = texto(campos.note);
-		return { dados: { target: alvo, source: traducao, ...(nota ? { note: nota } : {}) } };
+		const variantes = variantesDe(campos.variants, traducao);
+		return {
+			dados: {
+				target: alvo,
+				source: traducao,
+				...(nota ? { note: nota } : {}),
+				...(variantes.length > 0 ? { variants: variantes } : {})
+			}
+		};
 	}
 
 	if (campos.kind === 'VocabItem') {

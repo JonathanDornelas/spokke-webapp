@@ -36,6 +36,8 @@ export interface MaterialRow {
 	idioma?: string | null;
 	/** Wizard: está em mais de uma atividade, ou seja, veio da biblioteca. */
 	daBiblioteca?: boolean;
+	/** Biblioteca: arquivado (fora da biblioteca e do limite do plano; `ContentUnit.archivedAt`). */
+	arquivado?: boolean;
 	target: string;
 	source: string;
 	raw: string;
@@ -43,6 +45,8 @@ export interface MaterialRow {
 	example: string;
 	questions: Pergunta[];
 	lines: Fala[];
+	/** Par de frases: as outras formas certas de traduzir (viram resposta aceita). */
+	variants?: string[];
 }
 
 export const KIND_TO_KERNEL: Record<MaterialKind, ContentUnitKind> = {
@@ -61,64 +65,67 @@ export const KERNEL_TO_KIND: Record<ContentUnitKind, MaterialKind> = {
 export interface TipoDeMaterial {
 	id: MaterialKind;
 	label: string;
-	/** O que o ALUNO faz com ele — é por isso que o professor escolhe, não pelo formato. */
-	does: string;
 	/** A explicação de um parágrafo, no `title` do cartão. */
 	title: string;
 	/** Traço do ícone, na grade de 24px (design-system.md "Ícones"). */
 	icon: string;
-	/** A cor da pílula na lista. */
-	tone: 'primary' | 'accent' | 'soft';
+	/**
+	 * A cor da etiqueta: uma por tipo, das cores de etiqueta do produto
+	 * (`$lib/etiquetas.ts`) menos o azul — o azul é a marca, e uma etiqueta azul
+	 * leria como botão ou seleção.
+	 */
+	tone: 'teal' | 'violeta' | 'magenta' | 'ardosia';
 }
 
-/**
- * Os quatro tipos aparecem PELO EXERCÍCIO que produzem, não pelo formato do
- * dado — a dúvida do professor é "o que eu quero que o aluno faça".
- */
+/** Os quatro tipos de material, na ordem dos cartões do formulário. */
 export const TIPOS: readonly TipoDeMaterial[] = [
 	{
 		id: 'pair',
-		label: 'Par de frases',
-		does: 'montar, traduzir, completar, ouvir e falar',
+		label: 'Sentença',
 		title:
 			'Uma frase no idioma alvo com a tradução. Rende três exercícios sem áudio — e mais quatro com escuta e fala.',
 		icon: 'M4 8.5h11M4 8.5l3-3M4 8.5l3 3M20 15.5H9M20 15.5l-3-3M20 15.5l-3 3',
-		tone: 'primary'
+		tone: 'teal'
 	},
 	{
 		id: 'vocab',
 		label: 'Vocabulário',
-		does: 'escolher a tradução e associar os pares',
 		title: 'Termo e sentido. A alternativa errada sai de outro termo seu.',
 		icon: 'M4 6.5h7v11H4zM13 6.5h7v11h-7z',
-		tone: 'accent'
+		tone: 'violeta'
 	},
 	{
 		id: 'text',
 		label: 'Texto',
-		does: 'responder sobre o que leu',
 		title: 'Texto corrido com perguntas de compreensão. Sem pergunta, nada é gerado.',
 		icon: 'M5 5.5h14M5 10h14M5 14.5h9M5 19h6',
-		tone: 'soft'
+		tone: 'magenta'
 	},
 	{
 		id: 'dialogue',
 		label: 'Diálogo',
-		does: 'colocar as falas na ordem',
 		title: 'Falas em sequência, no mínimo duas. Vira um exercício de ordenar.',
 		icon: 'M3.5 6.5a2 2 0 012-2h9a2 2 0 012 2v4a2 2 0 01-2 2h-6l-4 3zM18.5 10.5h1a2 2 0 012 2v4a2 2 0 01-2 2h-1l-3 2.5V19h-3',
-		tone: 'soft'
+		tone: 'ardosia'
 	}
 ];
 
 export const tipoDe = (kind: MaterialKind): TipoDeMaterial =>
 	TIPOS.find((t) => t.id === kind) ?? TIPOS[0];
 
-/** Classes da pílula de tipo, inteiras e literais — Tailwind só gera o que lê no fonte. */
+/**
+ * Classes da etiqueta de tipo, inteiras e literais — Tailwind só gera o que lê
+ * no fonte. O texto de cada uma é uma cor DIFERENTE (o magenta de etiqueta de
+ * turma tem o texto violeta; aqui ele ganha o próprio, para não virar um
+ * segundo violeta ao lado do vocabulário). Verde, âmbar e vermelho ficam fora:
+ * são a correção.
+ */
 export const PILL_TONE: Record<TipoDeMaterial['tone'], string> = {
-	primary: 'bg-base-300 text-primary',
-	accent: 'bg-accent/12 text-accent',
-	soft: 'border border-line bg-base-200 text-base-content/70'
+	teal: 'bg-accent/14 text-accent',
+	violeta: 'bg-violeta/14 text-violeta',
+	magenta:
+		'bg-[color-mix(in_oklab,var(--color-violeta)_12%,var(--color-error)_10%)] text-[color-mix(in_oklab,var(--color-violeta)_55%,var(--color-error))]',
+	ardosia: 'border border-line bg-base-200 text-base-content/70'
 };
 
 export const FALAS_INICIAIS: readonly Fala[] = [

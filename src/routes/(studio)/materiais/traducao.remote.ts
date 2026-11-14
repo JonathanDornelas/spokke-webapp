@@ -4,6 +4,8 @@ import { requireTeacher } from '$lib/server/auth/guard';
 import { ehIdioma } from '$lib/idiomas';
 import { criarLimite } from '$lib/server/limite-por-ip';
 import { TraducaoIndisponivel, getTradutor } from '$lib/server/traducao';
+import { variantesDaFrase } from '$lib/server/atividades/variantes-aceitas';
+import { getProfile } from '$lib/kernel/language/profiles';
 
 /**
  * A tradução SUGERIDA enquanto o professor digita, no formulário de material
@@ -33,10 +35,20 @@ export const sugerirTraducao = command(
 		if (!tradutor) return { ok: false as const, motivo: 'desligado' as const };
 		if (!limite.permitir(teacher.id)) return { ok: false as const, motivo: 'limite' as const };
 		try {
-			const [traducao] = await tradutor.traduzir([texto], de, para);
-			return traducao?.trim()
-				? { ok: true as const, traducao: traducao.trim() }
-				: { ok: false as const, motivo: 'vazio' as const };
+			const [bruta] = await tradutor.traduzir([texto], de, para);
+			const traducao = bruta?.trim();
+			if (!traducao) return { ok: false as const, motivo: 'vazio' as const };
+			// As outras formas certas de dizer a mesma coisa, pelo mesmo filtro das
+			// questões de tradução: o formulário as mostra como variações, e as que o
+			// professor mantiver viram resposta aceita. Falhar aqui não tira a
+			// tradução da tela.
+			const alternativas = await variantesDaFrase(
+				texto,
+				traducao,
+				{ alvo: getProfile(de), origem: getProfile(para) },
+				tradutor
+			).catch(() => []);
+			return { ok: true as const, traducao, alternativas };
 		} catch (erro) {
 			if (erro instanceof TraducaoIndisponivel) {
 				return { ok: false as const, motivo: 'indisponivel' as const };

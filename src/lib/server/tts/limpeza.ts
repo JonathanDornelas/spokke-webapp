@@ -23,6 +23,13 @@ import { ttsObjectKey } from './index';
  * A ordem é objeto primeiro, linha depois: se o bucket falhar, a linha fica e a
  * próxima limpeza tenta de novo; o contrário deixaria um arquivo órfão sem
  * ninguém que soubesse dele.
+ *
+ * **"Em uso" é a questão que vai para o aluno**: as publicadas e as que estão
+ * DENTRO do rascunho. A que foi tirada da atividade (`discarded`) não segura o
+ * áudio — pôr de volta pede a síntese de novo (`descartarItem`). Quem chama:
+ * apagar a atividade, gerar de novo (as questões antigas saem), salvar uma
+ * questão que deixou de ser escuta ou mudou a frase, tirar uma questão e
+ * publicar (as de fora somem de vez).
  */
 export async function limparAudioSemUso(
 	teacherId: string,
@@ -30,7 +37,7 @@ export async function limparAudioSemUso(
 ): Promise<{ apagados: number; falhas: number }> {
 	const [itens, audios] = await Promise.all([
 		prisma.item.findMany({
-			where: { activityVersion: { activity: { teacherId } } },
+			where: { discarded: false, activityVersion: { activity: { teacherId } } },
 			select: {
 				id: true,
 				prompt: true,

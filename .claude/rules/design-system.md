@@ -78,6 +78,8 @@ e-mail que voltou, gerar o áudio de novo, confirmar um apagar), `.btn-outline-e
 destrutiva ainda não confirmada), `.btn-sm`/`.btn-lg`/`.btn-circle`, `.btn-disabled`
 (para um link que precisa parecer desabilitado — `<a>` não aceita o atributo `disabled`),
 `.input`, `.input-error`, `.select`, `.textarea`, `.toggle`/`.toggle-primary`/`.toggle-xs`,
+`.range` (o deslizante, com o trecho escolhido na cor da marca: a tela passa a fração em
+`--preenchido`, porque o Chrome não pinta esse trecho sozinho),
 `.checkbox`/`.checkbox-primary`, `.radio` (redondo, com ponto — escolha única precisa parecer
 diferente da múltipla), `.fieldset`, `.fieldset-legend` e `.fieldset-label` são
 `@utility` próprias, definidas em
@@ -196,6 +198,14 @@ Só `transform` e `opacity` (e as propriedades individuais `translate`/`scale`, 
 usa). Nenhuma biblioteca de animação — os keyframes `en-*` estão no `app.css`. **Nada de
 `transition-all`**: ele anima qualquer propriedade que mudar, inclusive as de layout.
 
+**A exceção é a SANFONA: o bloco que abre e fecha no lugar, empurrando a lista** (`desdobrar` e
+`recolher`, `$lib/client/transicoes.ts`: a prévia de um material na etapa 2, as bandejas e o
+código de acesso da etapa 4). Ela cresce e recolhe a altura junto com a opacidade, em `media` com a
+curva de movimento. Fechar veio primeiro: só com opacidade o bloco sumia e, terminada a saída, tudo
+abaixo dele pulava duzentos e tantos pixels de uma vez — um pulo ATRASADO em relação ao clique, que
+o dono do repositório leu como abrupto. Depois abrir: nascendo com a altura toda, a bandeja de
+turmas da etapa 4 empurrava as opções uns 300px num único quadro, e a leitura foi a mesma.
+
 **Os números são TOKENS, e duas fontes os espelham**: o `app.css` (`--duration-*`, `--ease-*`,
 `--stagger`, as `animate-*`) e `$lib/movimento.ts` (para as transições do Svelte e as esperas em
 JS). `movimento.test.ts` lê o CSS e falha se os dois divergirem. Duração escrita à mão numa tela é
@@ -226,6 +236,8 @@ do catálogo Motion Reference (takayustudio.jp), filtrado pelo que este produto 
 | Modal, painel       | `transicoes.ts`, `animate-veu*`: `media` / `curta`    | entrada / saída                    |
 | Teclado virtual     | `teclado-in` em `media` / `teclado-out` em `curta`    | entrada / saída                    |
 | Bloco que abre      | `animate-entrada-curta` (`media`)                     | entrada                            |
+| Sanfona que abre    | `desdobrar` (`media`, cresce a altura — a exceção)    | movimento                          |
+| Sanfona que fecha   | `recolher` (`media`, recolhe a altura — a exceção)    | movimento                          |
 | Tela, cartão grande | `animate-entrada` (`longa`), `reveal-row`             | entrada                            |
 | Barra que cresce    | `animate-crescer-x` / `animate-crescer-y` (`grafico`) | entrada                            |
 | Progresso           | `animate-progresso` (1 s), `ProgressBar`              | entrada (por `scaleX`, sem reflow) |
@@ -282,7 +294,11 @@ com `hover:-translate-y-0.5`. **No Tailwind 4, `-translate-y-*` e `scale-*` mexe
 precisa dizer `translate` e `scale` (estava errada em dezoito lugares). Botão responde ao toque com
 `motion-tap`.
 
-Repetição infinita só para gravação e carregamento. Nada mais fica em loop.
+Repetição infinita só para gravação e carregamento. Nada mais fica em loop — com UMA exceção,
+pedida pelo dono do repositório: a QUESTÃO RESUMIDA (components.md), o cartão que ilustra uma
+questão em miniatura no Studio. A onda do áudio sobe e desce e o cursor da resposta pisca, como no
+desenho do Claude Design, sem função nenhuma: é ilustração. Não vale para o Player nem para
+nenhum controle de verdade, e `prefers-reduced-motion` também a para.
 
 **Formas de ambiente**: a faixa é uma BORDA da tela — ela margeia o conteúdo, não divide a tela
 ao meio. A altura padrão é `clamp(9rem, 21vh, 12.5rem)`: em porcentagem pura ela crescia com o

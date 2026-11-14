@@ -46,7 +46,7 @@
 			{id}
 			bind:value={valor}
 			onchange={() => onmudou?.(valor)}
-			class="select h-[38px] min-h-[38px] w-auto py-0 text-[13px]"
+			class="select h-10 min-h-10 w-auto py-0 text-[13px]"
 		>
 			<option value="">Todos os idiomas</option>
 			{#each presentes.idiomas as i (i.tag)}

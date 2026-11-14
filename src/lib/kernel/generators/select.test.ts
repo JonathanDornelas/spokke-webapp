@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ITENS, TETO_POR_HABILIDADE, selectItems } from './select';
+import { MAX_ITENS, TETO_POR_HABILIDADE, selectItems, separarPelaQuantidade } from './select';
 import type { GenerationGroup } from './index';
 import type { Item } from '../item';
 
@@ -193,5 +193,93 @@ describe('selectItems', () => {
 	it('lista vazia de habilidades vale como "todas"', () => {
 		const grupos = [grupo([item('leitura'), item('escrita'), item('fala')])];
 		expect(selectItems(grupos, { target: 10, skills: [] })).toHaveLength(3);
+	});
+});
+
+describe('tipos por material', () => {
+	it('o material segue o bloco de cima quando não tem tipos próprios', () => {
+		const a = grupo([item('leitura'), item('fala')]);
+		const b = grupo([item('leitura'), item('fala')]);
+		const escolhidos = selectItems([a, b], {
+			target: 10,
+			skills: ['reading'],
+			skillsPorMaterial: {}
+		});
+		expect(escolhidos.every((i) => i.interaction.type === 'assemble')).toBe(true);
+		expect(escolhidos).toHaveLength(2);
+	});
+
+	it('cada material gera só os tipos dele', () => {
+		const a = grupo([item('leitura'), item('fala')]);
+		const b = grupo([item('leitura'), item('fala')]);
+		const escolhidos = selectItems([a, b], {
+			target: 10,
+			skills: ['reading', 'speaking'],
+			skillsPorMaterial: { [a.contentId]: ['speaking'], [b.contentId]: ['reading'] }
+		});
+		const deA = escolhidos.filter((i) => a.items.includes(i));
+		const deB = escolhidos.filter((i) => b.items.includes(i));
+		expect(deA.map((i) => i.interaction.type)).toEqual(['speak']);
+		expect(deB.map((i) => i.interaction.type)).toEqual(['assemble']);
+	});
+
+	it('material com todos os tipos desligados não gera nada', () => {
+		const a = grupo([item('leitura'), item('escrita')]);
+		const b = grupo([item('leitura')]);
+		const escolhidos = selectItems([a, b], {
+			target: 10,
+			skills: [...TODAS],
+			skillsPorMaterial: { [a.contentId]: [] }
+		});
+		expect(escolhidos.some((i) => a.items.includes(i))).toBe(false);
+		expect(escolhidos).toHaveLength(1);
+	});
+});
+
+describe('separarPelaQuantidade', () => {
+	// A etapa de materiais não deixa questão de fora: gera para todos, e o que
+	// passa do número pedido vai para a revisão como "fora".
+	it('dentro é a seleção de sempre; fora é todo o resto que o professor quis', () => {
+		const grupos = Array.from({ length: 4 }, () =>
+			grupo([item('leitura'), item('escrita'), item('escuta')])
+		);
+		const plano = { target: 5, skills: [...TODAS] };
+		const { dentro, fora } = separarPelaQuantidade(grupos, plano);
+		expect(dentro).toEqual(selectItems(grupos, plano));
+		expect(dentro.length + fora.length).toBe(12);
+		const ids = [...dentro, ...fora].map((i) => i.id);
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	it('fora não traz o que o professor desligou', () => {
+		const a = grupo([item('leitura'), item('fala'), item('escrita')]);
+		const { dentro, fora } = separarPelaQuantidade([a], {
+			target: 1,
+			skills: ['reading', 'writing'],
+			skillsPorMaterial: { [a.contentId]: ['reading', 'writing'] }
+		});
+		expect([...dentro, ...fora].some((i) => i.interaction.type === 'speak')).toBe(false);
+		expect(dentro.length + fora.length).toBe(2);
+	});
+
+	it('fora anda em rodízio: o primeiro de cada material, depois o segundo', () => {
+		const a = grupo([item('leitura'), item('leitura'), item('leitura')]);
+		const b = grupo([item('leitura'), item('leitura'), item('leitura')]);
+		const { dentro, fora } = separarPelaQuantidade([a, b], { target: 2, skills: [...TODAS] });
+		expect(dentro).toHaveLength(2);
+		const origem = fora.map((i) => (a.items.includes(i) ? 'a' : 'b'));
+		expect(origem).toEqual(['a', 'b', 'a', 'b']);
+	});
+
+	it('o fecho fica dentro e nunca aparece em fora', () => {
+		const grupos = [grupo([item('leitura'), item('leitura'), item('leitura')])];
+		const fecho = item('leitura');
+		const { dentro, fora } = separarPelaQuantidade(
+			grupos,
+			{ target: 2, skills: [...TODAS] },
+			fecho
+		);
+		expect(dentro.at(-1)).toBe(fecho);
+		expect(fora).not.toContain(fecho);
 	});
 });

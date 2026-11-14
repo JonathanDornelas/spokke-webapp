@@ -9,7 +9,13 @@ import { z } from 'zod';
 export const sentencePairSchema = z.object({
 	source: z.string().min(1), // frase no idioma do aluno
 	target: z.string().min(1), // frase no idioma alvo
-	note: z.string().optional()
+	note: z.string().optional(),
+	/**
+	 * Outras formas CERTAS de traduzir a frase, na língua do aluno: as que o
+	 * tradutor sugeriu enquanto o professor digitava, e as que ele acrescentou.
+	 * Viram resposta aceita na questão de tradução (`translate-type`).
+	 */
+	variants: z.array(z.string().min(1)).optional()
 });
 export type SentencePair = z.infer<typeof sentencePairSchema>;
 

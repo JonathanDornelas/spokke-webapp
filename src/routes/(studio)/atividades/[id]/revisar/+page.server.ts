@@ -3,139 +3,90 @@ import type { PageServerLoad } from './$types';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { atividades } from '$lib/server/db/repos/activities';
 import { materiais } from '$lib/server/db/repos/content-units';
-import { itemSkills } from '$lib/server/player/runtime';
-import { parseContentUnit } from '$lib/kernel/content/parse';
-import { interactionSchema, promptSchema } from '$lib/kernel/item';
-import { getProfile } from '$lib/kernel/language/profiles';
+import { playerRepo } from '$lib/server/db/repos/player';
+import { itemAudioHashes } from '$lib/server/player/runtime';
+import { materiaisPorId, questoesDoRoteiro } from '$lib/server/atividades/roteiro';
+import { isTtsConfigured } from '$lib/server/tts';
+import { isAsrConfigured } from '$lib/server/asr';
+import { progressoDaGeracao } from '$lib/server/atividades/geracao';
+import { getProfile, labelForTag } from '$lib/kernel/language/profiles';
 import { MAX_ITENS } from '$lib/kernel/generators/select';
-import { iconeDoItem, resumoDoItem, ROTULO_DO_MATERIAL } from '$lib/server/atividades/resumo';
-import { ROTULO_DA_INTERACAO } from '$lib/atividades/editor-item';
-import { skillLabels } from '$lib/kernel/interactions/skill-schema';
-import { readableAnswerKey } from '$lib/server/studio/answer-key';
+import { lerTiposPorMaterial } from '$lib/atividades/tipos-por-material';
 
 /**
- * Etapa 3 — o professor revisa um RESUMO LEGÍVEL de cada item gerado.
- * Nenhum JSON aparece nesta tela (paginas.md "O professor nunca vê JSON"):
- * o que ele lê é a frase abaixo, montada a partir do gerador que produziu o
- * item.
+ * Etapa 3 — a REVISÃO: o roteiro do aluno. As questões de dentro na ordem em
+ * que ele responde (o professor arrasta para mudar), depois as que ficaram de
+ * fora pela quantidade pedida; ao lado, o celular com a questão escolhida, do
+ * jeito que o aluno a vê. Nenhum JSON aparece (paginas.md).
+ *
+ * O celular desenha o que `buildRuntimeItem` devolve — a mesma porta do
+ * Player, então o gabarito não vai junto (regra nº 1). A "Resposta" da linha
+ * selecionada é a tela do PROFESSOR, atrás do guard: ela vai em texto, à parte.
  */
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const teacher = requireTeacher(locals);
 	const activity = await atividades(teacher).byId(params.id);
 	if (!activity) error(404, 'Atividade não encontrada');
 
+	const geracao = progressoDaGeracao(teacher.id, params.id);
+
 	// `draftFromPublished` e não `draft`: depois de publicar o rascunho deixa de
-	// existir, e esta tela ficava VAZIA — "Editar atividade" jogava o professor
-	// numa revisão sem nenhum item, como se a atividade dele tivesse sumido. A
-	// chamada devolve o rascunho quando já existe e, quando não, clona o que
-	// está no ar (a versão publicada continua intacta, regra nº 7).
+	// existir, e "Editar atividade" abria uma revisão vazia. A chamada devolve o
+	// rascunho quando já existe e, quando não, clona o que está no ar (regra nº 7).
 	const [draft, units] = await Promise.all([
 		atividades(teacher).draftFromPublished(params.id),
 		materiais(teacher).byActivity(params.id)
 	]);
 
-	const excerptById = new Map(
-		units.map((unit) => {
-			const data = parseContentUnit(unit.kind, unit.data);
-			const excerpt =
-				'target' in data
-					? data.target
-					: 'term' in data
-						? data.term
-						: 'title' in data
-							? data.title
-							: (data.lines[0]?.text ?? '');
-			return [unit.id, { excerpt, kindLabel: ROTULO_DO_MATERIAL[unit.kind] }];
-		})
-	);
+	const materialPorId = materiaisPorId(units);
 
-	// Agrupa os itens do rascunho pelo material que os originou.
-	const groups = new Map<
-		string,
-		{
-			materialId: string;
-			kindLabel: string;
-			excerpt: string;
-			items: {
-				id: string;
-				icon: string;
-				summary: string;
-				meta: string;
-				accepted: boolean;
-				discardReason?: string;
-			}[];
-		}
-	>();
+	const itens = draft?.items ?? [];
+	// As de dentro na ordem do roteiro; as de fora depois, como estão.
+	const ordenados = [...itens.filter((i) => !i.discarded), ...itens.filter((i) => i.discarded)];
 
-	for (const item of draft?.items ?? []) {
-		const interaction = interactionSchema.parse(item.interaction);
-		promptSchema.parse(item.prompt);
-		const source = item.sourceContentId ?? 'manual';
-		const info = excerptById.get(source);
+	const hashes = ordenados.flatMap((item) => itemAudioHashes(item, activity.targetLang));
+	const assets = await playerRepo.mediaUrls(teacher.id, hashes);
+	const urlByHash = new Map(assets.map((asset) => [asset.hash, asset.url]));
 
-		const group = groups.get(source) ?? {
-			materialId: source,
-			kindLabel: info?.kindLabel ?? 'item avulso',
-			excerpt: info?.excerpt ?? '',
-			items: []
-		};
+	const questoes = questoesDoRoteiro(ordenados, {
+		targetLang: activity.targetLang,
+		semente: `revisao:${draft?.id ?? activity.id}`,
+		urlByHash,
+		materialPorId
+	});
 
-		// Quantas respostas a questão aceita ALÉM da principal — inclusive as que o
-		// tradutor propôs ao gerar (`variantes-aceitas.ts`). Dito aqui para o
-		// professor saber que há o que conferir no editor da questão.
-		const outras = readableAnswerKey(interaction.type, interaction.payload).variants.length;
-		const aceitaMais =
-			outras === 0 ? '' : ` · aceita mais ${outras} ${outras === 1 ? 'resposta' : 'respostas'}`;
+	// Material que não rendeu questão aparece com o motivo, numa linha só.
+	const comQuestao = new Set(itens.map((i) => i.sourceContentId).filter(Boolean));
+	const tipos = lerTiposPorMaterial(activity.tiposPorMaterial);
+	const semQuestao = units
+		.filter((unit) => !comQuestao.has(unit.id))
+		.map((unit) => ({
+			id: unit.id,
+			trecho: materialPorId.get(unit.id)?.trecho ?? '',
+			motivo:
+				tipos[unit.id]?.length === 0
+					? 'todos os tipos de questão dele estão desligados'
+					: 'nenhum exercício saiu dele com os tipos ligados'
+		}));
 
-		group.items.push({
-			id: item.id,
-			icon: iconeDoItem(interaction.type),
-			summary: resumoDoItem(item.generatedBy, interaction.type),
-			// Habilidade DERIVADA, nunca declarada pelo professor.
-			meta: `${ROTULO_DA_INTERACAO[interaction.type]} · ${itemSkills(item)
-				.map((skill) => skillLabels[skill].toLocaleLowerCase('pt-BR'))
-				.join(' + ')}${aceitaMais}`,
-			// O item descartado CONTINUA no rascunho — a tela precisa dele para
-			// oferecer "Restaurar". Ele só não entra na versão publicada.
-			accepted: !item.discarded,
-			discardReason: item.discarded ? 'Descartado por você' : undefined
-		});
-		groups.set(source, group);
-	}
-
-	// Material que não gerou nada precisa aparecer com o motivo, não sumir.
-	for (const unit of units) {
-		if (groups.has(unit.id)) continue;
-		const info = excerptById.get(unit.id);
-		groups.set(unit.id, {
-			materialId: unit.id,
-			kindLabel: info?.kindLabel ?? '',
-			excerpt: info?.excerpt ?? '',
-			items: []
-		});
-	}
-
-	// **Por que este material não rendeu nada.** Havia UMA frase para as duas
-	// causas, e ela culpava o gerador: "nenhum gerador conseguiu produzir". Na
-	// maioria das vezes ele produziu — e a SELEÇÃO cortou, porque o alvo de
-	// questões já tinha sido atingido por outros materiais. O professor lia que
-	// a frase dele era ruim quando o que faltava era vaga.
-	const cheio = (draft?.items.length ?? 0) >= Math.min(activity.itemTarget, MAX_ITENS);
-	const motivo = cheio
-		? `As ${draft?.items.length} questões pedidas na etapa 1 foram preenchidas por outros materiais — este ficou de fora do sorteio. Peça mais questões ou gere de novo.`
-		: 'Nenhum gerador conseguiu produzir item deste material. Distrator sai sempre do seu próprio conjunto — com poucos materiais do mesmo tipo, alguns exercícios não têm alternativa errada plausível.';
-
+	const profile = getProfile(activity.targetLang);
 	return {
 		activity: {
 			id: activity.id,
 			title: activity.title,
-			dir: getProfile(activity.targetLang).direction
+			dir: profile.direction,
+			tag: profile.tag,
+			targetLabel: labelForTag(activity.targetLang),
+			sourceLabel: labelForTag(activity.sourceLang)
 		},
-		generating: false,
-		materialCount: units.length,
-		groups: [...groups.values()].map((group) => ({
-			...group,
-			reason: group.items.length === 0 ? motivo : undefined
-		}))
+		geracao,
+		alvo: activity.itemTarget,
+		maxItens: MAX_ITENS,
+		capacidades: {
+			tts: isTtsConfigured() && profile.tts.voices.length > 0,
+			asr: isAsrConfigured()
+		},
+		questoes,
+		semQuestao
 	};
 };

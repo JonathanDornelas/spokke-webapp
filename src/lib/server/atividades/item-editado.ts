@@ -1,142 +1,487 @@
-import { z } from 'zod';
-import {
-	gradingSchema,
-	interactionKindSchema,
-	interactionSchema,
-	promptSchema
-} from '$lib/kernel/item';
+import type { z } from 'zod';
+import { gradingSchema, interactionSchema, promptSchema } from '$lib/kernel/item';
+import type { InteractionKind } from '$lib/kernel/interactions/types';
 import { getInteraction } from '$lib/kernel/interactions/registry';
-import { instructionText } from '$lib/server/player/runtime';
+import type { LanguageProfile } from '$lib/kernel/language/profile';
+import { normalize } from '$lib/kernel/language/normalize';
+import { segmentosDePalavra, tokenize } from '$lib/kernel/language/tokenize';
+import { assembleAuthoringSchema } from '$lib/kernel/interactions/assemble';
+import { speakAuthoringSchema } from '$lib/kernel/interactions/speak';
+import { instructionText } from '$lib/atividades/enunciados';
 import {
+	FORMATOS_DO_TIPO,
+	MAX_PARES_DA_QUESTAO,
 	chaveDoEnunciado,
-	gabaritoEditavel,
-	modosDeCorrecao,
-	podeAlternar,
-	textoEditavel
-} from '$lib/atividades/editor-item';
+	tipoDaQuestao,
+	type CamposDaQuestao,
+	type Questao,
+	type QuestaoGravada
+} from '$lib/atividades/questao';
 
 /**
- * O item como o EDITOR DE QUESTÃO o deixa — usado por `salvarItem` para gravar
- * e por `previaDoItem` para a prévia. Os dois passam por aqui, então a prévia
- * mostra exatamente o que vai ser gravado, e nada que a tela ofereça escapa
- * das regras de `$lib/atividades/editor-item.ts`.
+ * A questão como o EDITOR a deixa — usado para gravar (`salvarQuestao`) e para
+ * a prévia (`previaDaQuestao`). Os dois passam por aqui, então a prévia mostra
+ * exatamente o que vai ser gravado.
  *
- * **O que o formulário não edita é PRESERVADO**, não reconstruído. A versão
- * anterior gravava `grading: { mode }` e um prompt montado só com quatro
- * campos: salvar uma "traduza para o português" sem mudar nada apagava o
- * `answerLang: 'source'`, e a resposta passava a ser corrigida com as regras
- * do inglês — e a questão ganhava o teclado do idioma alvo para uma resposta
- * em português.
+ * O editor manda campos LEGÍVEIS (`$lib/atividades/questao.ts`) e este módulo
+ * monta o payload do kernel: a frase vira peças pelo segmentador do idioma
+ * (regra nº 5), a lacuna é achada na frase pela fronteira de palavra, e no fim
+ * tudo passa pelo `authoringSchema` da interação.
+ *
+ * **O que o formulário não edita é PRESERVADO.** Salvar uma "traduza para o
+ * português" sem mexer não pode apagar o `answerLang: 'source'` (a resposta
+ * passaria a ser corrigida com as regras do inglês e ganharia o teclado do
+ * idioma alvo); salvar uma escuta sem mudar a frase mantém o `mediaId`; salvar
+ * um "monte" sem reescrever a frase mantém as peças e as ordens aceitas.
  */
 
-export const edicaoDoItemSchema = z.object({
-	interaction: interactionKindSchema,
-	/** O gabarito em JSON — só nos tipos que o editor monta (`gabaritoEditavel`). */
-	payload: z.string().optional(),
-	/** O que o aluno lê (ou, no áudio, ouve). */
-	promptText: z.string().optional(),
-	/** O enunciado como está no campo. Igual ao padrão do tipo = não personalizado. */
-	instruction: z.string().optional(),
-	gradingMode: z.enum(['exact', 'tolerant', 'sequence', 'set', 'asr', 'rubric'])
-});
-export type EdicaoDoItem = z.infer<typeof edicaoDoItemSchema>;
+type Prompt = z.infer<typeof promptSchema>;
+type Grading = z.infer<typeof gradingSchema>;
 
-export type ItemEditado =
+export type QuestaoMontada =
 	| {
 			ok: true;
-			prompt: z.infer<typeof promptSchema>;
-			interaction: { type: z.infer<typeof interactionKindSchema>; payload: unknown };
-			grading: z.infer<typeof gradingSchema>;
-			/** O texto de um prompt de áudio mudou: o arquivo antigo não serve mais. */
+			prompt: Prompt;
+			interaction: { type: InteractionKind; payload: unknown };
+			grading: Grading;
+			/** O áudio desta questão precisa ser gerado (é nova, ou a frase mudou). */
 			audioMudou: boolean;
 	  }
 	| { ok: false; error: string };
+
+export interface ContextoDaQuestao {
+	/** O idioma alvo da atividade: tokenização, comparação, vozes. */
+	alvo: LanguageProfile;
+	/** O que o servidor consegue entregar hoje. */
+	capacidades: { tts: boolean; asr: boolean };
+	/** A questão como está gravada. Ausente quando ela é criada do zero. */
+	atual?: { prompt: unknown; interaction: unknown; grading: unknown };
+}
 
 /** JSON não guarda `undefined`; tirar as chaves vazias evita um `"text": null` no banco. */
 function semVazios<T extends Record<string, unknown>>(objeto: T): T {
 	return Object.fromEntries(Object.entries(objeto).filter(([, v]) => v !== undefined)) as T;
 }
 
-export function montarItemEditado(
-	atual: { prompt: unknown; interaction: unknown; grading: unknown },
-	entrada: EdicaoDoItem
-): ItemEditado {
-	const prompt = promptSchema.parse(atual.prompt);
-	const interaction = interactionSchema.parse(atual.interaction);
-	const grading = gradingSchema.parse(atual.grading);
+const limpar = (lista: string[]) => lista.map((t) => t.trim()).filter(Boolean);
 
-	const escolhida = entrada.interaction;
-	if (
-		escolhida !== interaction.type &&
-		!(podeAlternar(interaction.type, grading.answerLang) && gabaritoEditavel(escolhida))
-	) {
-		return { ok: false, error: 'Esta questão não pode mudar para esse tipo por aqui.' };
-	}
+function falha(error: string): QuestaoMontada {
+	return { ok: false, error };
+}
 
-	// O gabarito: montado pelo formulário nos tipos de lista de textos; nos
-	// outros, o que o gerador produziu continua valendo.
-	let payload: unknown = interaction.payload;
-	if (gabaritoEditavel(escolhida)) {
-		if (!entrada.payload) return { ok: false, error: 'Preencha a resposta esperada.' };
-		try {
-			payload = JSON.parse(entrada.payload);
-		} catch {
-			return { ok: false, error: 'O gabarito chegou num formato inesperado. Recarregue a página.' };
+/**
+ * Onde o trecho começa na frase, inteiro: começando e terminando numa fronteira
+ * de PALAVRA do idioma. "a" em "I have a cat" é a palavra solta, não o "a" de
+ * "have". Sem `split(' ')` (regra nº 5): a fronteira é a do `Intl.Segmenter`.
+ */
+export function acharTrecho(frase: string, trecho: string, perfil: LanguageProfile): number {
+	if (!trecho) return -1;
+	const segmentos = segmentosDePalavra(frase, perfil);
+	const fronteiras = new Set([...segmentos.map((s) => s.inicio), frase.length]);
+	for (const s of segmentos) {
+		if (!s.palavra) continue;
+		if (frase.startsWith(trecho, s.inicio) && fronteiras.has(s.inicio + trecho.length)) {
+			return s.inicio;
 		}
 	}
-	const validado = getInteraction(escolhida).authoringSchema.safeParse(payload);
-	if (!validado.success) {
-		return {
-			ok: false,
-			error:
-				escolhida === 'cloze'
-					? 'Marque a lacuna na frase com ___ e preencha a resposta esperada.'
-					: 'Os campos desta questão não estão completos.'
-		};
+	return -1;
+}
+
+function repetidos(textos: string[], perfil: LanguageProfile): boolean {
+	const vistos = new Set(textos.map((t) => normalize(t, perfil)));
+	return vistos.size !== textos.length;
+}
+
+interface Gravada {
+	prompt: Prompt;
+	interaction: { type: InteractionKind; payload: unknown };
+	grading: Grading;
+}
+
+function payloadDe(
+	questao: Questao,
+	campos: CamposDaQuestao,
+	ctx: ContextoDaQuestao,
+	gravada: Gravada | null
+): { ok: true; payload: unknown } | { ok: false; error: string } {
+	const { alvo } = ctx;
+	const texto = questao.texto.trim();
+	const escuta = questao.tipo === 'escuta';
+	const mesmoFormato = gravada?.interaction.type === campos.interacao;
+
+	switch (campos.interacao) {
+		case 'choice': {
+			const opcoes = campos.opcoes.map((o) => o.trim());
+			const certa = opcoes[campos.certa];
+			if (!certa) return { ok: false, error: 'Escreva a alternativa certa.' };
+			const indices = opcoes.map((o, i) => (o ? i : -1)).filter((i) => i >= 0);
+			if (indices.length < 2) {
+				return { ok: false, error: 'Escreva ao menos uma alternativa errada.' };
+			}
+			const options = indices.map((i) => opcoes[i] as string);
+			if (repetidos(options, alvo)) {
+				return { ok: false, error: 'Duas alternativas iguais: o aluno acertaria qualquer uma.' };
+			}
+			if (escuta && normalize(certa, alvo) !== normalize(texto, alvo)) {
+				return { ok: false, error: 'Na escuta, a alternativa certa é a frase do áudio.' };
+			}
+			return { ok: true, payload: { options, correctIndex: indices.indexOf(campos.certa) } };
+		}
+
+		case 'assemble': {
+			const frase = (escuta ? texto : campos.frase).trim();
+			const distractors = limpar(campos.distratores).flatMap((d) => {
+				const pecas = tokenize(d, alvo);
+				return pecas.length > 0 ? pecas : [d];
+			});
+			const anterior = mesmoFormato
+				? assembleAuthoringSchema.safeParse(gravada?.interaction.payload)
+				: null;
+			if (!frase) {
+				// Sem frase escrita, as peças gravadas continuam: a frase original de
+				// um "monte" gerado não fica no item, e juntar as peças com espaço
+				// seria a regra nº 5 pelo avesso.
+				if (anterior?.success) return { ok: true, payload: { ...anterior.data, distractors } };
+				return { ok: false, error: 'Escreva a frase na ordem certa.' };
+			}
+			const tokens = tokenize(frase, alvo);
+			if (tokens.length < 2) {
+				return { ok: false, error: 'A frase precisa de ao menos duas palavras para montar.' };
+			}
+			const mesmasPecas =
+				anterior?.success &&
+				anterior.data.tokens.length === tokens.length &&
+				anterior.data.tokens.every((t, i) => t === tokens[i]);
+			return {
+				ok: true,
+				payload: semVazios({
+					tokens,
+					distractors,
+					// As outras ordens aceitas só valem para as MESMAS peças.
+					accepted: mesmasPecas && anterior?.success ? anterior.data.accepted : [tokens],
+					translation: anterior?.success ? anterior.data.translation : undefined
+				})
+			};
+		}
+
+		case 'type': {
+			const aceitas = limpar(escuta ? [texto, ...campos.aceitas] : campos.aceitas);
+			const unicas = aceitas.filter(
+				(a, i) => aceitas.findIndex((b) => normalize(b, alvo) === normalize(a, alvo)) === i
+			);
+			if (unicas.length === 0) return { ok: false, error: 'Escreva a resposta esperada.' };
+			return { ok: true, payload: { accepted: unicas } };
+		}
+
+		case 'cloze': {
+			const frase = campos.frase.trim();
+			const aceitas = limpar(campos.aceitas);
+			const lacuna = aceitas[0];
+			if (!frase) return { ok: false, error: 'Escreva a frase que vai ter a lacuna.' };
+			if (!lacuna) return { ok: false, error: 'Escreva o trecho que falta.' };
+			if (frase.includes('___')) return { ok: true, payload: { masked: frase, accepted: aceitas } };
+			const inicio = acharTrecho(frase, lacuna, alvo);
+			if (inicio < 0) {
+				return {
+					ok: false,
+					error: 'O trecho que falta precisa aparecer na frase, com as palavras inteiras.'
+				};
+			}
+			const masked = `${frase.slice(0, inicio)}___${frase.slice(inicio + lacuna.length)}`;
+			return { ok: true, payload: { masked, accepted: aceitas } };
+		}
+
+		case 'match': {
+			const linhas = campos.pares
+				.map((p) => ({ left: p.esquerda.trim(), right: p.direita.trim() }))
+				.filter((p) => p.left || p.right);
+			if (linhas.some((p) => !p.left || !p.right)) {
+				return { ok: false, error: 'Complete os dois lados de cada par.' };
+			}
+			if (linhas.length < 2) return { ok: false, error: 'Escreva ao menos dois pares.' };
+			if (linhas.length > MAX_PARES_DA_QUESTAO) {
+				return { ok: false, error: `No máximo ${MAX_PARES_DA_QUESTAO} pares.` };
+			}
+			if (
+				repetidos(
+					linhas.map((p) => p.left),
+					alvo
+				) ||
+				repetidos(
+					linhas.map((p) => p.right),
+					alvo
+				)
+			) {
+				return {
+					ok: false,
+					error: 'Dois pares com o mesmo lado: duas ligações ficariam certas.'
+				};
+			}
+			return { ok: true, payload: { pairs: linhas } };
+		}
+
+		case 'order': {
+			const falas = limpar(campos.falas);
+			if (falas.length < 2) return { ok: false, error: 'Escreva ao menos duas falas.' };
+			if (repetidos(falas, alvo)) {
+				return { ok: false, error: 'Duas falas iguais: a ordem certa ficaria ambígua.' };
+			}
+			return { ok: true, payload: { lines: falas } };
+		}
+
+		case 'select': {
+			const frase = campos.frase.trim();
+			const certa = campos.certa.trim();
+			if (!frase) return { ok: false, error: 'Escreva a frase em que o aluno toca.' };
+			if (!certa) return { ok: false, error: 'Escreva a palavra que o aluno precisa tocar.' };
+			const segments = segmentosDePalavra(frase, alvo).map((s) => ({
+				text: s.texto,
+				selectable: s.palavra
+			}));
+			const correctIndex = segments.findIndex(
+				(s) => s.selectable && normalize(s.text, alvo) === normalize(certa, alvo)
+			);
+			if (correctIndex < 0) {
+				return {
+					ok: false,
+					error: 'A palavra certa precisa ser uma palavra só, da própria frase.'
+				};
+			}
+			return { ok: true, payload: { segments, correctIndex } };
+		}
+
+		case 'speak': {
+			const frase = campos.frase.trim();
+			if (!frase) return { ok: false, error: 'Escreva a frase que o aluno vai falar.' };
+			const anterior = mesmoFormato
+				? speakAuthoringSchema.safeParse(gravada?.interaction.payload)
+				: null;
+			const mesma = anterior?.success && anterior.data.target === frase;
+			return {
+				ok: true,
+				payload: semVazios({
+					target: frase,
+					hints: mesma && anterior?.success ? anterior.data.hints : [],
+					ipa: mesma && anterior?.success ? anterior.data.ipa : undefined
+				})
+			};
+		}
+	}
+}
+
+function gradingDe(campos: CamposDaQuestao, gravada: Gravada | null): Grading {
+	const tolerancia = gravada?.grading.tolerance ?? 0.9;
+	switch (campos.interacao) {
+		case 'choice':
+		case 'select':
+			return { mode: 'exact', answerLang: 'target' };
+		case 'assemble':
+		case 'order':
+			return { mode: 'sequence', answerLang: 'target' };
+		case 'match':
+			return { mode: 'set', answerLang: 'target' };
+		case 'speak':
+			return { mode: 'asr', answerLang: 'target' };
+		case 'cloze':
+			// A lacuna é na frase do idioma alvo: a resposta é dele.
+			return { mode: 'tolerant', tolerance: tolerancia, answerLang: 'target' };
+		case 'type':
+			return {
+				mode: campos.corrigeVoce ? 'rubric' : 'tolerant',
+				tolerance: tolerancia,
+				// "Traduza para o português" responde na língua do aluno, e isso fica.
+				answerLang: gravada?.interaction.type === 'type' ? gravada.grading.answerLang : 'target'
+			};
+	}
+}
+
+export function montarQuestao(questao: Questao, ctx: ContextoDaQuestao): QuestaoMontada {
+	const gravada: Gravada | null = ctx.atual
+		? {
+				prompt: promptSchema.parse(ctx.atual.prompt),
+				interaction: interactionSchema.parse(ctx.atual.interaction),
+				grading: gradingSchema.parse(ctx.atual.grading)
+			}
+		: null;
+	const { campos, tipo } = questao;
+
+	if (!FORMATOS_DO_TIPO[tipo].includes(campos.interacao)) {
+		return falha('Esse formato não existe para este tipo de questão.');
 	}
 
-	const modos = modosDeCorrecao(escolhida, grading.mode);
-	if (!modos.includes(entrada.gradingMode)) {
-		return { ok: false, error: 'Essa correção não vale para este tipo de questão.' };
+	const texto = questao.texto.trim();
+	const kind = tipo === 'escuta' ? 'audio' : 'text';
+	if (kind === 'audio' && !texto) {
+		return falha('Escreva a frase que o aluno ouve: é dela que sai o áudio.');
+	}
+	// "Escolha a tradução" sem nada para ler é uma lista de alternativas soltas.
+	if (tipo === 'leitura' && campos.interacao === 'choice' && !texto) {
+		return falha('Escreva o que o aluno lê: a frase, o termo ou a pergunta.');
+	}
+	const audioMudou =
+		kind === 'audio' && (gravada?.prompt.kind !== 'audio' || gravada.prompt.text !== texto);
+	if (audioMudou && (!ctx.capacidades.tts || ctx.alvo.tts.voices.length === 0)) {
+		return falha('Sem voz para este idioma agora: não dá para gerar o áudio desta questão.');
+	}
+	const jaEraFala = gravada?.interaction.type === 'speak';
+	if (campos.interacao === 'speak' && !jaEraFala && !ctx.capacidades.asr) {
+		return falha(
+			'A transcrição de fala está desligada: questão de fala não teria como ser corrigida.'
+		);
 	}
 
-	// O texto só muda onde mudar não descola do gabarito (ver `textoEditavel`).
-	const texto = textoEditavel(escolhida, prompt.kind)
-		? entrada.promptText?.trim() || undefined
-		: prompt.text;
-	if (prompt.kind === 'audio' && !texto) {
-		return { ok: false, error: 'Escreva o que o aluno vai ouvir: é dele que o áudio é gerado.' };
-	}
-	// Numa "traduza" ou "monte a frase" o texto É a questão: apagá-lo deixaria o
-	// aluno sem o que traduzir. Só a questão criada sem texto pode seguir sem.
-	if (prompt.text && !texto) {
-		return { ok: false, error: 'Esta questão precisa do texto que o aluno lê.' };
+	const montado = payloadDe(questao, campos, ctx, gravada);
+	if (!montado.ok) return montado;
+	const validado = getInteraction(campos.interacao).authoringSchema.safeParse(montado.payload);
+	if (!validado.success) return falha('Os campos desta questão não formam um exercício ainda.');
+
+	const grading = gradingDe(campos, gravada);
+	if (campos.interacao === 'type' && grading.answerLang === 'source' && !texto) {
+		return falha('Escreva a frase que o aluno traduz.');
 	}
 
-	// Enunciado: o padrão do tipo não é gravado como texto do professor — senão
-	// a questão deixava de acompanhar o padrão e, trocando de tipo, levava o
-	// enunciado do tipo antigo ("Ouça e escreva" numa lacuna).
-	const chave = chaveDoEnunciado(
-		{ interacao: interaction.type, chave: prompt.instructionKey, prompt: prompt.kind },
-		escolhida
-	);
+	// Enunciado: o padrão não é gravado como texto do professor — senão a
+	// questão deixava de acompanhar o padrão e, trocando de formato, levava o
+	// enunciado do formato antigo ("Ouça e escreva" numa lacuna).
+	const anterior: QuestaoGravada | undefined = gravada
+		? {
+				tipo: tipoDaQuestao(gravada.prompt.kind, gravada.interaction.type),
+				interacao: gravada.interaction.type,
+				chave: gravada.prompt.instructionKey,
+				answerLang: gravada.grading.answerLang
+			}
+		: undefined;
+	const chave = chaveDoEnunciado(tipo, campos.interacao, anterior);
 	const padrao = instructionText(chave);
-	const escrito = entrada.instruction?.trim() ?? '';
-	const instrucao = escrito && escrito !== padrao ? escrito : undefined;
-	if (!instrucao && !padrao) {
-		return { ok: false, error: 'Escreva o enunciado: este tipo de questão não tem um padrão.' };
+	const escrito = questao.enunciado.trim();
+	const instruction = escrito && escrito !== padrao ? escrito : undefined;
+	if (!instruction && !padrao) {
+		return falha('Escreva o enunciado: este formato não tem um padrão.');
+	}
+	// "Toque na palavra certa" não diz QUAL: sem uma pista ou um enunciado próprio,
+	// o aluno toca no escuro.
+	if (campos.interacao === 'select' && !texto && !instruction) {
+		return falha('Diga ao aluno qual palavra tocar: escreva uma pista ou um enunciado seu.');
 	}
 
 	return {
 		ok: true,
 		prompt: semVazios({
-			...prompt,
-			text: texto,
+			kind,
+			text: texto || undefined,
+			// O arquivo gravado só serve se a frase do áudio é a mesma.
+			mediaId: kind === 'audio' && !audioMudou ? gravada?.prompt.mediaId : undefined,
 			instructionKey: chave,
-			instruction: instrucao
+			instruction
 		}),
-		interaction: { type: escolhida, payload: validado.data },
-		grading: semVazios({ ...grading, mode: entrada.gradingMode }),
-		audioMudou: prompt.kind === 'audio' && texto !== prompt.text
+		interaction: { type: campos.interacao, payload: validado.data },
+		grading: semVazios(grading),
+		audioMudou
 	};
+}
+
+/**
+ * O caminho inverso: a questão gravada como o editor a abre. É a tela do
+ * PROFESSOR, atrás do guard — o gabarito vem junto, na moldura âmbar.
+ *
+ * `fraseDoMaterial` é a frase no idioma alvo do material de origem, quando há:
+ * o "monte a frase" gerado não guarda a frase inteira, só as peças, e juntar as
+ * peças com espaço quebraria o japonês (regra nº 5).
+ */
+export function questaoDoItem(
+	item: { prompt: unknown; interaction: unknown; grading: unknown },
+	extra: { fraseDoMaterial?: string } = {}
+): Questao {
+	const prompt = promptSchema.parse(item.prompt);
+	const interaction = interactionSchema.parse(item.interaction);
+	const grading = gradingSchema.parse(item.grading);
+	const tipo = tipoDaQuestao(prompt.kind, interaction.type);
+	const enunciado = prompt.instruction?.trim() || instructionText(prompt.instructionKey);
+	const base = { tipo, enunciado, texto: prompt.text ?? '' };
+	const validado = getInteraction(interaction.type).authoringSchema.safeParse(interaction.payload);
+	const payload: Record<string, unknown> = validado.success
+		? (validado.data as Record<string, unknown>)
+		: {};
+	const lista = (valor: unknown) =>
+		Array.isArray(valor) ? valor.filter((v): v is string => typeof v === 'string') : [];
+
+	switch (interaction.type) {
+		case 'choice':
+			return {
+				...base,
+				campos: {
+					interacao: 'choice',
+					opcoes: lista(payload.options),
+					certa: typeof payload.correctIndex === 'number' ? payload.correctIndex : 0
+				}
+			};
+		case 'assemble':
+			return {
+				...base,
+				campos: {
+					interacao: 'assemble',
+					frase: prompt.kind === 'audio' ? (prompt.text ?? '') : (extra.fraseDoMaterial ?? ''),
+					distratores: lista(payload.distractors)
+				}
+			};
+		case 'type':
+			return {
+				...base,
+				campos: {
+					interacao: 'type',
+					aceitas: lista(payload.accepted),
+					corrigeVoce: grading.mode === 'rubric'
+				}
+			};
+		case 'cloze': {
+			const aceitas = lista(payload.accepted);
+			const masked = typeof payload.masked === 'string' ? payload.masked : '';
+			// Com UMA lacuna a frase volta inteira (a lacuna é o primeiro aceito);
+			// com mais de uma, a frase fica com os ___ e o professor os vê.
+			const uma = masked.split('___').length === 2 && aceitas[0];
+			return {
+				...base,
+				campos: {
+					interacao: 'cloze',
+					frase: uma ? masked.replace('___', aceitas[0] as string) : masked,
+					aceitas
+				}
+			};
+		}
+		case 'match': {
+			const pares = Array.isArray(payload.pairs)
+				? (payload.pairs as { left: string; right: string }[]).map((p) => ({
+						esquerda: p.left,
+						direita: p.right
+					}))
+				: [];
+			return { ...base, campos: { interacao: 'match', pares } };
+		}
+		case 'order':
+			return { ...base, campos: { interacao: 'order', falas: lista(payload.lines) } };
+		case 'select': {
+			const segmentos = Array.isArray(payload.segments)
+				? (payload.segments as { text: string; selectable: boolean }[])
+				: [];
+			const indice = typeof payload.correctIndex === 'number' ? payload.correctIndex : -1;
+			return {
+				...base,
+				campos: {
+					interacao: 'select',
+					// Os segmentos guardam também o espaço e a pontuação: juntá-los
+					// devolve a frase exata.
+					frase: segmentos.map((s) => s.text).join(''),
+					certa: segmentos[indice]?.text ?? ''
+				}
+			};
+		}
+		case 'speak':
+			return {
+				...base,
+				campos: {
+					interacao: 'speak',
+					frase: typeof payload.target === 'string' ? payload.target : ''
+				}
+			};
+	}
 }

@@ -11,26 +11,38 @@ import { linkDaAtividade } from '$lib/server/player/slug';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
 import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import type { Skill } from '$lib/kernel/interactions/types';
+import { turmas } from '$lib/server/db/repos/classrooms';
+import { modulos } from '$lib/server/db/repos/modules';
+import { corOuPadrao, etiquetaDaTurma } from '$lib/etiquetas';
 
 /**
  * Etapa 4. As habilidades aqui são DERIVADAS dos itens aceitos — o professor
  * não escolheu nenhuma delas (kernel.md). O contador de áudio vem do que já
  * existe em `MediaAsset`: a publicação só fica acessível quando todos os
  * áudios terminam (server.md "TTS").
+ *
+ * Publicar e ENVIAR moram juntos aqui (o desenho "Studio Publicar A"): as
+ * turmas e os módulos do professor vêm para as bandejas da tela, e quem envia
+ * e quem acrescenta ao módulo continuam sendo as remote functions de sempre
+ * (`enviarParaTurmas`, `adicionarAoModulo`), chamadas depois de publicar.
  */
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const teacher = requireTeacher(locals);
 	const activity = await atividades(teacher).byId(params.id);
 	if (!activity) error(404, 'Atividade não encontrada');
 
-	const [draft, published] = await Promise.all([
+	const [draft, published, listaDeTurmas, listaDeModulos] = await Promise.all([
 		atividades(teacher).draft(params.id),
-		atividades(teacher).published(params.id)
+		atividades(teacher).published(params.id),
+		turmas(teacher).list(),
+		modulos(teacher).list()
 	]);
 
 	// Depois de publicar não existe mais rascunho: a tela continua mostrando a
 	// versão que acabou de ir ao ar, não uma atividade vazia.
-	const items = draft?.items ?? published?.items ?? [];
+	// Do rascunho, só o que está DENTRO: o que ficou de fora na revisão não vai
+	// para o aluno, não conta nas habilidades e não pede áudio.
+	const items = draft?.items.filter((item) => !item.discarded) ?? published?.items ?? [];
 
 	const counts = new Map<Skill, number>();
 	for (const item of items) {
@@ -95,6 +107,27 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			showResult: settings?.showResult ?? true
 		},
 		itemCount: items.length,
+		turmas: listaDeTurmas.map((turma) => ({
+			id: turma.id,
+			nome: turma.name,
+			cor: corOuPadrao(turma.color),
+			sigla: etiquetaDaTurma(turma.name),
+			alunos: turma.students,
+			comEmail: turma.withEmail
+		})),
+		// A posição diz se a atividade JÁ está no módulo (e em que lugar): essa
+		// linha aparece marcada e parada — tirar dali é na tela do módulo.
+		modulos: listaDeModulos.map((modulo) => {
+			const indice = modulo.atividades.findIndex((a) => a.id === activity.id);
+			return {
+				id: modulo.id,
+				nome: modulo.name,
+				cor: modulo.color,
+				sigla: etiquetaDaTurma(modulo.name),
+				total: modulo.total,
+				posicao: indice >= 0 ? indice + 1 : null
+			};
+		}),
 		skills: [...counts.entries()].map(([name, count]) => ({ name: skillLabels[name], count })),
 		audio,
 		published: noAr,

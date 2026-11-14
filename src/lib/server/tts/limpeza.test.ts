@@ -100,6 +100,35 @@ describe('limparAudioSemUso', () => {
 		);
 	});
 
+	it('a questão que saiu da atividade ou deixou de ser escuta leva o áudio dela', async () => {
+		const repo = atividades(professora);
+		const tirada = itemDeEscuta('My brother plays the guitar.');
+		const editada = itemDeEscuta('We are late again.');
+		const atividade = await repo.create('D', 'pt-BR', 'en-US', PLANO);
+		const versao = await repo.replaceDraftItems(atividade.id, [tirada, editada]);
+		const hashesTirada = await audiosDe(professora.id, tirada);
+		const hashesEditada = await audiosDe(professora.id, editada);
+
+		// Tirada da atividade (fora): não vai para o aluno, o áudio não serve.
+		const idTirada = versao?.items[0]?.id ?? '';
+		await repo.setDraftItemDiscarded(atividade.id, idTirada, true);
+		// Editada para não ser mais escuta: o prompt vira texto.
+		const idEditada = versao?.items[1]?.id ?? '';
+		await repo.updateDraftItem(atividade.id, idEditada, {
+			prompt: { kind: 'text', text: 'We are late again.' },
+			interaction: { type: 'type', payload: { accepted: ['Estamos atrasados de novo.'] } },
+			grading: { mode: 'tolerant', answerLang: 'source' }
+		});
+
+		const r = await limparAudioSemUso(professora.id, async () => {});
+		expect(r.apagados).toBe(hashesTirada.length + hashesEditada.length);
+		expect(
+			await prisma.mediaAsset.count({
+				where: { teacherId: professora.id, hash: { in: [...hashesTirada, ...hashesEditada] } }
+			})
+		).toBe(0);
+	});
+
 	it('bucket falhou: a linha FICA, para a próxima limpeza tentar de novo', async () => {
 		const repo = atividades(professora);
 		const item = itemDeEscuta('Where is the library?');

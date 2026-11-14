@@ -48,10 +48,11 @@ export function materiais(teacher: TeacherScope, db: Db = prisma) {
 	}
 
 	return {
+		/** A biblioteca que se OFERECE (usar da biblioteca): sem os arquivados. */
 		list(): Promise<UsedContentUnit[]> {
 			return db.contentUnit
 				.findMany({
-					where: { teacherId: teacher.id },
+					where: { teacherId: teacher.id, archivedAt: null },
 					orderBy: { createdAt: 'desc' },
 					include: { _count: { select: { activities: true } } }
 				})
@@ -115,9 +116,12 @@ export function materiais(teacher: TeacherScope, db: Db = prisma) {
 		async findEquivalent(kind: ContentUnitKind, data: unknown): Promise<string | null> {
 			const parsed = parseContentUnit(kind, data);
 			const existente = await db.contentUnit.findFirst({
+				// O arquivado não é reaproveitado: ele saiu da biblioteca, e religá-lo
+				// em silêncio poria de volta algo que o professor guardou.
 				where: {
 					teacherId: teacher.id,
 					kind,
+					archivedAt: null,
 					data: { equals: parsed as Prisma.InputJsonValue }
 				},
 				select: { id: true },
@@ -270,10 +274,44 @@ export function materiais(teacher: TeacherScope, db: Db = prisma) {
 		 * para `failed`. Áudio vencido é varrido por `enfileirarAudioFaltante`.
 		 */
 		async remove(id: string): Promise<boolean> {
+			return (await this.removerVarios([id])) > 0;
+		},
+
+		/** Apaga vários (a biblioteca, em massa). Só os deste professor; devolve quantos saíram. */
+		async removerVarios(ids: string[]): Promise<number> {
 			const { count } = await db.contentUnit.deleteMany({
-				where: { id, teacherId: teacher.id }
+				where: { id: { in: ids }, teacherId: teacher.id }
 			});
-			return count > 0;
+			return count;
+		},
+
+		/**
+		 * Arquiva: sai da biblioteca e do limite do plano, e as atividades que já o
+		 * usam continuam com ele. Só os deste professor e só os que não estavam
+		 * arquivados. Devolve quantos mudaram.
+		 */
+		async arquivar(ids: string[]): Promise<number> {
+			const { count } = await db.contentUnit.updateMany({
+				where: { id: { in: ids }, teacherId: teacher.id, archivedAt: null },
+				data: { archivedAt: new Date() }
+			});
+			return count;
+		},
+
+		/** Quantos destes estão arquivados — a vaga que desarquivar vai pedir. */
+		contarArquivados(ids: string[]): Promise<number> {
+			return db.contentUnit.count({
+				where: { id: { in: ids }, teacherId: teacher.id, archivedAt: { not: null } }
+			});
+		},
+
+		/** Desarquiva. Quem chama confere a vaga ANTES, dentro da trava de cota. */
+		async desarquivar(ids: string[]): Promise<number> {
+			const { count } = await db.contentUnit.updateMany({
+				where: { id: { in: ids }, teacherId: teacher.id, archivedAt: { not: null } },
+				data: { archivedAt: null }
+			});
+			return count;
 		}
 	};
 }

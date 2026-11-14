@@ -10,6 +10,26 @@ import type { Prisma } from '../../../../../generated/prisma/client.ts';
 type TeacherScope = { id: string };
 
 /**
+ * A ordem do rascunho quando questões ENTRAM no roteiro (aceitar uma de fora,
+ * aceitar todas, criar uma do zero): elas vão para o fim das de dentro — antes
+ * do "associar" que fecha, se ele for a ÚLTIMA — e as de fora seguem depois. A
+ * ordem que o professor arrastou é respeitada: o fecho só é contornado quando
+ * está no fim, nunca puxado de volta para lá.
+ */
+export function ordemComEntradas(
+	itens: { id: string; discarded: boolean; generatedBy: string | null }[],
+	entram: string[]
+): string[] {
+	const entrando = new Set(entram);
+	const dentro = itens.filter((i) => !i.discarded && !entrando.has(i.id));
+	const ultima = dentro.at(-1);
+	const fecho = ultima?.generatedBy === 'closing-match' ? [ultima] : [];
+	const antes = fecho.length > 0 ? dentro.slice(0, -1) : dentro;
+	const fora = itens.filter((i) => i.discarded && !entrando.has(i.id));
+	return [...antes, ...entram.map((id) => ({ id })), ...fecho, ...fora].map((i) => i.id);
+}
+
+/**
  * Padrão de repositório escopado por professor — ver .claude/rules/auth.md
  * "Isolamento entre professores" e .claude/rules/db.md "Repositórios". Nunca
  * use `prisma.activity` cru numa remote function; use isto.
@@ -36,7 +56,9 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 					versions: {
 						orderBy: { versionNumber: 'desc' },
 						include: {
-							items: { select: { prompt: true, interaction: true } },
+							// Só o que está DENTRO: as que ficaram de fora na revisão
+							// não contam como questões da atividade.
+							items: { where: { discarded: false }, select: { prompt: true, interaction: true } },
 							publications: {
 								select: { id: true, slug: true, _count: { select: { attempts: true } } }
 							}
@@ -157,8 +179,12 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 		 * Troca o conteúdo do RASCUNHO pelos itens recém-gerados. Nunca toca
 		 * numa versão publicada: se a última versão já tem `Publication`, abre
 		 * a próxima em vez de editar aquela.
+		 *
+		 * `fora` são as questões geradas que passaram da quantidade pedida: entram
+		 * depois das outras, já marcadas como fora da atividade (`discarded`), para
+		 * o professor trocar na revisão o que entra e o que sai.
 		 */
-		async replaceDraftItems(activityId: string, items: Item[]) {
+		async replaceDraftItems(activityId: string, items: Item[], fora: Item[] = []) {
 			const activity = await prisma.activity.findFirst({
 				where: { id: activityId, teacherId: teacher.id }
 			});
@@ -186,7 +212,7 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 				}
 
 				await tx.item.createMany({
-					data: items.map((item, index) => ({
+					data: [...items, ...fora].map((item, index) => ({
 						sourceContentId: item.sourceContentId,
 						generatedBy: item.generatedBy,
 						order: index,
@@ -194,6 +220,7 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 						interaction: item.interaction as unknown as Prisma.InputJsonValue,
 						grading: item.grading as unknown as Prisma.InputJsonValue,
 						locale: item.locale as unknown as Prisma.InputJsonValue,
+						discarded: index >= items.length,
 						activityVersionId: versionId
 					}))
 				});
@@ -206,9 +233,11 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 		},
 
 		/**
-		 * Descarta ou restaura um item do rascunho. O item NÃO é apagado: fica
+		 * Descarta ou aceita um item do rascunho. O item NÃO é apagado: fica
 		 * marcado e some da publicação, para o professor poder voltar atrás na
 		 * própria tela de revisão. Item de versão publicada nunca é tocado.
+		 * Aceitar põe a questão no FIM do roteiro (`ordemComEntradas`) — é o que
+		 * a revisão promete, e é onde o professor a procura.
 		 */
 		async setDraftItemDiscarded(
 			activityId: string,
@@ -217,57 +246,45 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 		): Promise<boolean> {
 			const draft = await this.draft(activityId);
 			if (!draft) return false;
-			const { count } = await prisma.item.updateMany({
-				where: { id: itemId, activityVersionId: draft.id },
-				data: { discarded }
-			});
-			return count > 0;
+			const item = draft.items.find((i) => i.id === itemId);
+			if (!item) return false;
+			if (discarded || !item.discarded) {
+				await prisma.item.update({
+					where: { id: itemId, activityVersionId: draft.id },
+					data: { discarded }
+				});
+				return true;
+			}
+			const ordem = ordemComEntradas(draft.items, [itemId]);
+			await prisma.$transaction([
+				prisma.item.update({
+					where: { id: itemId, activityVersionId: draft.id },
+					data: { discarded: false }
+				}),
+				...ordem.map((id, order) =>
+					prisma.item.update({ where: { id, activityVersionId: draft.id }, data: { order } })
+				)
+			]);
+			return true;
 		},
 
-		/** Restaura todos de uma vez — o "Aceitar todos" da etapa de revisão. */
+		/** Aceita todas de uma vez, no fim do roteiro — o "Aceitar todas" da revisão. */
 		async acceptAllDraftItems(activityId: string): Promise<number> {
 			const draft = await this.draft(activityId);
 			if (!draft) return 0;
-			const { count } = await prisma.item.updateMany({
-				where: { activityVersionId: draft.id, discarded: true },
-				data: { discarded: false }
-			});
-			return count;
-		},
-
-		/**
-		 * Item escrito do zero (nível 3 de autoria). Nasce como `cloze` porque é
-		 * a interação com o formulário mais simples de preencher — o professor
-		 * troca no editor se quiser outra.
-		 *
-		 * O conteúdo é um MARCADOR, não vazio: `clozeAuthoringSchema` exige
-		 * `masked` e `accepted` não vazios, e um item que não valida rebenta em
-		 * `toRuntime()` — ou seja, na prévia e no browser do aluno. Melhor nascer
-		 * com um texto que grita "me edite" do que com um payload inválido.
-		 */
-		async createManualDraftItem(activityId: string, locale: { source: string; target: string }) {
-			const draft = await this.draft(activityId);
-			if (!draft) return null;
-			const ultimo = await prisma.item.findFirst({
-				where: { activityVersionId: draft.id },
-				orderBy: { order: 'desc' },
-				select: { order: true }
-			});
-			return prisma.item.create({
-				data: {
-					sourceContentId: null,
-					generatedBy: null,
-					order: (ultimo?.order ?? -1) + 1,
-					prompt: { kind: 'text', instructionKey: 'fill-the-blank' },
-					interaction: {
-						type: 'cloze',
-						payload: { masked: 'Escreva a frase e marque a lacuna com ___', accepted: ['resposta'] }
-					},
-					grading: { mode: 'tolerant', tolerance: 0.9 },
-					locale,
-					activityVersionId: draft.id
-				}
-			});
+			const fora = draft.items.filter((i) => i.discarded).map((i) => i.id);
+			if (fora.length === 0) return 0;
+			const ordem = ordemComEntradas(draft.items, fora);
+			await prisma.$transaction([
+				prisma.item.updateMany({
+					where: { activityVersionId: draft.id, discarded: true },
+					data: { discarded: false }
+				}),
+				...ordem.map((id, order) =>
+					prisma.item.update({ where: { id, activityVersionId: draft.id }, data: { order } })
+				)
+			]);
+			return fora.length;
 		},
 
 		/**
@@ -320,6 +337,104 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 			});
 		},
 
+		/**
+		 * O plano de geração da etapa de materiais: quantas questões entram e os
+		 * tipos de cada material. `skills` é o bloco de cima da tela (a união dos
+		 * tipos de todos os materiais). Devolve se era dele.
+		 */
+		async atualizarPlano(
+			id: string,
+			plano: { itemTarget: number; skills: string[]; tiposPorMaterial: Record<string, string[]> }
+		): Promise<boolean> {
+			const { count } = await db.activity.updateMany({
+				where: { id, teacherId: teacher.id },
+				data: {
+					itemTarget: plano.itemTarget,
+					skills: plano.skills,
+					tiposPorMaterial: plano.tiposPorMaterial
+				}
+			});
+			return count > 0;
+		},
+
+		/**
+		 * A etapa 1 de uma atividade que já existe: título e nível, e os idiomas só
+		 * quando quem chama decidiu que ainda podem mudar (sem material, sem
+		 * questão, nunca publicada). Devolve se era dele.
+		 */
+		async atualizarDetalhes(
+			id: string,
+			campos: {
+				title: string;
+				level: string | null;
+				idiomas?: { sourceLang: string; targetLang: string };
+			}
+		): Promise<boolean> {
+			const { count } = await db.activity.updateMany({
+				where: { id, teacherId: teacher.id },
+				data: { title: campos.title, level: campos.level, ...(campos.idiomas ?? {}) }
+			});
+			return count > 0;
+		},
+
+		/**
+		 * Uma questão escrita do zero, gravada só quando o professor salva o editor
+		 * — já validada. Ela nascia no clique, com texto de exemplo e a resposta
+		 * "resposta", e fechar o editor sem mexer deixava essa questão na atividade.
+		 * Entra no fim das que estão DENTRO, antes do "associar" que fecha quando
+		 * ele é a última (`ordemComEntradas`).
+		 */
+		async criarQuestaoManual(
+			activityId: string,
+			conteudo: {
+				prompt: Prisma.InputJsonValue;
+				interaction: Prisma.InputJsonValue;
+				grading: Prisma.InputJsonValue;
+				locale: Prisma.InputJsonValue;
+			}
+		) {
+			const draft = await this.draftFromPublished(activityId);
+			if (!draft) return null;
+			return prisma.$transaction(async (tx) => {
+				const criada = await tx.item.create({
+					data: {
+						sourceContentId: null,
+						generatedBy: null,
+						order: draft.items.length,
+						...conteudo,
+						activityVersionId: draft.id
+					}
+				});
+				const ordem = ordemComEntradas(draft.items, [criada.id]);
+				for (const [order, id] of ordem.entries()) {
+					await tx.item.update({ where: { id }, data: { order } });
+				}
+				return criada;
+			});
+		},
+
+		/**
+		 * A ORDEM do roteiro do aluno: as questões de dentro na sequência que o
+		 * professor arrastou, e as de fora depois delas, como estavam. `ids` tem de
+		 * ser exatamente as de dentro do rascunho — uma lista que não bate (de
+		 * outra atividade, faltando uma) é recusada inteira. Devolve se reordenou.
+		 */
+		async reordenarRascunho(activityId: string, ids: string[]): Promise<boolean> {
+			const draft = await this.draft(activityId);
+			if (!draft) return false;
+			const dentro = draft.items.filter((i) => !i.discarded).map((i) => i.id);
+			const pedidos = new Set(ids);
+			if (pedidos.size !== ids.length || ids.length !== dentro.length) return false;
+			if (!dentro.every((id) => pedidos.has(id))) return false;
+			const fora = draft.items.filter((i) => i.discarded).map((i) => i.id);
+			await prisma.$transaction(
+				[...ids, ...fora].map((id, order) =>
+					prisma.item.update({ where: { id, activityVersionId: draft.id }, data: { order } })
+				)
+			);
+			return true;
+		},
+
 		/** Troca o nível (rótulo). Nulo = sem nível. Quem chama já validou contra a escala. */
 		async definirNivel(id: string, level: string | null): Promise<boolean> {
 			const { count } = await db.activity.updateMany({
@@ -335,11 +450,36 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 		 * (docs/adr-002-billing.md). Nada é apagado. Devolve se era dele.
 		 */
 		async arquivar(id: string): Promise<boolean> {
+			return (await this.arquivarVarias([id])) > 0;
+		},
+
+		/**
+		 * Arquiva várias de uma vez (a lista de atividades, em massa). Só as DESTE
+		 * professor e só as que ainda não estavam arquivadas: o id de outro passa
+		 * em silêncio, sem dizer se existe (auth.md). Devolve quantas mudaram.
+		 */
+		async arquivarVarias(ids: string[]): Promise<number> {
 			const { count } = await db.activity.updateMany({
-				where: { id, teacherId: teacher.id, archivedAt: null },
+				where: { id: { in: ids }, teacherId: teacher.id, archivedAt: null },
 				data: { archivedAt: new Date() }
 			});
-			return count > 0;
+			return count;
+		},
+
+		/** Quantas destas estão arquivadas — a vaga que desarquivar vai pedir. */
+		contarArquivadas(ids: string[]): Promise<number> {
+			return db.activity.count({
+				where: { id: { in: ids }, teacherId: teacher.id, archivedAt: { not: null } }
+			});
+		},
+
+		/** Desarquiva várias. Quem chama confere a vaga ANTES, dentro da trava de cota. */
+		async desarquivarVarias(ids: string[]): Promise<number> {
+			const { count } = await db.activity.updateMany({
+				where: { id: { in: ids }, teacherId: teacher.id, archivedAt: { not: null } },
+				data: { archivedAt: null }
+			});
+			return count;
 		},
 
 		/** Desarquiva. Quem chama confere a vaga ANTES, dentro da trava de cota. */
@@ -371,16 +511,23 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 		 * `apagarTentativa`.
 		 */
 		async apagarDeVez(id: string): Promise<boolean> {
-			const dono = { id, teacherId: teacher.id };
+			return (await this.apagarVariasDeVez([id])) > 0;
+		},
+
+		/**
+		 * Apaga várias DE VEZ, numa transação só (a lista, em massa), na mesma
+		 * ordem dos `RESTRICT` de `apagarDeVez`. O escopo entra nas três escritas:
+		 * o id de outro professor não leva nada dele junto. Devolve quantas saíram.
+		 */
+		async apagarVariasDeVez(ids: string[]): Promise<number> {
+			const dono = { id: { in: ids }, teacherId: teacher.id };
 			return prisma.$transaction(async (tx) => {
-				const existe = await tx.activity.findFirst({ where: dono, select: { id: true } });
-				if (!existe) return false;
 				await tx.attempt.deleteMany({
 					where: { publication: { activityVersion: { activity: dono } } }
 				});
 				await tx.publication.deleteMany({ where: { activityVersion: { activity: dono } } });
 				const { count } = await tx.activity.deleteMany({ where: dono });
-				return count > 0;
+				return count;
 			});
 		},
 

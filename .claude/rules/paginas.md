@@ -26,8 +26,9 @@ específico de rota. Contexto completo de cada página (dados, estados, regras q
 | `(studio)/atividades`                                                                | Lista — **com zero atividades vira o onboarding**       |
 | `(studio)/atividades/[id]`                                                           | A atividade aberta: questões, link, QR, envios          |
 | `(studio)/atividades/nova` → `[id]/materiais` → `revisar` → `publicar`               | Wizard de criação                                       |
-| `(studio)/atividades/[id]/itens/[itemId]`                                            | Editor de item                                          |
-| `(studio)/atividades/[id]/previa`                                                    | Prévia do aluno, sem criar tentativa                    |
+| `(studio)/atividades/[id]/detalhes`                                                  | Etapa 1 de uma atividade que já existe (o "voltar")     |
+| `(studio)/atividades/[id]/itens/[itemId]`                                            | Redireciona ao editor em modal, na revisão              |
+| `(studio)/atividades/[id]/previa`                                                    | Prévia do aluno: a tela do Player, sem gravar nada      |
 | `(studio)/materiais`                                                                 | Biblioteca reusável                                     |
 | `(studio)/resultados` → `[activityId]` → `[attemptId]`                               | Resultados — e a correção, na própria resposta          |
 | `(studio)/turmas` → `[id]` (`nova` só redireciona para a bandeja)                    | Turmas e alunos                                         |
@@ -97,8 +98,8 @@ módulos — e trocar de aba fazia o conteúdo pular. O que limita leitura é a 
 Barra lateral fixa em `(studio)/+layout.svelte`. **O wizard de criação não usa esse layout** —
 durante a criação o professor tem uma tarefa só, e o `Stepper` substitui a navegação. Na
 prática isso é o reset de layout avançado do SvelteKit: as seis telas do wizard
-(`atividades/nova`, `[id]/materiais`, `[id]/revisar`, `[id]/publicar`,
-`[id]/itens/[itemId]`, `[id]/previa`) são arquivos `+page@.svelte` — o `@` sem sufixo reseta para o layout
+(`atividades/nova`, `[id]/detalhes`, `[id]/materiais`, `[id]/revisar`, `[id]/publicar`,
+`[id]/previa`) são arquivos `+page@.svelte` — o `@` sem sufixo reseta para o layout
 raiz (`src/routes/+layout.svelte`, que só monta `app.css` e o favicon), pulando o
 `(studio)/+layout.svelte` mesmo estando fisicamente aninhadas sob `(studio)/atividades/`.
 
@@ -113,29 +114,36 @@ o `overscroll-contain` do corpo segurava o gesto. A lista também é uma
 significa. No celular só um dos dois cabe: o formulário cobre a lista, e "Ver os N materiais" /
 "Adicionar" alternam entre eles.
 
-**Os quatro tipos aparecem PELO EXERCÍCIO que produzem** ("montar, traduzir, completar, ouvir e
-falar"), não pelo formato do dado — a dúvida do professor é "o que eu quero que o aluno faça".
-Cada tipo tem os SEUS campos, não um campo genérico: par de frases é
-alvo + tradução + nota (a nota é do professor, nunca vai para o aluno); vocabulário troca a nota
-por frase de exemplo; texto tem as perguntas de compreensão campo a campo; e diálogo é uma lista
+**"Tipo do Material": quatro cartões só com o nome** (Sentença, Vocabulário, Texto, Diálogo —
+"Sentença" era "Par de frases", e o título era "O que o aluno vai fazer"; os dois mudaram a pedido
+do dono do repositório): a descrição sob cada um saiu na limpeza das frases redundantes. **Cada
+tipo tem a SUA cor de etiqueta** em toda lista (wizard, biblioteca, modal da biblioteca, roteiro da
+revisão): teal, violeta, magenta e ardósia — as cores de etiqueta do produto menos o azul, que é a
+marca (`PILL_TONE`, `material-form.ts`). Cada tipo tem os SEUS campos, não um campo genérico: a
+sentença é alvo + tradução + as
+variações da tradução (a "nota do professor" saiu do formulário); vocabulário tem frase de exemplo; texto tem as perguntas de compreensão campo a campo; e diálogo é uma lista
 de falas com falante, com reordenar e remover — colado num bloco só, uma linha sem "Nome:" caía
 em A/B alternado sem o professor saber. Na edição o tipo fica TRAVADO com o motivo escrito, e
 um aviso diz em quantas atividades o material está — salvar muda o que os rascunhos veem, o que
 está no ar não.
 
-**"O que o aluno vai ver"** fecha o formulário: o exercício montado com o que o professor digitou
-(a frase tokenizada pelo `Intl.Segmenter` do idioma alvo e embaralhada com seed, a escolha com a
-alternativa errada tirada de OUTRO termo do conjunto, as falas fora de ordem). É a única forma de
-entender o produto sem publicar antes — e a alternativa certa aparece marcada porque é a tela do
-PROFESSOR, não do aluno.
+**O formulário não tem mais a prévia "O que o aluno vai ver"** (saiu a pedido do dono do
+repositório): o que um material rende aparece na "Prévia" da linha dele, na lista ao lado, com os
+geradores de verdade (as questões resumidas, abaixo).
 
 Perguntas e falas viajam como JSON num campo escondido, montado pelo componente. Isso não
 contradiz "o professor nunca vê JSON": ele preenche campo a campo, como no `payload` de
 `salvarItem`.
 
-**Trazer da biblioteca é uma escolha, não um clique por linha**: o painel tem busca, filtro por
-tipo e seleção múltipla, e `usarDaBiblioteca` recebe uma LISTA de ids. O professor marca as
-frases da aula passada e traz de uma vez, em vez de uma viagem ao servidor por material.
+**Trazer da biblioteca é uma escolha, não um clique por linha**: "Usar da biblioteca" abre um
+MODAL (um `<dialog>`, pedido do dono do repositório; era um painel que abria no meio da lista) com
+busca, filtro por tipo e por idioma e seleção múltipla, e `usarDaBiblioteca` recebe uma LISTA de
+ids. O professor marca as frases da aula passada e traz de uma vez; **"Adicionar" fecha o modal**, e
+o que entrou aparece na lista atrás dele. **O MESMO material que já está na atividade aparece
+travado**, com "já está nesta atividade": o mesmo tipo e o mesmo texto principal (sem diferença de
+caixa, espaço ou forma Unicode), mesmo noutro registro — uma frase cadastrada duas vezes com
+traduções diferentes renderia as mesmas questões duas vezes. `materiaisDisponiveis` marca
+(`jaNaAtividade`) e `usarDaBiblioteca` recusa de novo, para quem chega por um POST direto.
 
 Par de frases e vocabulário têm ainda o modo **"Colar uma lista"** (`adicionarMateriaisEmLote`),
 que é como o professor tem o material de verdade. A prévia usa o MESMO parser do servidor
@@ -147,8 +155,8 @@ arquivo do parser.
 
 **A tradução sai sozinha** quando há tradutor (`TRANSLATE_PROVIDER`, server.md "Tradução do
 material", adr-006): o professor escreve a frase no idioma que ensina e o campo da tradução vem
-preenchido depois de uma pausa na digitação, com "Tradução automática. Confira e ajuste se
-precisar." embaixo e o rótulo "sai sozinha, você confere". **A dele nunca é trocada**: escreveu,
+preenchido depois de uma pausa na digitação, sem frase de apoio em volta (o "sai sozinha, você
+confere" e o "Tradução automática. Confira…" saíram por redundantes). **A dele nunca é trocada**: escreveu,
 o campo é dele, e a sugestão não volta por cima mesmo que a frase mude — "Traduzir de novo"
 troca a pedido. O botão de salvar não espera a tradução: o que chegar em branco é traduzido no
 servidor. Colando uma lista, a tradução depois do separador vira OPCIONAL: a linha só no idioma
@@ -176,23 +184,41 @@ professor marcar e confirmar, e o que ele já tem é reaproveitado.
 
 **Repetido é dito ENQUANTO digita**, não depois de enviar: "você já tem esta frase" (ou "já está
 nesta atividade") aparece sob o campo. A comparação espelha a do servidor — os campos como vão ser
-gravados, só aparados, INCLUINDO nota e exemplo, porque `findEquivalent` compara o jsonb inteiro.
+gravados, só aparados, INCLUINDO exemplo e variações, porque `findEquivalent` compara o jsonb inteiro.
 Não passa pelo normalizador de propósito: "café" e "cafe" são dois materiais para o servidor, e
 prometer reaproveitar para depois gravar outro seria mentir. É por isso que `materiaisDisponiveis`
 devolve `note` e `example`.
 
-Cada tipo mostra também **o que o conjunto já rende** — o bloco sob os cartões de tipo, com tom
-de aviso quando falta ("1 de 2 perguntas no conjunto"): distrator sai sempre do próprio conjunto
-(kernel.md), então um termo sozinho não vira exercício de escolha — e isso só aparecia na etapa
-3, depois de gerar. A conta é `estimarRendimento` (`kernel/content/rendimento.ts`), que espelha
-o piso de cada gerador; o rodapé do wizard usa a mesma ("dá para gerar ao menos N questões" —
-"ao menos" porque escuta e fala dependem do provedor).
+**Vocabulário e texto avisam quando FALTA algo, numa frase que diz o que fazer** ("Falta mais um
+termo. As alternativas erradas são os seus outros termos. Com um só, nenhuma questão sai."; o mesmo
+para as perguntas de um texto). Distrator sai sempre do próprio conjunto (kernel.md), e isso só
+aparecia na etapa 3, depois de gerar. A conta inclui o que já está digitado no formulário, e quando
+está tudo certo não aparece nada — a linha "N frases nesta atividade. Cada frase rende…" saiu.
 
 Descartar um item **marca** (`Item.discarded`), não apaga: "Restaurar" precisa dele, e a
-publicação é que remove os descartados de vez. "Pré-visualizar tudo" é uma rota do professor
-(`[id]/previa`), não `/a/[slug]`: antes de publicar aquele link não existe, e depois de
-publicar abri-lo criaria uma tentativa de aluno no relatório dele. A prévia monta cada item com
-o mesmo `buildRuntimeItem` do Player — se o gabarito aparecesse ali, estaria vazando de verdade.
+publicação é que remove os descartados de vez.
+
+**"Pré-visualizar" é a PRÉVIA DO ALUNO: a atividade na tela do Player** (pedido do dono do
+repositório; era uma lista de cartões que não respondia). É uma rota do professor (`[id]/previa`),
+não `/a/[slug]`: antes de publicar aquele link não existe, e depois de publicar abri-lo criaria uma
+tentativa de aluno no relatório dele.
+
+- **Direto na primeira questão**: sem nome, sem código, sem conta. A casca e o miolo são os da
+  `/q/[n]` — cabeçalho com a conta logada (a do professor), as duas colunas do desktop, o rodapé,
+  o teclado do idioma encaixado, os atalhos, os mesmos componentes de interação e de veredito — e
+  a fala grava e é transcrita de verdade.
+- **No fim, o resultado do Player** (`ResultadoDaPrevia.svelte`): o placar, o percurso (sem a
+  média da turma, que a prévia não tem), por habilidade e questão a questão, com "Responder de
+  novo" e "Fechar a prévia". A questão pulada é "Pulada", não "A corrigir".
+- **Nada é gravado**: sem `Attempt`, sem resposta, sem a gravação de voz. Quem corrige é o
+  servidor, pelo mesmo kernel e com a seed da versão (`corrigirResposta`, `previa/fala`), e cada
+  item passa pelo mesmo `buildRuntimeItem` do Player — se o gabarito aparecesse ali, estaria
+  vazando de verdade.
+- **Uma faixa FORA do cartão do Player** é do professor: o X, "Prévia do aluno · nada do que você
+  responder fica salvo" e qual versão está na tela (o rascunho, ou a que está no ar). Dentro do
+  cartão é o que o aluno vê.
+- A escuta cujo áudio ainda está na fila diz isso no lugar do player (o link nem abriria para o
+  aluno), e a questão incompleta aparece na sequência com "Abrir no editor".
 
 **A prévia é uma tela FECHADA sobre de onde veio**, não uma etapa: sem barra lateral e sem
 Stepper, e a saída é um X (mais Esc) — não um "voltar para Publicar". Ela é aberta de dois
@@ -205,16 +231,88 @@ endereço livre é redirecionamento aberto de manual.
 quatro, e enquanto ele existia só na primeira o professor que mudava de ideia na etapa 3 só tinha
 o "voltar" — um passo por vez até o começo. Não apaga nada: o rascunho continua salvo e a
 atividade aparece na lista como rascunho, e é por isso que o rótulo é "Cancelar" e não
-"Descartar".
+"Descartar". **Na etapa 4, com algo por publicar, ele pergunta antes** (o desenho "Studio
+Publicar A"): um `<dialog>` do próprio `WizardShell` (`confirmarSaida`) com "Sair sem publicar?",
+a consequência numa frase e "Continuar publicando" / "Sair sem publicar" — azul, não vermelho,
+porque sair não apaga nada.
 
-**A etapa 1 pergunta QUANTAS questões e QUAIS habilidades.** Isso não contradiz "o professor
-nunca escolhe a habilidade": ele não marca a habilidade de cada exercício — ela continua derivada
-—, ele diz o que a ATIVIDADE treina, e `selectItems` (kernel.md) filtra o que os geradores
-produziram. Sem esse corte, 20 frases viravam cem exercícios e ele descartava 88 na mão. Fala e
-escuta têm teto de 5 cada, escrito no próprio chip: cada item de escuta é um par de arquivos de
-TTS a sintetizar e cada um de fala é uma gravação que o aluno precisa de silêncio para fazer.
-Desmarcar a última habilidade não é possível — geraria uma atividade vazia, e o erro só
-apareceria na etapa 3.
+**A etapa 4 é PUBLICAR E ENVIAR, numa tela só** (o desenho "Studio Publicar A"; as duas decisões
+moravam em telas diferentes). À esquerda: o título pelo estado ("Pronta para publicar", "Mudanças
+prontas para publicar", "Só falta o áudio", "Está no ar", este com um selo azul que se desenha),
+as habilidades treinadas (derivadas, com a contagem), as BANDEJAS "Enviar para turmas" e
+"Adicionar a módulo" (abrem por baixo como SANFONA — crescem e recolhem a altura, como a prévia de
+um material, porque nascer com a altura toda empurrava as opções 300px num quadro —, com linhas
+com a etiqueta e a caixa de marcar, e **nada vem marcado**: enviar é decisão, nunca padrão) e as
+opções (código de acesso: **ligar já sorteia as 4 letras**, e um código que já existia fica —
+religar não troca o que talvez já esteja no quadro; "Sortear" troca; mostrar o resultado). **Cada
+bandeja mostra no MÁXIMO SEIS linhas** (pedido do dono do repositório): as marcadas sempre entram,
+as outras completam na ordem da lista, e o resto se acha pela busca, que aparece a partir de sete,
+com "Mais N turmas: busque pelo nome". À direita, numa coluna de 400px: o QR com o link e o
+código; o áudio que falta; e, depois de enviar, "Convites na fila de envio" com cada turma. O
+botão diz o que acontece: "Publicar", "Publicar mudanças", "Publicar e enviar 2 convites" (ou "e
+enviar para 1 turma", quando ninguém dela tem e-mail). Publicado, o envio sai pelas MESMAS
+remote functions da tela da turma e do módulo (`enviarParaTurmas`, `adicionarAoModulo`), e o
+módulo em que a atividade já está aparece marcado e parado ("Já está aqui · é a 1ª"). No celular
+o contexto desce depois das opções.
+
+**A etapa 1 é título, idiomas e nível** (`CamposDaAtividade.svelte`, a MESMA tela em `nova` e em
+`[id]/detalhes`). O "voltar" da etapa 2 leva a `[id]/detalhes`: levar a `nova` criava outra
+atividade em vez de mudar esta. Os idiomas travam depois do primeiro material (o material tem a
+tag dela e as questões foram tokenizadas com ela), com o motivo escrito; `editarDetalhes` confere
+de novo. **O desenho é o do Claude Design, idêntico**: o formulário à esquerda e, à direita, em
+42% da largura (540 de 1280 no desenho), "O que sai daqui" — uma QUESTÃO RESUMIDA de cada tipo,
+inclinada, no idioma e no nível escolhidos (`$lib/atividades/amostras.ts`: em inglês a frase
+muda com o nível, como no desenho; nos outros idiomas é uma amostra, com as frases dos exemplos do
+blog). Amostra em inglês numa atividade de japonês seria mentira; idioma sem voz mostra a escuta
+apagada. A onda e o cursor dos cartões se mexem, como no desenho (components.md "Questão
+resumida"). O bloco "Sobre a atividade" fica no MEIO da coluna, nos dois eixos, e **nada muda de
+altura com o que se escolhe** — as colunas são centralizadas, e uma linha a mais movia tudo: o
+nome do nível vai na linha do rótulo, numa linha só (na frase de baixo, "Intermediário superior"
+quebrava em três linhas), os seletores de idioma não têm frase embaixo, e no desktop os cartões
+da direita têm altura fixa e o chip "inglês · B2" (como no desenho: o idioma sem a região) reserva
+o lugar do nível mesmo sem nível. O nível diz que é rótulo e não muda as questões (o "calibra o
+vocabulário" do desenho não é verdade aqui).
+
+**QUANTAS questões e de QUAIS tipos é a etapa 2, logo acima da lista** (`BlocoDeGeracao.svelte`).
+Isso não contradiz "o professor nunca escolhe a habilidade": ele não marca a habilidade de cada
+exercício — ela continua derivada —, ele diz o que a atividade treina, e o servidor filtra o que
+os geradores produziram (kernel.md "O corte"). O pedido do dono do repositório, em três regras
+(`$lib/atividades/tipos-por-material.ts`, com teste):
+
+- **O bloco de cima vale para todos os materiais**: mexer nele muda todos. O tipo ligado em só
+  alguns aparece tracejado, sem número (o "em 2 de 4" saiu a pedido do dono do repositório), e o
+  clique nele liga em todos.
+- **Cada material tem o seu "Gera"** (os mesmos quatro chips, sob a linha dele, pelo `detalhe` do
+  `MaterialList`). Ligar ali um tipo que o bloco de cima não tem liga lá também: o bloco de cima é
+  a UNIÃO. (Havia a linha "N materiais têm tipos próprios" com "Usar os tipos de cima em todos";
+  saiu a pedido do dono do repositório.)
+- **Nenhum material fica sem tipo.** O clique que desligaria o último tipo de um material — no
+  "Gera" dele, ou no bloco de cima, que desliga em todos — não faz nada: o chip fica com o cursor
+  de bloqueado (`aria-disabled`, não `disabled`, para continuar alcançável) e o `title` diz o
+  que fazer ("Ligue outro antes de desligar este"). Tipo que não entrega hoje (sem voz) não conta
+  como ligado. A regra é pura e testada (`bloqueioNoGeral`, `bloqueioNoMaterial`).
+- **A quantidade não corta nada nesta tela.** A geração é para todos; o que passar do número fica
+  "fora" na revisão, e o professor troca o que entra e o que sai.
+
+Fala e escuta mostram "máx. 5" no chip, ligadas ou não, e o chip tem sempre a largura do texto em
+negrito — sumindo o "máx." ou trocando o peso no clique, os vizinhos andavam. A trilha do "Gerar" ocupa o resto da linha e não anda (os chips não mudam de largura),
+com o trecho escolhido na cor da marca (`.range`). Sem voz no idioma ou sem transcrição, o tipo aparece desligado com o motivo.
+**No wizard cada material é um cartão** (o desenho: tipo, conteúdo, "Editar" e remover numa
+linha, tudo centralizado na vertical; embaixo, o "Gera" com os chips de ligado e desligado). A
+"Prévia" abre por baixo, descendo com opacidade (`desdobrar`), e fecha recolhendo a altura
+(`recolher` — design-system.md "Movimento"). **Ela mostra UM exemplo de cada tipo**, como no
+desenho: no máximo quatro QUESTÕES RESUMIDAS (`QuestaoResumida.svelte`, components.md), na ordem
+escuta, fala, leitura, escrita (`umaPorHabilidade`). De cada habilidade fica a primeira que entra
+com os tipos de agora; o tipo desligado aparece apagado. Houve uma versão com tudo o que o
+material rende (três "Escuta" lado a lado) e outra com o formato no rótulo ("Escuta + Montar"); as
+duas confundiam, e saíram a pedido do dono do repositório. Com espaço, os quatro cartões cabem
+inteiros lado a lado; numa faixa estreita eles rolam de lado, **a largura do cartão sai da
+largura da faixa** (`cqw`) para sobrar MEIO cartão na ponta (o sinal de que há mais), e **a faixa
+começa a 15px da borda, com o encaixe da rolagem respeitando esse respiro** (`scroll-ps`; sem ele
+o navegador encaixava o primeiro cartão colado na borda). Quem as monta é o servidor
+(`previaDoMaterial` → `resumirQuestao`), com os geradores de verdade e sem tradutor. O plano
+vai para o servidor sozinho, 700 ms depois do último clique (`salvarPlanoDeGeracao`), e o botão diz
+o número: "Gerar 8 questões" ("Ligue um tipo" quando nenhum está ligado).
 
 **Material igual ao que o professor já tem é REAPROVEITADO, não duplicado.** `createForActivity`
 procura um equivalente (igualdade de `jsonb`, mesmo `kind`) e liga aquele à atividade. A linha
@@ -222,12 +320,52 @@ ganha a etiqueta **biblioteca** — sem ela o contador não subia e parecia que 
 sido salva. Colar a lista da aula passada de novo é comum, então o lote diz quantas linhas já
 existiam.
 
+**"Gerando" é uma tela de verdade, passo a passo.** `gerarItens` só COMEÇA a geração (em segundo
+plano, server.md "Geração das questões") e a revisão mostra cada passo: os materiais lidos, as
+palavras traduzidas para o associar, as questões montadas, quantas entram e quantas ficam de fora,
+as outras traduções certas e o salvar. O passo que anda tem a `fila` e o texto, o que já terminou
+ganha o check com o número que descobriu, e o que ainda não começou é `skeleton` — a `orbita`
+lenta fica no título. O passo que não vale (sem tradutor, sem par de frases) nem aparece. A tela
+diz que dá para sair: o trabalho continua, e as questões estão lá na volta. Falhou, ela diz por
+quê e oferece "Gerar de novo".
+
 Esperas são reais e assíncronas, e cada uma usa a variante certa de `Loading.svelte`
-(components.md "Espera"): gerar itens é `orbita` em `pace="devagar"` mais `skeleton`, porque a
-estrutura do que vem é conhecida; salvar item, publicar, regerar e enviar convites são `fila`
+(components.md "Espera"): salvar questão, publicar, regerar e enviar convites são `fila`
 dentro do próprio botão; a fila de e-mail é `LoadingBar`. Gerar áudio bloqueia a publicação com
 progresso REAL (x de y áudios prontos), que é o único caso em que existe número para mostrar.
 Nenhuma delas tem prazo estimado.
+
+**A revisão é o ROTEIRO do aluno** (o desenho "Studio Wizard" do Claude Design, reformulado a
+pedido do dono do repositório). Duas colunas no desktop, cada uma rolando por dentro:
+
+- **O palco** (30% da largura, de 480 a 720px, `base-200`): o celular da home (`CelularDoAluno`,
+  components.md) com a questão escolhida montada pelo `buildRuntimeItem` — o mesmo payload do
+  Player, sem gabarito —, a posição no topo ("3/8") e as setas redondas dos lados, que andam pelo
+  roteiro e depois pelas de fora. A questão de fora aparece com o aparelho apagado. O aparelho não
+  encolhe: numa tela baixa o palco rola (`safe center`, senão o topo ficava fora do alcance).
+  **A questão cabe INTEIRA na tela do aparelho**, sem rolar, nem que precise encolher (pedido do
+  dono do repositório): o "montar" de frase longa e o "ordenar" de quatro falas passavam da tela, e
+  o fim deles ficava escondido. E o celular é o do aluno de verdade: as setas do "ordenar", as
+  peças e as palavras do "tocar" saíam infladas pelo alvo de 48px de `data-surface="player"`, que
+  nem o Player nem o celular da home usam.
+- **O roteiro**: "N questões geradas", "Gerar novamente" e "Aceitar todas" (só quando todas
+  cabem), os chips por habilidade com "N de M aceitas", e a lista NA ORDEM EM QUE O ALUNO
+  RESPONDE, ligada por um fio: alça de arrastar, a bolha da habilidade, a posição, o enunciado, o
+  tipo de material com o trecho, a habilidade e o check de aceita. **Arrastar muda a sequência**
+  (`svelte-dnd-action` pela alça, com teclado; `reordenarQuestoes`, que só aceita EXATAMENTE as
+  de dentro — server.md), e as outras linhas abrem espaço deslizando (`flip`).
+- **A linha escolhida abre** a resposta (cadeado âmbar: só o professor vê, e é a tela dele, atrás
+  do guard), as setas de subir e descer (o caminho visível do arrastar), "Editar" e "Descartar".
+- **A questão do palco RESPONDE**: o professor responde no celular e o "Verificar" traz o veredito
+  que o aluno receberia, com o grifo e a resposta esperada; "Tentar de novo" zera. Quem corrige é o
+  servidor (`corrigirNaRevisao`), pelo mesmo kernel e com a MESMA seed do runtime do palco, e nada
+  é gravado. Fala e escrita livre não se corrigem ali, e o rodapé do celular diz por quê (o
+  microfone; a correção é do professor).
+- **As de fora vêm numa seção à parte**, "Ficaram de fora · N" — não no fio do roteiro: podem ser
+  vinte, e o roteiro é o que o aluno faz. Cada uma tem "Aceitar", que a põe no FIM do roteiro.
+  O teto de 15 vale ao aceitar, ao criar do zero e ao publicar.
+- O check de aceita é na cor da MARCA, não verde (verde é correção), e o "Gerando" continua numa
+  coluna de 560px no meio da tela.
 
 Esse progresso é o único número do wizard que muda **sem o professor fazer nada** — quem
 sintetiza é o worker, noutro processo. Por isso a etapa 4 recarrega sozinha enquanto falta
@@ -235,15 +373,22 @@ sintetiza é o worker, noutro processo. Por isso a etapa 4 recarrega sozinha enq
 publicação (server.md "TTS"). Enfileirar só ao publicar era um impasse: o botão exigia o áudio
 pronto, e o áudio só era pedido por quem apertasse o botão.
 
-**A prévia do editor de questão é a de VERDADE**: `previaDoItem` monta a questão com o que está
-no formulário — antes de salvar — pelo mesmo `montarItemEditado` do `salvarItem` e pelo mesmo
+**O editor de questão é um MODAL sobre a revisão** (`revisar/EditorDeQuestao.svelte` é a casca;
+`FormularioDaQuestao.svelte`, uma abertura), para editar e para criar do zero. Era uma tela
+inteira, e o professor saía da lista para corrigir uma questão. `itens/[itemId]` virou um
+redirecionamento para `revisar?questao=<id>` (a tela de detalhes e a prévia levam a ele), com o
+mapeamento de questão publicada para a cópia editável. Ver "O editor de questão", abaixo.
+
+**A prévia do editor de questão é a de VERDADE**: `previaDaQuestao` monta a questão com o que está
+no formulário — antes de salvar — pelo mesmo `montarQuestao` do `salvarQuestao` e pelo mesmo
 `buildRuntimeItem` do Player, e quem desenha são os componentes do Player
-(`PreviaDaQuestao.svelte`, o mesmo da prévia da atividade inteira). A versão anterior era um
+(`PreviaDaQuestao.svelte`, o mesmo do palco da revisão). A versão anterior era um
 desenho à mão que se dizia `toRuntime()` e não era: numa lacuna ela escondia a tradução de apoio
-que o aluno vê. **E é um celular**: moldura de bezel de 340px por 560px de
-altura MÍNIMA, centrada na coluna de 420px, com a ação no rodapé. Antes ela tinha a altura do
-próprio conteúdo, então uma questão curta virava uma tirinha e o professor não via o respiro que
-o aluno vê. **As formas de ambiente ficam no PAINEL, nunca dentro do aparelho** — dentro dele
+que o aluno vê. **E é o celular da home** (`CelularDoAluno`: 344 × 600, a tela em zoom), na
+coluna de 404px do modal; o aparelho nunca estica nem encolhe, e a QUESTÃO encolhe até caber
+inteira (components.md "O celular do aluno") —
+houve uma versão que esticava com o conteúdo (uma questão curta virava uma tirinha) e outra que
+encolhia para caber na tela, e as duas ficaram com a largura errada. **As formas de ambiente ficam no PAINEL, nunca dentro do aparelho** — dentro dele
 caem atrás do enunciado e do campo de resposta —, ancoradas embaixo (`edges="bottom"`, 190px) e
 com `scale={0.62}`, porque elas crescem com `vw` e numa coluna estreita sairiam do tamanho de uma
 tela inteira (components.md "Formas de ambiente").
@@ -528,54 +673,54 @@ loader que esquece um campo faz a tela cair no mock inteiro, silenciosamente.
 
 Pendências dentro do que já está ligado:
 
-- **O editor de questão** (`atividades/[id]/itens/[itemId]`) pergunta na ordem em que o aluno lê:
-  o que ele FAZ, o enunciado, o que ele VÊ (ou ouve), a resposta certa (moldura âmbar, só o
-  professor vê) e como é corrigida. O que dá para mudar é UMA lista de regras
-  (`$lib/atividades/editor-item.ts`) que a tela e o servidor (`montarItemEditado`) usam — a tela
-  não oferece o que o servidor recusaria. O que estava errado, e por quê:
-  - **Salvar apagava a língua da resposta.** O `salvarItem` gravava `grading: { mode }` e um
-    prompt montado só com quatro campos: salvar uma "traduza para o português" sem mudar nada
-    tirava o `answerLang: 'source'`, a resposta passava a ser corrigida com as regras do inglês e
-    ganhava o teclado do idioma alvo. Agora o que o formulário não edita é PRESERVADO (teste em
-    `item-editado.test.ts`).
-  - **A resposta principal vinha repetida nas variantes** (`readableAnswerKey`): corrigir "teh"
-    para "the" deixava "teh" aceito.
-  - **Seis modos de correção, e só um mudava a nota.** O corretor de digitar e de lacuna é sempre o
-    tolerante; "exata", "sequência", "conjunto" e "ASR" só trocavam a dica, e "rubrica" numa
-    questão de escolha desligava a correção dela. Hoje digitar oferece "Automática" ou "Você
-    corrige" (escrita livre); os outros tipos dizem como são corrigidos, sem escolha.
-  - **O seletor de prompt** deixava escolher "Imagem" e "Composto", que não existem (não há
-    upload), e trocar texto por áudio sem gerar áudio. Saiu: o tipo de prompt é o do item.
-  - **"Sugestão: aceitar também…"** propunha a resposta normalizada, que a correção já aceita
-    sozinha — um clique que não mudava nada. Saiu; no lugar, uma linha diz o que a correção já
-    ignora no idioma DA RESPOSTA (maiúscula, pontuação, acento).
-  - **O enunciado padrão era congelado** como texto do professor a cada salvar, e trocando de tipo
-    a questão levava "Ouça e escreva" para uma lacuna. Agora igual ao padrão não é gravado; o
-    padrão acompanha o tipo; "Voltar ao padrão" desfaz uma personalização. Digitar com texto não
-    tem padrão, e o professor escreve o dele.
-  - **Sair perdia o que estava digitado.** "Próxima" é um link; agora o guarda barra a saída com
-    "Salvar e sair", "Descartar e sair" ou "Continuar editando", e "mudanças não salvas" aparece na
-    barra.
-  - **O texto da questão** é editável só onde não descola do gabarito: num áudio de "monte" ou
-    "escolha" as peças saíram dele, então ali ele é só leitura. Num áudio de digitar, a tela avisa
-    quando o que o aluno ouve e a resposta esperada não batem, e mudar o texto pede o TTS novo ao
-    salvar. O texto que existia não pode ser apagado — numa "traduza" ele é a própria questão.
-  - **Lacuna**: selecionar a palavra na frase e "Lacuna na seleção" marca o buraco e preenche a
-    resposta de uma vez (antes eram dois campos que precisavam bater). Lacuna → digitar passa a
-    resposta para a frase inteira; "traduza para o português" não vira lacuna.
-  - Questão descartada abre com o aviso e "Restaurar".
-    Continua pendente o formulário campo a campo das outras seis interações (kernel.md "Nível 3"):
-    nelas o gabarito aparece só para leitura, e trocá-lo é editar o material e gerar de novo.
+- **O editor de questão** (modal da revisão) pergunta na ordem em que a questão se monta: o
+  TIPO (escuta, fala, leitura, escrita: o que o aluno faz — e **montar sem áudio é Leitura**, como o
+  kernel deriva: o editor o punha em Escrita, e a mesma questão era Escrita no editor e Leitura no
+  celular e no roteiro), o FORMATO (o tipo filtra os possíveis),
+  o enunciado, o que o aluno lê ou ouve, e a resposta certa na moldura âmbar (só o professor vê),
+  com "como é corrigida" numa linha. **Os oito formatos se editam e se criam** — escolher,
+  digitar, montar, lacuna, associar, ordenar, tocar na palavra e falar —, cada um com campos
+  LEGÍVEIS (as alternativas com a certa marcada, a frase na ordem certa, os pares, as falas em
+  ordem). As regras são UMA lista isomórfica (`$lib/atividades/questao.ts`) que a tela e o
+  servidor (`montarQuestao`) usam. O que vale saber:
+  - **Trocar de tipo ou de formato leva as DUAS frases, cada uma para o seu lugar**: a do idioma
+    alvo (o áudio da escuta, a frase da lacuna, do montar, da fala) e a tradução (o apoio da
+    lacuna, a frase que o montar traduz, a resposta do "traduza para o português"). Levando só
+    "a frase", a tradução em português virava o áudio de uma escuta.
+  - **Na escuta, a resposta do "digitar" é sempre a frase do áudio de agora**: a da abertura
+    ficava escondida na lista e, trocada a frase, a antiga continuava valendo.
+  - **"Escolher" na leitura pede o que o aluno lê, e "Tocar na palavra" pede uma pista** (ou um
+    enunciado próprio): "Toque na palavra certa" sozinho não diz QUAL.
+  - **O celular da questão NOVA mostra o lugar dela** ("8/9"), não "fora": ela entra no fim do
+    roteiro, antes do associar que fecha.
+  - **O que o formulário não edita é PRESERVADO**: a língua da resposta de uma "traduza para o
+    português", o `mediaId` de uma escuta cuja frase não mudou, as ordens aceitas de um "monte"
+    cujas peças não mudaram, as dicas de uma fala de mesma frase (teste em `item-editado.test.ts`).
+  - **Trocar o tipo ou o formato refaz os campos de resposta e leva a frase alvo junto**; o
+    enunciado acompanha o padrão, a não ser que o professor tenha escrito o dele ("Voltar ao
+    padrão" desfaz). Digitar com texto não tem padrão: o professor escreve o dele.
+  - **Na escuta, a frase que o aluno ouve É a resposta**: no montar, a frase; no digitar, a
+    principal; no escolher, a alternativa certa (as outras são as erradas). Mudar a frase pede o
+    áudio novo ao salvar. Sem voz no idioma, o tipo escuta não abre para questão nova; sem
+    transcrição, o fala.
+  - **A lacuna é achada na frase pela fronteira de PALAVRA** (`acharTrecho`, pelo `Intl.Segmenter`
+    do idioma): "a" em "I have a cat" é a palavra solta, não o "a" de "have". "Usar o que está
+    selecionado na frase" preenche o trecho. O "monte" gerado guarda só as peças: o editor abre
+    com a frase do material de origem, e em branco as peças de agora continuam.
+  - **A questão nova só existe quando o professor salva**, já validada, e entra no fim do
+    roteiro (antes do associar que fecha, quando ele é a última). Ela nascia no clique com um texto marcador, e fechar o
+    editor deixava aquilo na atividade. Rascunho antigo que ainda tenha o marcador é recusado na
+    publicação.
+  - **Fechar com mudança não salva pergunta antes** ("Continuar editando" ou "Fechar sem
+    salvar"), pelo X, pelo Esc ou pelo véu. "Salvar e ir para a próxima" anda pela lista; "Descartar"
+    e "Aceitar" (as palavras do roteiro) valem dali mesmo.
 - `Prompt.instruction` é o enunciado que o professor escreve no editor; sem ele vale a copy
   padrão da `instructionKey`. Quem resolve os dois num só é `promptInstruction()`
   (`server/player/runtime.ts`) — a prévia e o Player têm que mostrar a mesma frase.
 - Sem rate limit por IP em `iniciarTentativa`/`responderItem` (server.md pede) — mesmo padrão
   provisório do formulário de contato.
-- "Criar questão do zero" nasce com um texto MARCADOR ("Escreva a frase e marque a lacuna com
-  ___"), não vazio: `clozeAuthoringSchema` exige `masked` e `accepted` não vazios, e um payload
-  que não valida rebenta em `toRuntime()` — ou seja, na tela do aluno. Por segurança a prévia
-  isola item por item e `publicarAtividade` recusa publicar qualquer um que não valide, já que
-  versão publicada é imutável e não teria conserto.
+- A prévia da atividade isola questão por questão e `publicarAtividade` recusa publicar qualquer
+  uma que não valide, já que versão publicada é imutável e não teria conserto.
 
 ## Início
 
@@ -688,7 +833,10 @@ Atividade sempre tem (`targetLang`); turma e material podem não ter, e aí a ta
 ## Biblioteca de materiais
 
 `(studio)/materiais` lista TUDO que o professor cadastrou, inclusive o que ele colou dentro de
-uma atividade — é o caminho normal de o material entrar (db.md "ContentUnit.activities").
+uma atividade — é o caminho normal de o material entrar (db.md "ContentUnit.activities"). É uma das
+três listas no desenho comum (acima): a busca no conteúdo, o tipo e o idioma em selects, a ordem, e
+os chips de situação — todos, em atividades, sem uso e arquivados. A linha inteira abre a edição, na
+bandeja; o "⋯" arquiva ou apaga. Vazia, ela é um hero, como as de atividades e de turmas.
 
 **"Novo material" abre uma bandeja** (`Bandeja.svelte`, components.md), não outra tela: cadastrar
 não pode tirar o professor da lista, que é onde ele confere se o que acabou de digitar já estava
@@ -895,15 +1043,30 @@ characters" e nada aparecia na tela. O valor é restaurado no `enhance`.
 `draftFromPublished`, não `draft`: publicar apaga o rascunho, e sem isso a tela abria vazia —
 o professor clicava em editar e a atividade dele sumia. A versão no ar continua intacta.
 
-**Os filtros da lista de atividades filtram.** Todas / Publicadas / Rascunhos eram três chips
-DECORATIVOS — nenhum `onclick`, e o primeiro sempre pintado como ativo. O loader manda a lista
-inteira e a tela filtra e pagina em cima dela (8 por página, `Pagination.svelte`): é dado do
-próprio professor e a troca fica instantânea. O "Ver todas" ao pé da tabela, que também não
-fazia nada, deu lugar à paginação de verdade.
+**As três listas do Studio são UM desenho** — atividades, materiais e turmas (pedido do dono do
+repositório: a de atividades não tinha busca, e cada bloco em comum morava num lugar diferente em
+cada tela). De cima para baixo: o cabeçalho com os números e a ação de criar ("Nova atividade",
+"Novo material", "Nova turma"), a barra de busca e filtros (os selects de filtro e de ORDEM ao
+lado do campo), os chips de situação com a contagem, a barra do que está marcado, a tabela (cartões
+no celular), o vazio do filtro com "Limpar busca e filtros" e a paginação, de 10 nas três. O que é
+de cada uma vem depois (a nota "turma não fecha a porta da frente", as respostas que esperam
+retorno) ou antes da busca (a retomada "Você parou aqui", que é tarefa começada). Os componentes
+são os de `$lib/components/lista/` (components.md "Listas do Studio"). A linha inteira abre o
+item — o título é o link e cobre a linha —, e o "⋯" dela tem as ações daquele item.
+
+**Atividades e materiais se arquivam e se apagam em massa.** Marcar linhas mostra a barra com
+"Arquivar" (ou "Desarquivar", na situação "Arquivadas") e "Apagar"; o "⋯" de cada linha faz o
+mesmo com uma. Arquivar e apagar passam por uma confirmação (`ConfirmarAcao.svelte`, um
+`<dialog>`) que diz a consequência e lista o que muda; apagar atividade pede "apagar" digitado,
+conferido de novo no servidor (pela página dela, uma só continua pedindo o título). Desarquivar não
+pergunta: nada se perde, e a vaga é conferida dentro da trava de cota — todas cabem ou nenhuma
+muda. Filtrar, buscar ou trocar de situação desmarca tudo: a ação vale para o que está na tela. O
+loader manda a lista inteira e a tela filtra, ordena e pagina em cima dela: é dado do próprio
+professor e a troca fica instantânea.
 
 **Abrir uma atividade da lista leva ao DETALHE, não aos resultados.** `atividades/[id]` responde
-"o que é isto": estado, as questões numa lista clicável (cada uma abre o editor dela), link, QR,
-código e para quais turmas foi, com os números de cada envio. Antes a lista pulava direto para
+"o que é isto": estado, as questões, link, QR, código e para quais turmas foi, com os números de
+cada envio. Antes a lista pulava direto para
 `resultados/[activityId]`, que responde "como foi" — a pergunta seguinte, e numa atividade sem
 nenhuma tentativa uma tela vazia. Os resultados continuam a um clique, no cartão de respostas e
 no botão do cabeçalho.
@@ -911,41 +1074,38 @@ no botão do cabeçalho.
 É uma tela de LEITURA: toda ação leva para onde ela já existe (o wizard para editar, a etapa de
 publicar para reenviar, os resultados para o relatório), e nada é editado no lugar.
 
-**Uma coluna, seis blocos, nesta ordem**: o cartão de cabeçalho (`HeaderCard.svelte`: ícone,
-título, "idioma · criada em DATA · editada há N dias", "Editar no wizard" e "Enviar para turma",
-e os quatro números — questões, tentativas em azul, terminadas, turmas que receberam), o
-cartão de estado e áudio, "Como a turma entra" (QR, link e código NUM cartão só — são três formas
-do mesmo endereço, e separados pareciam três coisas), as questões e "Quem recebeu e quem
-respondeu". Havia uma segunda coluna de contexto; ela empurrava o QR para um canto e o
-professor rolava a página procurando o link.
+**Uma coluna, e só o que vale para o estado dela** (o desenho que o dono do repositório pediu
+para "a disposição confusa" do topo):
 
-**O cartão de estado tem uma pílula e uma frase sobre o ALUNO** ("O link responde. Quem abrir
-agora faz exatamente esta versão."), e nos dois estados que não são "no ar" o botão de publicar
-mora nele — é o cartão que diz que falta publicar, então é ele que oferece. A linha do áudio vem
-embaixo, no mesmo cartão: neutra quando está pronto, vermelha quando falta — e só aí aparece
-"Gerar áudio de novo", com o custo dito na linha seguinte (o link
-sai do ar por alguns minutos).
+1. **O cartão do topo** (`HeaderCard.svelte`) diz o que é e EM QUE ESTADO está: o título; a pílula
+   do estado com uma frase sobre o ALUNO (no ar, mudanças por publicar, rascunho, arquivada); os
+   dados, cada um com o seu rótulo numa linha — idioma, nível (um select: troca ali, na hora, sem
+   publicar), criada em (com "editada há…" embaixo) e os módulos (chips mais "+ Acrescentar"); e a
+   AÇÃO DO ESTADO ao lado de "Editar no wizard": "Publicar", "Publicar as mudanças", "Enviar para
+   turma" ou "Desarquivar". O estado era um cartão à parte sob este, e o rascunho tinha três avisos
+   de "publique" espalhados pela tela. Os números embaixo: as questões sempre; tentativas,
+   terminadas e turmas só no ar (num rascunho elas são sempre zero).
+2. **"Como a turma entra"** (QR, link e código NUM cartão só) **só existe no ar**: antes de publicar
+   não há link, e o lugar dele era uma caixa repetindo "publique".
+3. **As questões têm o desenho da REVISÃO** — o celular (`CelularDoAluno`) com a questão escolhida,
+   as setas, e o roteiro ligado pelo fio, com a bolha da habilidade, a posição, o enunciado, a
+   etiqueta do material e o trecho —, **só para ver**: nada se arrasta, nada se edita (editar é no
+   wizard). A linha escolhida mostra a resposta, com o cadeado. O rodapé do celular é "Responder na
+   prévia", que leva à prévia do aluno; a questão no celular usa a mesma seed dela. As linhas saem do
+   mesmo `questoesDoRoteiro` da revisão (`$lib/server/atividades/roteiro.ts`).
+4. **"Quem recebeu e quem respondeu" só existe no ar E com alguma resposta**: a distribuição das
+   respostas (as três faixas, a legenda em porcentagem) e os envios por turma com abriram e
+   terminaram.
+5. **"Arquivar ou apagar", lado a lado**: arquivar (largo) e apagar de vez (estreito, em vermelho),
+   cada um com a consequência escrita e o botão embaixo. Arquivada, desarquivar mora no topo e aqui
+   fica só apagar.
 
-**As questões são uma tabela**: número em mono, o que o aluno faz, uma pílula de TIPO (escuta,
-fala, escrita, escolha, montar — `tipoDoItem`, que sai do prompt e da interação juntos) e a
-habilidade derivada. Cada linha abre o editor do item. A contagem por habilidade cabe na linha do
-título ("3 questões · Leitura 3, Escrita 3"): o bloco "Habilidades treinadas" que vinha depois
-repetia a coluna da tabela e saiu. "Quem recebeu e quem respondeu" abre com a distribuição das
-respostas (barra com as três faixas e a legenda em porcentagem) e lista os envios por turma com
-abriram/terminaram e uma barra do que terminou.
-
-**O cartão de estado diz também como está o ÁUDIO.** Ele é a única parte da atividade que vive
-fora do banco — num bucket — e portanto a única que pode estar faltando sem nada na tela avisar
-(síntese na fila, job que falhou). É aqui que o professor volta dias depois para reenviar o link,
-então é aqui que ele precisa ver "faltam 4 de 10" antes de mandar para a turma. Atividade sem
-questão de escuta não mostra linha nenhuma: "0 de 0" seria inventar um problema. **O áudio não
-vence** (server.md "TTS"): pronto, a linha diz que os arquivos ficam enquanto a atividade existir.
-Houve um aviso "vence em N dias", âmbar a três dias do fim; ele saiu junto com o prazo.
-
-**"Gerar áudio de novo" só aparece quando o áudio FALTA.** Numa atividade
-saudável o botão era ruído, e pior: um convite a refazer trabalho já feito, deixando o link fora
-do ar por alguns minutos à toa. Regerar deixa o link fora do ar enquanto a fila anda, e a tela
-diz isso antes.
+**O áudio só aparece quando FALTA**, no cartão do topo, em vermelho: quantos faltam, que gerar de
+novo tira o link do ar por alguns minutos, e "Gerar áudio de novo". Ele é a única parte da
+atividade que vive fora do banco — num bucket — e portanto a única que pode estar faltando sem
+nada na tela avisar (síntese na fila, job que falhou); pronto, ele não vira linha nenhuma. Havia
+um cartão de estado com a linha "Áudio pronto"; ele saiu com a reorganização do topo. **O áudio
+não vence** (server.md "TTS").
 
 **Áudio faltando barra as duas saídas.** O link não abre (503 `audioPending`) e o envio para as
 turmas é recusado — mandar trinta e-mails de uma atividade que não responde é fazer a turma
@@ -954,14 +1114,15 @@ avisa, mas não é ela que impede.
 
 O estado segue os mesmos três nomes do resto do produto — **no ar**, **mudanças por publicar**,
 **rascunho** —, e cada um diz o que o ALUNO encontra ao abrir o link, que é a pergunta que o
-professor tem ali. **No rascunho nunca publicado não há link nenhum**: o bloco "Como a turma
-entra" vira uma caixa dizendo que o link, o QR e o código nascem na publicação, com o botão de
-publicar — mostrar um endereço que ainda não abre era o que o professor colava no grupo.
+professor tem ali. **No rascunho nunca publicado não há link nenhum**: "Como a turma entra" nem
+aparece, e a frase do estado diz que o link, o QR e o código nascem na publicação — mostrar um
+endereço que ainda não abre era o que o professor colava no grupo.
 
-**Clicar numa questão abre o editor dela, inclusive numa atividade no ar.** A tela lista a versão
-PUBLICADA, e o editor trabalha no rascunho — os ids são de linhas diferentes, então o link dava 404. O loader do editor resolve isso: id que não está no rascunho é procurado na versão no ar e,
-se estiver lá, ele abre a cópia editável (`draftFromPublished`) e redireciona para o item
-EQUIVALENTE. O que liga um id ao outro é a POSIÇÃO — o clone copia na mesma ordem —, nunca o id.
+**O editor de uma questão abre pela revisão, inclusive numa atividade no ar.** A tela lista a versão
+PUBLICADA, e o editor trabalha no rascunho — os ids são de linhas diferentes, então o link dava 404. O endereço `itens/[itemId]` resolve isso (`+server.ts`): id que não está no rascunho é
+procurado na versão no ar e, se estiver lá, ele abre a cópia editável (`draftFromPublished`) e
+leva à revisão com o editor aberto na questão EQUIVALENTE (`revisar?questao=`). O que liga um id
+ao outro é a POSIÇÃO — o clone copia na mesma ordem —, nunca o id.
 
 **O professor não escolhe o link.** O endereço sai do id da atividade (`server/player/slug.ts`),
 e por isso é único por construção e estável entre publicações. Antes havia um campo de slug, uma
@@ -976,20 +1137,22 @@ mostrar o derivado era projetar um QR que respondia 404.
 `publicarAtividade` não aceita `slug` no schema: aceitar um do cliente seria aceitar que alguém
 escolhesse o endereço de outra pessoa por um POST direto.
 
-**O botão de publicar tem três textos, e nenhum deles é um número.** Nunca publicada é
-"Publicar"; no ar com mudanças pendentes é "Publicar mudanças"; no ar e sem nada pendente o
-wizard ACABOU — a ação é **"Concluir"**, que fecha o fluxo e leva para a lista de atividades.
-Mandar de volta para "Editar atividade" ali era devolver o professor ao começo do que ele acabou
-de terminar; editar continua a um clique pelo "Revisar" do cabeçalho e pela lista. O loader
+**O botão de publicar nunca é um número.** Nunca publicada é "Publicar"; no ar com mudanças
+pendentes é "Publicar mudanças" (os dois com "e enviar N convites" quando há turma marcada); no
+ar e sem nada pendente o wizard ACABOU — a ação é **"Ir para a atividade"** (o desenho), que
+leva ao detalhe, onde estão o link, o QR e quem recebeu; com turma ou módulo marcado ali, ela
+vira "Enviar N convites" / "Pôr no módulo". Mandar de volta para "Editar atividade" era devolver
+o professor ao começo do que ele acabou de terminar; editar continua a um clique pelo "Revisar"
+do cabeçalho e pela lista. O loader
 entrega `published` (no ar e limpa) e `jaNoAr` (existe link no ar) — nunca `nextVersion`. Na
 lista de atividades e no cabeçalho de resultados o mesmo vale: o badge é "No ar", não "v3 no ar",
 e o filtro por versão saiu da tela de resultados.
 
-**Publicada, a etapa 4 vira uma tela de desfecho.** Sem nada a publicar, o formulário não teria
-como ser enviado, então os interruptores de código e de resultado dariam a impressão de mudar
-algo — eles viram o RESUMO do que está valendo, e mudar passa por editar e publicar de novo. O
-aviso "isto cria/atualiza o link" some junto: ele descreve o efeito de publicar, e ali não há o
-que publicar.
+**Publicada, a etapa 4 vira uma tela de desfecho.** Sem nada a publicar, as opções SOMEM — seriam
+interruptores que não mudam nada; o código que está valendo aparece no cartão do link, e mudar
+passa por editar e publicar de novo. A coluna volta ao topo depois de publicar, para o "Está no
+ar" nascer à vista. **Antes da primeira publicação não há link nem QR**: o lugar deles diz que
+nascem ao publicar (um QR que não abre iria para o quadro antes da hora).
 
 **O QR tem lugar próprio, em tamanho de projeção.** É como a atividade chega numa sala de aula
 — o professor projeta e a turma aponta a câmera —, e a 66px dentro de outro cartão ele era
@@ -1204,7 +1367,13 @@ aluno e no seletor de atividades da turma. **Não muda os exercícios.**
 Os limites do plano são de ESTOQUE, então o detalhe da atividade termina em "Arquivar ou apagar".
 Arquivar fecha o link para quem não começou (a entrada responde `unpublished`; quem está no meio
 termina), guarda os resultados e libera a vaga; desarquivar exige vaga. Apagar de vez pede o título
-digitado e diz quantas tentativas vão junto. Arquivadas saem de "Todas" e ganham chip próprio.
+digitado e diz quantas tentativas vão junto. Arquivadas saem de "Todas" e ganham chip próprio. Na
+lista dá para fazer o mesmo com várias de uma vez (acima, "As três listas do Studio").
+
+**Material também se arquiva** (`ContentUnit.archivedAt`, db.md): sai da biblioteca (a situação
+"Arquivados" da lista), do limite de materiais do plano, do "usar da biblioteca" do wizard e da busca
+do cabeçalho, e não é reaproveitado como equivalente ao cadastrar o mesmo texto. As atividades que já
+o usam continuam com ele — nada no rascunho nem no que está no ar muda. Desarquivar exige vaga.
 
 A etapa 1 mostra o bloqueio ANTES dos campos quando não cabe uma atividade nova — com o número, o
 caminho (arquivar) e `/planos?motivo=`. Material que não cabe aparece como "N ficaram de fora".

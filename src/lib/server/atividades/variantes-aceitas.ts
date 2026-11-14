@@ -153,3 +153,46 @@ export async function comVariantesDaTraducao(
 		return items;
 	}
 }
+
+/**
+ * As variações de UMA frase, para o formulário de material mostrar junto da
+ * tradução sugerida (`sugerirTraducao`). É o mesmo funil das questões.
+ */
+export async function variantesDaFrase(
+	original: string,
+	principal: string,
+	perfis: { alvo: LanguageProfile; origem: LanguageProfile },
+	tradutor: Tradutor | null
+): Promise<string[]> {
+	const [variantes] = await variantesDasFrases([{ original, principal }], perfis, tradutor);
+	return variantes ?? [];
+}
+
+/**
+ * As variações de VÁRIAS frases de uma vez — a lista colada, e a frase que o
+ * professor salvou antes de a sugestão chegar: o servidor traduz o que veio em
+ * branco e, sem isto, o material entrava sem as variações que a tela teria
+ * mostrado. São os mesmos dois pedidos ao tradutor para a lista inteira (as
+ * alternativas e a ida e volta), nunca dois por frase. Uma lista por frase, na
+ * ordem; vazia quando nada passou ou o tradutor não respondeu.
+ */
+export async function variantesDasFrases(
+	frases: { original: string; principal: string }[],
+	perfis: { alvo: LanguageProfile; origem: LanguageProfile },
+	tradutor: Tradutor | null
+): Promise<string[][]> {
+	const questoes: Item[] = frases.map(({ original, principal }, i) => ({
+		id: `variantes-${i}`,
+		sourceContentId: null,
+		generatedBy: null,
+		prompt: { kind: 'text', text: original, instructionKey: 'translate-to-source' },
+		interaction: { type: 'type', payload: { accepted: [principal] } },
+		grading: { mode: 'tolerant', tolerance: 0.9, answerLang: 'source' },
+		locale: { source: perfis.origem.tag, target: perfis.alvo.tag }
+	}));
+	const com = await comVariantesDaTraducao(questoes, perfis, tradutor);
+	return com.map((questao) => {
+		const lido = typeAuthoringSchema.safeParse(questao.interaction.payload);
+		return lido.success ? lido.data.accepted.slice(1) : [];
+	});
+}

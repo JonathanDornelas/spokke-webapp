@@ -1,61 +1,82 @@
 import { describe, expect, it } from 'vitest';
+import { ROTULO_DA_INTERACAO } from './editor-item';
 import {
-	chaveDoEnunciado,
-	modoInicial,
-	modosDeCorrecao,
-	podeAlternar,
-	ROTULO_DA_INTERACAO,
-	textoEditavel
-} from './editor-item';
-import type { InteractionKind } from '$lib/kernel/interactions/types';
+	FORMATOS_DO_TIPO,
+	TIPOS_DE_QUESTAO,
+	camposIniciais,
+	enunciadoPadrao,
+	fraseDaQuestao,
+	questaoNova,
+	tipoDaQuestao
+} from './questao';
 
-const TODAS: InteractionKind[] = [
-	'type',
-	'cloze',
+const CHAVES = [
 	'choice',
 	'assemble',
+	'type',
+	'cloze',
 	'match',
 	'order',
 	'select',
 	'speak'
-];
+] as const;
 
 describe('regras do editor de questão', () => {
-	it('todo tipo tem rótulo em português, e nenhum é a chave do kernel', () => {
-		for (const tipo of TODAS) {
-			expect(ROTULO_DA_INTERACAO[tipo]).toBeTruthy();
-			expect(ROTULO_DA_INTERACAO[tipo].toLowerCase()).not.toBe(tipo);
+	it('todo tipo de interação tem rótulo em português, e nenhum é a chave do kernel', () => {
+		for (const chave of CHAVES) {
+			expect(ROTULO_DA_INTERACAO[chave]).toBeTruthy();
+			expect(ROTULO_DA_INTERACAO[chave].toLowerCase()).not.toBe(chave);
 		}
 	});
 
-	it('só digitar e lacuna alternam, e só com resposta no idioma alvo', () => {
-		expect(podeAlternar('type', 'target')).toBe(true);
-		expect(podeAlternar('cloze', 'target')).toBe(true);
-		expect(podeAlternar('type', 'source')).toBe(false);
-		expect(podeAlternar('assemble', 'target')).toBe(false);
+	it('os oito formatos aparecem em algum tipo de questão', () => {
+		const todos = new Set(TIPOS_DE_QUESTAO.flatMap((t) => FORMATOS_DO_TIPO[t]));
+		expect([...todos].sort()).toEqual([...CHAVES].sort());
 	});
 
-	it('o texto de um áudio preso a peças não é editável; o de leitura é', () => {
-		expect(textoEditavel('assemble', 'audio')).toBe(false);
-		expect(textoEditavel('choice', 'audio')).toBe(false);
-		expect(textoEditavel('assemble', 'text')).toBe(true);
-		expect(textoEditavel('type', 'audio')).toBe(true);
+	it('a questão gravada abre no tipo certo', () => {
+		expect(tipoDaQuestao('audio', 'choice')).toBe('escuta');
+		expect(tipoDaQuestao('text', 'speak')).toBe('fala');
+		// Montar sem áudio é Leitura, como o kernel deriva (o roteiro e o celular dizem o mesmo).
+		expect(tipoDaQuestao('text', 'assemble')).toBe('leitura');
+		expect(tipoDaQuestao('text', 'match')).toBe('leitura');
 	});
 
-	it('a correção de digitar é automática ou do professor; a dos outros é a do tipo', () => {
-		expect(modosDeCorrecao('type', 'tolerant')).toEqual(['tolerant', 'rubric']);
-		expect(modosDeCorrecao('cloze', 'tolerant')).toEqual(['tolerant']);
-		expect(modosDeCorrecao('assemble', 'sequence')).toEqual(['sequence']);
-		// "exata" num digitar corrigia igual à tolerante: aparece como automática.
-		expect(modoInicial('type', 'exact')).toBe('tolerant');
+	it('o enunciado padrão acompanha o formato, e o gravado vence quando nada mudou', () => {
+		expect(enunciadoPadrao('escrita', 'cloze')).toBe('Complete a frase.');
+		expect(enunciadoPadrao('escuta', 'type')).toBe('Ouça e escreva o que você ouviu.');
+		// Digitar no texto não tem padrão: o professor escreve o dele.
+		expect(enunciadoPadrao('escrita', 'type')).toBe('');
+		const pergunta = {
+			tipo: 'leitura' as const,
+			interacao: 'choice' as const,
+			chave: 'answer-about-passage',
+			answerLang: 'target' as const
+		};
+		expect(enunciadoPadrao('leitura', 'choice', pergunta)).toBe('Responda sobre o texto.');
+		expect(enunciadoPadrao('leitura', 'order', pergunta)).toBe('Coloque as falas na ordem certa.');
 	});
 
-	it('o enunciado padrão acompanha o tipo escolhido', () => {
-		const gravado = { interacao: 'type' as const, chave: 'listen-and-type', prompt: 'audio' };
-		expect(chaveDoEnunciado(gravado, 'type')).toBe('listen-and-type');
-		expect(chaveDoEnunciado(gravado, 'cloze')).toBe('fill-the-blank');
-		const lacuna = { interacao: 'cloze' as const, chave: 'fill-the-blank', prompt: 'text' };
-		// Digitar com texto não tem um padrão que sirva a toda frase.
-		expect(chaveDoEnunciado(lacuna, 'type')).toBe(undefined);
+	it('trocar de formato leva a frase alvo junto', () => {
+		const lacuna = { interacao: 'cloze' as const, frase: 'She ___ here.', aceitas: ['works'] };
+		const frase = fraseDaQuestao(lacuna);
+		expect(frase).toBe('She works here.');
+		expect(camposIniciais('speak', frase)).toEqual({
+			interacao: 'speak',
+			frase: 'She works here.'
+		});
+		expect(camposIniciais('choice', frase)).toEqual({
+			interacao: 'choice',
+			opcoes: ['She works here.', ''],
+			certa: 0
+		});
+	});
+
+	it('a questão nova começa no primeiro formato do tipo, com o enunciado dele', () => {
+		expect(questaoNova('escuta')).toMatchObject({
+			tipo: 'escuta',
+			enunciado: 'Ouça e escolha o que você ouviu.',
+			campos: { interacao: 'choice' }
+		});
 	});
 });

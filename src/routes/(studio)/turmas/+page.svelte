@@ -13,6 +13,22 @@
 	import { casaComBusca } from '$lib/busca';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import NovaTurma from './NovaTurma.svelte';
+	import Pagination from '$lib/components/Pagination.svelte';
+	import CabecalhoDaLista from '$lib/components/lista/CabecalhoDaLista.svelte';
+	import FerramentasDaLista from '$lib/components/lista/FerramentasDaLista.svelte';
+	import ChipsDaLista from '$lib/components/lista/ChipsDaLista.svelte';
+	import VazioDaLista from '$lib/components/lista/VazioDaLista.svelte';
+	import {
+		BOTAO_NOVO,
+		CABECALHO_DA_TABELA,
+		CARTAO_DA_LISTA,
+		ICONE_MAIS,
+		LINHA_DA_TABELA,
+		LINK_DA_LINHA,
+		POR_PAGINA,
+		SELECT_DA_LISTA,
+		TABELA
+	} from '$lib/components/lista/lista';
 
 	interface Classroom {
 		id: string;
@@ -132,6 +148,16 @@
 			)
 	);
 	const filtrando = $derived(!!busca.trim() || filtro !== 'todas' || !!filtroIdioma);
+
+	// Paginada como as outras listas; filtrar ou buscar volta para a primeira página.
+	let pagina = $state(1);
+	const naPagina = $derived(visiveis.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA));
+	$effect(() => {
+		void busca;
+		void filtro;
+		void filtroIdioma;
+		pagina = 1;
+	});
 	function limparFiltros() {
 		busca = '';
 		filtro = 'todas';
@@ -208,170 +234,112 @@
 	</div>
 {:else}
 	<div class="pagina-studio">
-		<div class="mb-[22px] flex flex-wrap items-end gap-4">
-			<div>
-				<h1 class="mb-1 font-display text-[26px] font-semibold tracking-[-0.022em] lg:text-[28px]">
-					Turmas
-				</h1>
-				<p class="text-[13.5px] text-base-content/65">
-					{data.totals.classrooms}
-					{data.totals.classrooms === 1 ? 'turma' : 'turmas'} · {data.totals.students} alunos ·
-					{data.totals.withEmail} com e-mail
-				</p>
-			</div>
-			<div class="flex-1"></div>
-			<FiltroIdioma tags={data.classrooms.map((t) => t.idioma)} bind:valor={filtroIdioma} />
-			<button
-				type="button"
-				onclick={() => abrirNova('um')}
-				class="btn h-[46px] motion-tap gap-2 rounded-[11px] btn-primary px-[19px] text-[15px] font-bold"
-			>
-				<svg class="size-[1.05rem]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-					<path
-						d="M12 5v14M5 12h14"
-						stroke="currentColor"
-						stroke-width="2.4"
-						stroke-linecap="round"
-					/>
-				</svg>
-				Nova turma
-			</button>
-		</div>
+		<CabecalhoDaLista titulo="Turmas">
+			{data.totals.classrooms}
+			{data.totals.classrooms === 1 ? 'turma' : 'turmas'} · {data.totals.students} alunos ·
+			{data.totals.withEmail} com e-mail
+			{#snippet acao()}
+				<button type="button" onclick={() => abrirNova('um')} class={BOTAO_NOVO}>
+					<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path d={ICONE_MAIS} stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+					</svg>
+					Nova turma
+				</button>
+			{/snippet}
+		</CabecalhoDaLista>
 
-		<!-- Busca por turma OU por aluno ("em que turma está a Juliana?"), os filtros
-		     de situação e a ordem. Tudo de tela. -->
-		<div class="mb-4 flex flex-wrap items-center gap-2.5">
-			<label class="relative min-w-[220px] flex-[1_1_280px]">
-				<span class="sr-only">Buscar turma ou aluno</span>
-				<svg
-					class="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-base-content/65"
-					viewBox="0 0 24 24"
-					fill="none"
-					aria-hidden="true"
-					><path
-						d="M11 18.5a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM20.5 20.5l-4.2-4.2"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-					/></svg
-				>
-				<input
-					type="search"
-					bind:value={busca}
-					placeholder="Buscar turma ou aluno"
-					class="input h-[38px] min-h-[38px] w-full ps-9 text-[13.5px]"
-				/>
-			</label>
+		<!-- Busca por turma OU por aluno ("em que turma está a Juliana?"), o idioma e
+		     a ordem; embaixo, os chips de situação. Tudo de tela. -->
+		<FerramentasDaLista bind:busca rotulo="Buscar turma ou aluno">
+			<FiltroIdioma tags={data.classrooms.map((t) => t.idioma)} bind:valor={filtroIdioma} />
 			<label class="sr-only" for="ordem-turmas">Ordenar turmas</label>
-			<select
-				id="ordem-turmas"
-				bind:value={ordem}
-				class="select h-[38px] min-h-[38px] w-auto py-0 text-[13px]"
-			>
+			<select id="ordem-turmas" bind:value={ordem} class={SELECT_DA_LISTA}>
 				<option value="recentes">Mais recentes</option>
 				<option value="nome">Nome (A–Z)</option>
 				<option value="alunos">Mais alunos</option>
 			</select>
-		</div>
-		{#if filtros.length > 1}
-			<div
-				class="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0"
-				role="group"
-				aria-label="Filtrar turmas"
-			>
-				{#each filtros as f (f.id)}
-					<button
-						type="button"
-						aria-pressed={filtro === f.id}
-						onclick={() => (filtro = f.id)}
-						class="inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors {filtro ===
-						f.id
-							? 'border-primary bg-primary text-primary-content'
-							: 'border-line bg-base-100 text-base-content/70 hover:border-primary'}"
-					>
-						{f.label}
-						<span class="font-mono text-[12px] opacity-80">{f.n}</span>
-					</button>
-				{/each}
-			</div>
-		{/if}
+		</FerramentasDaLista>
+
+		<ChipsDaLista opcoes={filtros} bind:valor={filtro} rotulo="Filtrar turmas" />
 
 		{#if visiveis.length === 0}
-			<div
-				class="mb-[22px] rounded-[14px] border border-dashed border-line px-5 py-8 text-center text-[14px] text-base-content/65"
-				role="status"
-			>
-				<p class="mb-3">Nenhuma turma com {busca.trim() ? `“${busca.trim()}”` : 'esse filtro'}.</p>
-				{#if filtrando}
-					<button type="button" onclick={limparFiltros} class="btn btn-sm btn-plain">
-						Limpar busca e filtros
-					</button>
-				{/if}
-			</div>
-		{/if}
-
-		<!-- Desktop: quatro colunas, e nenhuma delas é desempenho. Celular: a
-		     mesma informação em cartões, sem rolagem lateral. -->
-		<div class="mb-[22px] hidden overflow-hidden rounded-[14px] border border-line lg:block">
-			<div
-				class="grid grid-cols-[2.6fr_1.5fr_1.15fr_1.3fr_76px] gap-[18px] border-b border-line bg-base-200 px-5 py-[11px] text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
-			>
-				<span>Turma</span><span>Alunos</span><span>Enviadas</span><span>Último envio</span><span
-				></span>
-			</div>
-			{#each visiveis as turma (turma.id)}
-				<a
-					href={resolve('/(studio)/turmas/[id]', { id: turma.id })}
-					class="grid grid-cols-[2.6fr_1.5fr_1.15fr_1.3fr_76px] items-center gap-[18px] border-b border-line px-5 py-[15px] text-sm text-base-content no-underline transition-colors last:border-0 hover:bg-base-200"
-				>
-					<span class="flex min-w-0 items-center gap-3">
-						<span
-							class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {CLASSE_DA_ETIQUETA[
-								corOuPadrao(turma.color)
-							]}">{turma.badge}</span
-						>
-						<span class="min-w-0">
-							<span class="mb-[3px] block truncate font-semibold">{turma.name}</span>
-							{#if alunoAchado(turma)}
-								<span class="mb-1 block truncate text-[12px] text-primary"
-									>aluno: {alunoAchado(turma)}</span
+			<VazioDaLista
+				texto={busca.trim()
+					? `Nenhuma turma com “${busca.trim()}”.`
+					: 'Nenhuma turma com esse filtro.'}
+				onlimpar={filtrando ? limparFiltros : undefined}
+			/>
+		{:else}
+			<!-- Desktop: quatro colunas, e nenhuma delas é desempenho. Celular: a
+			     mesma informação em cartões, sem rolagem lateral. -->
+			<div class="hidden lg:block {TABELA}">
+				<div class="grid grid-cols-[2.6fr_1.5fr_1.15fr_1.3fr_36px] {CABECALHO_DA_TABELA}">
+					<span>Turma</span><span>Alunos</span><span>Enviadas</span><span>Último envio</span><span
+					></span>
+				</div>
+				{#each naPagina as turma (turma.id)}
+					<div class="grid grid-cols-[2.6fr_1.5fr_1.15fr_1.3fr_36px] {LINHA_DA_TABELA}">
+						<span class="flex min-w-0 items-center gap-3">
+							<span
+								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {CLASSE_DA_ETIQUETA[
+									corOuPadrao(turma.color)
+								]}">{turma.badge}</span
+							>
+							<span class="min-w-0">
+								<a
+									href={resolve('/(studio)/turmas/[id]', { id: turma.id })}
+									class="mb-[3px] block truncate font-semibold text-base-content {LINK_DA_LINHA}"
+									>{turma.name}</a
 								>
-							{/if}
-							<IdiomaTag tag={turma.idioma} class="mt-1" />
-						</span>
-					</span>
-					<span class="min-w-0">
-						<span class="mb-[3px] block font-mono text-[13px]">{turma.students} alunos</span>
-						<!-- É este número que recebe convite, e por isso ele aparece antes
-						     de qualquer botão de enviar. Sem e-mail não é erro: fica em neutro. -->
-						<span class="block text-xs text-base-content/65">
-							{turma.withEmail === turma.students
-								? 'todos com e-mail'
-								: `${turma.withEmail} com e-mail`} · {turma.withAccount} com conta
-						</span>
-						{#if turma.bounced > 0}
-							<span class="mt-0.5 block text-xs font-semibold text-error">
-								{turma.bounced}
-								{turma.bounced === 1 ? 'e-mail voltou' : 'e-mails voltaram'}
+								{#if alunoAchado(turma)}
+									<span class="mb-1 block truncate text-[12px] text-primary"
+										>aluno: {alunoAchado(turma)}</span
+									>
+								{/if}
+								<IdiomaTag tag={turma.idioma} class="mt-1" />
 							</span>
-						{/if}
-					</span>
-					<span class="font-mono text-[13px] text-base-content/65"
-						>{turma.deliveries === 0 ? '—' : turma.deliveries}</span
-					>
-					<span class="text-[13px] text-base-content/65">{turma.lastDelivery}</span>
-					<span class="text-end text-[13px] font-bold text-primary">Abrir</span>
-				</a>
-			{/each}
-		</div>
+						</span>
+						<span class="min-w-0">
+							<span class="mb-[3px] block font-mono text-[13px]">{turma.students} alunos</span>
+							<!-- É este número que recebe convite, e por isso ele aparece antes
+							     de qualquer botão de enviar. Sem e-mail não é erro: fica em neutro. -->
+							<span class="block text-xs text-base-content/65">
+								{turma.withEmail === turma.students
+									? 'todos com e-mail'
+									: `${turma.withEmail} com e-mail`} · {turma.withAccount} com conta
+							</span>
+							{#if turma.bounced > 0}
+								<span class="mt-0.5 block text-xs font-semibold text-error">
+									{turma.bounced}
+									{turma.bounced === 1 ? 'e-mail voltou' : 'e-mails voltaram'}
+								</span>
+							{/if}
+						</span>
+						<span class="font-mono text-[13px] text-base-content/65"
+							>{turma.deliveries === 0 ? '—' : turma.deliveries}</span
+						>
+						<span class="text-[13px] text-base-content/65">{turma.lastDelivery}</span>
+						<svg
+							class="size-4 justify-self-end text-base-content/45"
+							viewBox="0 0 24 24"
+							fill="none"
+							aria-hidden="true"
+						>
+							<path
+								d="M9 5l7 7-7 7"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</div>
+				{/each}
+			</div>
 
-		<ul class="mb-[22px] grid list-none gap-2.5 p-0 lg:hidden">
-			{#each visiveis as turma (turma.id)}
-				<li>
-					<a
-						href={resolve('/(studio)/turmas/[id]', { id: turma.id })}
-						class="block cartao-interativo rounded-[14px] border border-line p-4 no-underline"
-					>
+			<ul class="grid list-none gap-2.5 p-0 lg:hidden">
+				{#each naPagina as turma (turma.id)}
+					<li class={CARTAO_DA_LISTA}>
 						<div class="mb-2.5 flex items-center gap-3">
 							<span
 								class="grid size-[34px] shrink-0 place-items-center rounded-[10px] text-xs font-bold {CLASSE_DA_ETIQUETA[
@@ -379,8 +347,10 @@
 								]}">{turma.badge}</span
 							>
 							<span class="min-w-0 flex-1">
-								<span class="block truncate text-[0.92rem] font-semibold text-base-content"
-									>{turma.name}</span
+								<a
+									href={resolve('/(studio)/turmas/[id]', { id: turma.id })}
+									class="block truncate text-[0.92rem] font-semibold text-base-content {LINK_DA_LINHA}"
+									>{turma.name}</a
 								>
 								{#if alunoAchado(turma)}
 									<span class="block truncate text-[12px] text-primary"
@@ -410,14 +380,16 @@
 							>
 							<span>{turma.lastDelivery}</span>
 						</div>
-					</a>
-				</li>
-			{/each}
-		</ul>
+					</li>
+				{/each}
+			</ul>
+
+			<Pagination bind:pagina porPagina={POR_PAGINA} total={visiveis.length} rotulo="turmas" />
+		{/if}
 
 		<!-- Lembrete: turma não é porta. -->
 		<div
-			class="flex gap-3.5 rounded-[13px] border border-s-[3px] border-line border-s-accent bg-base-200 px-[19px] py-[17px]"
+			class="mt-3.5 flex gap-3.5 rounded-[14px] border border-s-[3px] border-line border-s-accent bg-base-200 px-[19px] py-[17px]"
 		>
 			<svg
 				class="mt-0.5 size-[18px] shrink-0 text-accent"

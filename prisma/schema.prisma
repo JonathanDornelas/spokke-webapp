@@ -227,6 +227,13 @@ model ContentUnit {
   /// o professor escolhe (`$lib/idiomas.ts`). Validado ao ler (`idiomaOuNulo`).
   targetLang String?
 
+  /// Arquivado: fora da biblioteca e do limite de materiais do plano, como a
+  /// atividade arquivada. As atividades que já o usam continuam com ele (nada no
+  /// rascunho nem no que está no ar muda), mas ele não é oferecido em "usar da
+  /// biblioteca" nem reaproveitado como equivalente. Desarquivar volta a ocupar
+  /// vaga, conferida dentro da trava de cota.
+  archivedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -302,6 +309,12 @@ model Activity {
   /// atividade treina, e o gerador filtra o que produziu. Vazio = todas as
   /// disponíveis.
   skills String[] @default(["listening", "speaking", "reading", "writing"])
+
+  /// Os tipos de questão de CADA material, escolhidos na etapa de materiais:
+  /// `{ [contentUnitId]: Skill[] }`. `skills` acima é o bloco de cima da tela —
+  /// a união destes —, e material que não está aqui segue `skills`. Nulo = todos
+  /// os materiais seguem `skills`. Validado com Zod ao ler (db.md "JSON").
+  tiposPorMaterial Json?
 
   /// Arquivada: sai do estoque do plano (libera a vaga) e o link FECHA para
   /// quem ainda não começou — quem já está respondendo termina, e os resultados

@@ -62,7 +62,7 @@ export function iconeDoItem(interaction: InteractionKind): ItemIcon {
 }
 
 export const ROTULO_DO_MATERIAL = {
-	SentencePair: 'par de frases',
+	SentencePair: 'sentença',
 	VocabItem: 'item de vocabulário',
 	Passage: 'texto',
 	Dialogue: 'diálogo'

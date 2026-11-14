@@ -6,15 +6,15 @@ import { modulos } from '$lib/server/db/repos/modules';
 import { corOuPadrao } from '$lib/etiquetas';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { atividades } from '$lib/server/db/repos/activities';
+import { materiais } from '$lib/server/db/repos/content-units';
 import { envios } from '$lib/server/db/repos/deliveries';
 import { prisma } from '$lib/server/db/client';
 import { itemAudioHashes, itemSkills } from '$lib/server/player/runtime';
 import { playerRepo } from '$lib/server/db/repos/player';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
-import { resumoDoItem, tipoDoItem } from '$lib/server/atividades/resumo';
+import { materiaisPorId, questoesDoRoteiro } from '$lib/server/atividades/roteiro';
 import { etiquetaDaTurma } from '$lib/server/turmas/etiqueta';
-import { interactionSchema, promptSchema } from '$lib/kernel/item';
-import { labelForTag } from '$lib/kernel/language/profiles';
+import { getProfile, labelForTag } from '$lib/kernel/language/profiles';
 import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import type { Skill } from '$lib/kernel/interactions/types';
 
@@ -22,7 +22,7 @@ import type { Skill } from '$lib/kernel/interactions/types';
  * A atividade aberta. Abrir uma da lista caía direto em `resultados`, que
  * responde "como foi" antes de o professor poder ver "o que é" — e para uma
  * atividade sem nenhuma tentativa era uma tela vazia. Aqui está o que ele
- * criou: as questões, o link, o QR, o código e para quais turmas foi.
+ * criou: o estado, as questões, o link, o QR, o código e para quais turmas foi.
  *
  * O que a tela mostra é a versão NO AR quando existe uma, e o rascunho quando
  * não — é o que o aluno pegaria se abrisse o link agora. Ler o rascunho aqui
@@ -68,20 +68,33 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 
 	// **O estado do áudio.** Ele é a única parte da atividade que existe FORA do
 	// banco — num bucket — e por isso a única que pode estar faltando sem nada na
-	// tela dizer (um job que falhou, uma síntese ainda na fila). Ele não vence
-	// mais (server.md "TTS"), mas o professor ainda precisa ver aqui, e não só na
-	// etapa de publicar, se algum arquivo falta antes de reenviar o link.
+	// tela dizer (um job que falhou, uma síntese ainda na fila).
 	const hashesDeAudio = itens.flatMap((item) => itemAudioHashes(item, activity.targetLang));
-	const audio = await playerRepo.audioReady(teacher.id, hashesDeAudio);
+	const [audio, assets, unidades] = await Promise.all([
+		playerRepo.audioReady(teacher.id, hashesDeAudio),
+		playerRepo.mediaUrls(teacher.id, hashesDeAudio),
+		// O material de cada questão, para a linha do roteiro dizer de onde ela saiu.
+		materiais(teacher).byIds(
+			[...new Set(itens.map((item) => item.sourceContentId))].filter((id): id is string => !!id)
+		)
+	]);
+
+	// **As questões, como na revisão** (paginas.md "A atividade aberta"): o
+	// roteiro na ordem do aluno, com o celular. É a mesma seed da prévia do aluno,
+	// então o embaralhamento que aparece aqui é o que ela mostra.
+	const questoes = questoesDoRoteiro(itens, {
+		targetLang: activity.targetLang,
+		semente: `previa:${versao?.id ?? activity.id}`,
+		urlByHash: new Map(assets.map((asset) => [asset.hash, asset.url])),
+		materialPorId: materiaisPorId(unidades)
+	});
 
 	const publicacao = published?.publications.at(-1);
 	const settings = publicacao ? publicationSettingsSchema.parse(publicacao.settings) : null;
 
 	// **O link só existe depois de publicar.** O que está NO AR manda: uma
 	// atividade publicada antes de o endereço passar a sair do id tem outro
-	// slug, e mostrar o derivado era mostrar um link que responde 404 — o
-	// professor projetava um QR morto. No rascunho nunca publicado não há link
-	// nenhum, e a tela diz que ele nasce na publicação.
+	// slug, e mostrar o derivado era mostrar um link que responde 404.
 	const link = publicacao ? `${url.origin}/a/${publicacao.slug}` : null;
 	const qr = link
 		? await toDataURL(link, { margin: 1, width: 264, errorCorrectionLevel: 'M' })
@@ -117,9 +130,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			/** A tag de idioma (`$lib/idiomas.ts`) — o chip do cabeçalho. */
 			idioma: activity.targetLang,
 			sourceLang: labelForTag(activity.sourceLang),
+			/** A direção do conteúdo (o trecho do material na linha do roteiro). */
+			dir: getProfile(activity.targetLang).direction,
 			// Criada em DATA, editada há QUANTO TEMPO: a primeira responde "de que
 			// semestre é isto", a segunda "alguém mexeu depois de publicar".
-			createdAt: activity.createdAt.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' }),
+			createdAt: activity.createdAt.toLocaleDateString('pt-BR', {
+				day: 'numeric',
+				month: 'long',
+				year: 'numeric'
+			}),
 			updatedAt: haQuantoTempo(activity.updatedAt),
 			// Arquivada: fora do estoque do plano e com o link fechado para quem não
 			// começou (docs/adr-002-billing.md). A tela oferece desarquivar.
@@ -146,20 +165,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			code: settings?.code ?? '',
 			showResult: settings?.showResult ?? true
 		},
-		items: itens.map((item, i) => {
-			const interaction = interactionSchema.parse(item.interaction);
-			const prompt = promptSchema.parse(item.prompt);
-			return {
-				id: item.id,
-				n: i + 1,
-				tipo: tipoDoItem(prompt.kind, interaction.type),
-				summary: resumoDoItem(item.generatedBy, interaction.type),
-				// Habilidade DERIVADA, nunca declarada pelo professor.
-				habilidade: itemSkills(item)
-					.map((skill) => skillLabels[skill])
-					.join(' + ')
-			};
-		}),
+		questoes,
 		skills: [...habilidades.entries()].map(([skill, count]) => ({
 			name: skillLabels[skill],
 			count

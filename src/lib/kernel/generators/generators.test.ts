@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerators, type GenerationOptions, type StoredContentUnit } from './index';
-import { listenChoice, translateAssemble } from './sentence-pair';
+import { clozeTarget, listenChoice, translateAssemble, translateType } from './sentence-pair';
 import { vocabChoice } from './vocab-item';
 import { ptBR } from '../language/profiles/pt-BR';
 import { enUS } from '../language/profiles/en-US';
@@ -82,6 +82,26 @@ describe('runGenerators', () => {
 
 // testing.md "Geradores": conjunto pequeno demais devolve MENOS exercícios,
 // nunca um distrator inventado.
+describe('variações da tradução', () => {
+	it('translate-type aceita as variações do material depois da resposta do professor', () => {
+		const [questao] = translateType.generate(
+			{
+				id: 'cnt_v',
+				data: {
+					source: 'Nunca desista dos seus sonhos.',
+					target: 'Never give up on your dreams.',
+					// a repetida não entra duas vezes
+					variants: ['Nunca desista de seus sonhos.', 'Nunca desista dos seus sonhos.']
+				}
+			},
+			{ ...options, siblings: [] }
+		);
+		expect(questao.interaction.payload).toEqual({
+			accepted: ['Nunca desista dos seus sonhos.', 'Nunca desista de seus sonhos.']
+		});
+	});
+});
+
 describe('distratores', () => {
 	const ctx = {
 		targetProfile: enUS,
@@ -109,6 +129,13 @@ describe('distratores', () => {
 		for (const option of payload.options) {
 			expect(['Hi.', 'Bye.', 'Thanks.']).toContain(option);
 		}
+	});
+
+	it('cloze-target mascara a PALAVRA, não a primeira vez que o texto dela aparece', () => {
+		// "a" é a palavra do meio de "I have a cat." — e também uma letra de "have".
+		const frase = { id: 'cnt_a', data: { source: 'Eu tenho um gato.', target: 'I have a cat.' } };
+		const [item] = clozeTarget.generate(frase, { ...ctx, siblings: [] });
+		expect(item?.interaction.payload).toEqual({ masked: 'I have ___ cat.', accepted: ['a'] });
 	});
 
 	it('vocab-choice não inventa tradução quando o conjunto tem um item só', () => {
