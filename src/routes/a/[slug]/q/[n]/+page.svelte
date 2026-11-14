@@ -847,8 +847,9 @@
 	>
 		<!-- As faixas decorativas ficam FORA do `{#key}`: elas são o fundo do
 		     cartão, não a questão, e reiniciar as formas a cada troca faria o
-		     ambiente piscar junto. -->
-		<AmbientShapes edges="both" />
+		     ambiente piscar junto. No celular a questão começa colada no topo, e a
+		     faixa de cima cairia atrás do rótulo e do enunciado: lá só a de baixo. -->
+		<AmbientShapes edges="both" edgesNoCelular="bottom" />
 
 		{#key data.index}
 			<div class="relative z-1 min-w-0 {movimento}" style="--q-shift: {deslocamento}">

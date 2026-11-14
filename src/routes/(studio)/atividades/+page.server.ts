@@ -5,6 +5,8 @@ import { atividades } from '$lib/server/db/repos/activities';
 import { prisma } from '$lib/server/db/client';
 import { itemSkills } from '$lib/server/player/runtime';
 import { labelForTag } from '$lib/kernel/language/profiles';
+import { skills as HABILIDADES } from '$lib/kernel/interactions/skill-schema';
+import type { Skill } from '$lib/kernel/interactions/types';
 
 /**
  * Lista de atividades. As habilidades NÃO são um campo do banco: são
@@ -49,9 +51,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const publishedVersion = activity.versions.find((v) => v.publications.length > 0);
 		const current = publishedVersion ?? activity.versions[0];
 
-		const skills = new Set<string>();
+		const presentes = new Set<Skill>();
 		for (const item of current?.items ?? []) {
-			for (const skill of itemSkills(item)) skills.add(skill);
+			for (const skill of itemSkills(item)) presentes.add(skill);
 		}
 
 		const attempts = publishedVersion?.publications.reduce(
@@ -63,7 +65,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			id: activity.id,
 			title: activity.title,
 			itemCount: current?.items.length ?? 0,
-			skills: [...skills],
+			// As CHAVES, na ordem de sempre (escuta, fala, leitura, escrita): quem
+			// escreve o nome em português é a tela, por `skillLabels`. A lista
+			// mostrava "reading, speaking, writing", na ordem em que apareciam.
+			skills: HABILIDADES.filter((h) => presentes.has(h)),
 			language: labelForTag(activity.targetLang),
 			/** A tag de idioma (`$lib/idiomas.ts`) — o chip e o filtro da lista. */
 			idioma: activity.targetLang,
@@ -82,10 +87,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	});
 
-	// A retomada: o rascunho mexido por último, com a etapa em que parou.
-	const rascunho = rows.find((a) => a.versions.every((v) => v.publications.length === 0));
+	// A retomada: o rascunho MEXIDO por último, com a etapa em que parou. A lista
+	// vem por data de criação, e o primeiro rascunho dela era o mais NOVO, não o
+	// último em que o professor trabalhou; arquivado não é tarefa começada.
+	const rascunho = rows
+		.filter((a) => a.archivedAt === null && a.versions.every((v) => v.publications.length === 0))
+		.reduce<(typeof rows)[number] | null>(
+			(ultimo, a) => (ultimo && ultimo.updatedAt >= a.updatedAt ? ultimo : a),
+			null
+		);
+	// Os materiais DESTE rascunho. A conta era a biblioteca inteira: um rascunho
+	// recém-criado aparecia com "200 materiais colados", já na etapa 2.
 	const materiaisDoRascunho = rascunho
-		? await prisma.contentUnit.count({ where: { teacherId: teacher.id } })
+		? await prisma.contentUnit.count({
+				where: { teacherId: teacher.id, activities: { some: { id: rascunho.id } } }
+			})
 		: 0;
 	const itensDoRascunho = rascunho?.versions[0]?.items.length ?? 0;
 
@@ -96,9 +112,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 				materiais: materiaisDoRascunho,
 				itens: itensDoRascunho,
 				editadoEm: haQuantoTempo(rascunho.updatedAt),
-				etapa: itensDoRascunho > 0 ? 3 : materiaisDoRascunho > 0 ? 2 : 1,
-				etapaLabel:
-					itensDoRascunho > 0 ? 'Revisar' : materiaisDoRascunho > 0 ? 'Materiais' : 'Detalhes'
+				// A atividade só existe depois do "Continuar" da etapa 1: sem questões,
+				// ela está nos materiais, com ou sem algum colado. E a tela leva PARA a
+				// etapa: com as questões geradas, cair nos materiais deixava o "Gerar"
+				// a um toque de refazer a revisão.
+				etapa: itensDoRascunho > 0 ? 3 : 2,
+				etapaLabel: itensDoRascunho > 0 ? 'Revisar' : 'Materiais'
 			}
 		: null;
 

@@ -9,7 +9,7 @@
 	// Este componente só desenha os campos com os `name` que
 	// `camposMaterial` espera, mais tudo que se calcula no cliente: a prévia
 	// do lote, o aviso do que falta para o tipo render questão e o de repetido.
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import Alternador from './Alternador.svelte';
 	import Loading from './Loading.svelte';
 	import IdiomaTag from './IdiomaTag.svelte';
@@ -336,6 +336,23 @@
 		if (!wiz) idioma = idiomaPadrao ?? '';
 		primeiroCampo?.focus();
 	}
+
+	/**
+	 * Traz o resultado do envio para a vista. Ele mora no FIM do corpo, depois dos
+	 * campos, e no celular (ou com uma lista colada longa) ficava fora dela: o
+	 * professor tocava em "Adicionar" e não via nem o "3 adicionados" nem o erro.
+	 * A página chama depois de enviar.
+	 */
+	export async function mostrarResultado() {
+		await tick();
+		const semMovimento =
+			typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+		caixaDoResultado?.scrollIntoView({
+			block: 'nearest',
+			behavior: semMovimento ? 'auto' : 'smooth'
+		});
+	}
+	let caixaDoResultado = $state<HTMLElement>();
 
 	/** Reabre o formulário com os campos CRUS da linha — nunca com o resumo. */
 	export function editar(m: MaterialRow) {
@@ -1948,73 +1965,31 @@
 			</div>
 		{/if}
 
-		<!-- resultado do envio -->
-		{#if resultado && !resultado.ok}
-			<p
-				class="mt-4 flex items-center gap-2 rounded-field border-s-[3px] border-error bg-base-200 px-3 py-2.5 text-[13px]"
-				role="alert"
-			>
-				<svg class="size-4 shrink-0 text-error" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-					<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
-					<path
-						d="M12 7.5v6M12 16.5h.01"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-					/>
-				</svg>
-				<span>
-					{resultado.error}
-					{#if resultado.motivo}
-						<!-- Porta fechada por plano tem saída, e ela não é "tente de novo". -->
-						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do motivo; a regra não enxerga a concatenação. -->
-						<a href={resolve('/(site)/planos') + '?motivo=' + resultado.motivo} class="font-bold"
-							>Ver os planos</a
-						>
-					{/if}
-				</span>
-			</p>
-		{:else if resultado?.ok && 'ignored' in resultado}
-			<!-- Quantas linhas ficaram de fora é a informação que faltava: colar uma
-			     lista e ver o contador subir menos do que devia, sem saber por
-			     quê, foi o que travou a etapa antes. -->
-			<p
-				class="mt-4 flex items-center gap-2 rounded-field border-s-[3px] border-success bg-base-200 px-3 py-2.5 text-[13px]"
-				role="status"
-			>
-				<svg
-					class="size-4 shrink-0 text-success"
-					viewBox="0 0 24 24"
-					fill="none"
-					aria-hidden="true"
-				>
-					<path
-						d="M4 12.5l5 5L20 6.5"
-						stroke="currentColor"
-						stroke-width="2.6"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				{resultado.added} adicionados{resultado.ignored
-					? `, ${resultado.ignored} sem separador ${resultado.ignored === 1 ? 'ignorada' : 'ignoradas'}`
-					: ''}{resultado.reused ? `, ${resultado.reused} você já tinha` : ''}.
-				{#if resultado.traduzidas}
-					{resultado.traduzidas === 1
-						? 'Uma tradução veio do tradutor automático: confira na lista.'
-						: `${resultado.traduzidas} traduções vieram do tradutor automático: confira na lista.`}
-				{/if}
-			</p>
-			{#if resultado.aviso}
-				<!-- As linhas que não couberam no estoque do plano: dizer QUANTAS, e o
-				     caminho, em vez de deixar o contador subir menos sem explicação. -->
+		<!-- resultado do envio (`mostrarResultado` rola até aqui) -->
+		<div bind:this={caixaDoResultado} class="scroll-mb-4">
+			{#if resultado && !resultado.ok}
 				<p
-					class="mt-2 flex items-center gap-2 rounded-field border-s-[3px] border-warning bg-base-200 px-3 py-2.5 text-[13px]"
-					role="status"
+					class="mt-4 flex items-center gap-2 rounded-field border-s-[3px] border-error bg-base-200 px-3 py-2.5 text-[13px]"
+					role="alert"
 				>
+					<svg
+						class="size-4 shrink-0 text-error"
+						viewBox="0 0 24 24"
+						fill="none"
+						aria-hidden="true"
+					>
+						<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
+						<path
+							d="M12 7.5v6M12 16.5h.01"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+						/>
+					</svg>
 					<span>
-						{resultado.aviso}
+						{resultado.error}
 						{#if resultado.motivo}
+							<!-- Porta fechada por plano tem saída, e ela não é "tente de novo". -->
 							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do motivo; a regra não enxerga a concatenação. -->
 							<a href={resolve('/(site)/planos') + '?motivo=' + resultado.motivo} class="font-bold"
 								>Ver os planos</a
@@ -2022,30 +1997,81 @@
 						{/if}
 					</span>
 				</p>
-			{/if}
-		{:else if resultado?.ok && resultado.reused === true}
-			<!-- Reaproveitar em silêncio parecia falha: o contador não subia e o
-			     professor reenviava a mesma frase. -->
-			<p
-				class="mt-4 flex items-center gap-2 rounded-field border-s-[3px] border-primary bg-base-200 px-3 py-2.5 text-[13px]"
-				role="status"
-			>
-				<svg
-					class="size-4 shrink-0 text-primary"
-					viewBox="0 0 24 24"
-					fill="none"
-					aria-hidden="true"
+			{:else if resultado?.ok && 'ignored' in resultado}
+				<!-- Quantas linhas ficaram de fora é a informação que faltava: colar uma
+			     lista e ver o contador subir menos do que devia, sem saber por
+			     quê, foi o que travou a etapa antes. -->
+				<p
+					class="mt-4 flex items-center gap-2 rounded-field border-s-[3px] border-success bg-base-200 px-3 py-2.5 text-[13px]"
+					role="status"
 				>
-					<path
-						d="M3 5.5h6a3 3 0 013 3v10a2.5 2.5 0 00-2.5-2.5H3zM21 5.5h-6a3 3 0 00-3 3v10a2.5 2.5 0 012.5-2.5H21z"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				Você já tinha este material — ele foi reaproveitado da sua biblioteca, não duplicado.
-			</p>
-		{/if}
+					<svg
+						class="size-4 shrink-0 text-success"
+						viewBox="0 0 24 24"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="M4 12.5l5 5L20 6.5"
+							stroke="currentColor"
+							stroke-width="2.6"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+					{resultado.added} adicionados{resultado.ignored
+						? `, ${resultado.ignored} sem separador ${resultado.ignored === 1 ? 'ignorada' : 'ignoradas'}`
+						: ''}{resultado.reused ? `, ${resultado.reused} você já tinha` : ''}.
+					{#if resultado.traduzidas}
+						{resultado.traduzidas === 1
+							? 'Uma tradução veio do tradutor automático: confira na lista.'
+							: `${resultado.traduzidas} traduções vieram do tradutor automático: confira na lista.`}
+					{/if}
+				</p>
+				{#if resultado.aviso}
+					<!-- As linhas que não couberam no estoque do plano: dizer QUANTAS, e o
+				     caminho, em vez de deixar o contador subir menos sem explicação. -->
+					<p
+						class="mt-2 flex items-center gap-2 rounded-field border-s-[3px] border-warning bg-base-200 px-3 py-2.5 text-[13px]"
+						role="status"
+					>
+						<span>
+							{resultado.aviso}
+							{#if resultado.motivo}
+								<!-- eslint-disable svelte/no-navigation-without-resolve -- rota resolvida mais a query do motivo; a regra não enxerga a concatenação. -->
+								<a
+									href={resolve('/(site)/planos') + '?motivo=' + resultado.motivo}
+									class="font-bold">Ver os planos</a
+								>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							{/if}
+						</span>
+					</p>
+				{/if}
+			{:else if resultado?.ok && resultado.reused === true}
+				<!-- Reaproveitar em silêncio parecia falha: o contador não subia e o
+			     professor reenviava a mesma frase. -->
+				<p
+					class="mt-4 flex items-center gap-2 rounded-field border-s-[3px] border-primary bg-base-200 px-3 py-2.5 text-[13px]"
+					role="status"
+				>
+					<svg
+						class="size-4 shrink-0 text-primary"
+						viewBox="0 0 24 24"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="M3 5.5h6a3 3 0 013 3v10a2.5 2.5 0 00-2.5-2.5H3zM21 5.5h-6a3 3 0 00-3 3v10a2.5 2.5 0 012.5-2.5H21z"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linejoin="round"
+						/>
+					</svg>
+					Você já tinha este material — ele foi reaproveitado da sua biblioteca, não duplicado.
+				</p>
+			{/if}
+		</div>
 	</div>
 
 	<!-- rodapé -->

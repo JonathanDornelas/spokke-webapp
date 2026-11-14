@@ -145,8 +145,12 @@
 	let modo = $state<Modo>('um');
 	let editando = $state<MaterialRow | null>(null);
 	let salvando = $state(false);
-	/** No celular só um dos dois cabe: o formulário ou a lista. */
-	let formAberto = $state(true);
+	/**
+	 * No celular só um dos dois cabe: o formulário ou a lista. Abre no formulário
+	 * só quando ainda não há material — quem volta da revisão quer ver o que já
+	 * está aqui, e caía em "Adicionar material".
+	 */
+	let formAberto = $state(untrack(() => data.materials.length === 0));
 
 	// Uma remote function por modo. Os campos são os mesmos, e duplicar o
 	// markup faria as duas telas divergirem no primeiro ajuste de layout.
@@ -208,6 +212,7 @@
 		const r = await aceitarPropostasIa({ kind, propostas: dados, activityId: data.activity.id });
 		resultadoIa = r;
 		if (r.ok) await invalidateAll();
+		void formulario?.mostrarResultado();
 		return r.ok;
 	}
 	const enviar = $derived(
@@ -220,6 +225,8 @@
 			} finally {
 				salvando = false;
 			}
+			// O resultado fica no fim do corpo do formulário: no celular, fora da vista.
+			void formulario?.mostrarResultado();
 		})
 	);
 
@@ -422,13 +429,20 @@
 	const podeGerar = $derived(total > 0 && plano.geral.length > 0);
 	const palavraQuestoes = $derived(quantidade === 1 ? 'questão' : 'questões');
 	const statusTexto = $derived(`${total} ${total === 1 ? 'material' : 'materiais'}`);
+	// O X do formulário no celular. "Ver os 0 materiais" e "Ver os 1 material" não
+	// eram português.
+	const rotuloDaLista = $derived(
+		total === 0 ? 'Ver a lista' : total === 1 ? 'Ver o material' : `Ver os ${statusTexto}`
+	);
 	const hintTexto = $derived(
 		erroAoGerar ??
 			(total === 0
 				? 'Precisa de ao menos 1 material para avançar.'
 				: plano.geral.length === 0
 					? 'Ligue ao menos um tipo de questão para gerar.'
-					: `${quantidade} ${palavraQuestoes} em rodízio entre os ${statusTexto}: nenhum repete antes de todos entrarem. O resto fica de fora na revisão, para você trocar.`)
+					: total === 1
+						? `${quantidade} ${palavraQuestoes} deste material. O resto fica de fora na revisão, para você trocar.`
+						: `${quantidade} ${palavraQuestoes} em rodízio entre os ${statusTexto}: nenhum repete antes de todos entrarem. O resto fica de fora na revisão, para você trocar.`)
 	);
 </script>
 
@@ -477,7 +491,7 @@
 				linguaDoAluno={data.activity.sourceTag}
 				onsugerirTraducao={sugerir}
 				onfechar={() => (formAberto = false)}
-				fecharRotulo="Ver os {statusTexto}"
+				fecharRotulo={rotuloDaLista}
 				fecharSoNoCelular
 			/>
 		</form>

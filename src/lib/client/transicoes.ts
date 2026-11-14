@@ -79,7 +79,8 @@ const MOVIMENTO = bezier(CURVA.movimento);
  * para ABRIR: nascendo com a altura toda, a bandeja de turmas empurrava as opções
  * uns 300px num único quadro, e o dono do repositório leu isso como abrupto. Os
  * blocos são pequenos e estão no Studio; o recálculo de leiaute por quadro não
- * pesa. A medida é a do bloco já montado (`in:`) ou ainda montado (`out:`).
+ * pesa. Fechar mede uma vez, o bloco ainda montado (o conteúdo não muda na saída);
+ * abrir mede a cada quadro (`desdobrar`, abaixo).
  */
 function sanfona(node: Element): TransitionConfig {
 	if (semMovimento()) return { duration: 0 };
@@ -98,9 +99,57 @@ function sanfona(node: Element): TransitionConfig {
 	};
 }
 
-/** ABRIR a sanfona (`in:desdobrar`): cresce do zero até a altura dela. */
+/** As propriedades que a abertura escreve no elemento — e apaga no fim. */
+const DA_ABERTURA = [
+	'overflow',
+	'opacity',
+	'transform',
+	'height',
+	'padding-top',
+	'padding-bottom',
+	'border-top-width'
+];
+
+/**
+ * ABRIR a sanfona (`in:desdobrar`): cresce do zero até a altura dela.
+ *
+ * A abertura mede a altura a CADA QUADRO, pelo que está dentro agora, em vez de
+ * uma vez no começo: o conteúdo pode mudar no meio dela. Na prévia de um material
+ * o esqueleto vira os cartões, e o cartão de uma frase longa é mais alto que o
+ * esqueleto: medida uma vez, a bandeja abria até a altura do esqueleto e saltava
+ * o resto no fim. `scrollHeight` dá a altura do conteúdo mesmo com a do elemento
+ * presa (ele inclui o padding que a própria abertura está pondo, e por isso o
+ * padding de agora sai da conta antes de entrar o cheio). Por isso `tick`, e não
+ * `css`: um quadro-chave calculado antes não acompanha o conteúdo.
+ */
 export function desdobrar(node: Element): TransitionConfig {
-	return sanfona(node);
+	if (semMovimento()) return { duration: 0 };
+	const el = node as HTMLElement;
+	const estilo = getComputedStyle(el);
+	const cima = parseFloat(estilo.paddingTop);
+	const baixo = parseFloat(estilo.paddingBottom);
+	const borda = parseFloat(estilo.borderTopWidth);
+	return {
+		duration: DURACAO.media,
+		easing: MOVIMENTO,
+		tick: (t) => {
+			if (t >= 1) {
+				for (const propriedade of DA_ABERTURA) el.style.removeProperty(propriedade);
+				return;
+			}
+			const paddingAgora =
+				(el.style.paddingTop ? parseFloat(el.style.paddingTop) : cima) +
+				(el.style.paddingBottom ? parseFloat(el.style.paddingBottom) : baixo);
+			const conteudo = el.scrollHeight - paddingAgora;
+			el.style.overflow = 'hidden';
+			el.style.opacity = String(t);
+			el.style.transform = `translate3d(0, ${(t - 1) * 8}px, 0)`;
+			el.style.paddingTop = `${t * cima}px`;
+			el.style.paddingBottom = `${t * baixo}px`;
+			el.style.borderTopWidth = `${t * borda}px`;
+			el.style.height = `${t * (conteudo + cima + baixo + borda)}px`;
+		}
+	};
 }
 
 /** FECHAR a sanfona (`out:recolher`): some, sobe e recolhe a altura junto. */

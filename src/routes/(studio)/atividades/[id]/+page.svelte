@@ -16,6 +16,12 @@
 	import Loading from '$lib/components/Loading.svelte';
 	import HeaderCard from '$lib/components/HeaderCard.svelte';
 	import CelularDoAluno from '$lib/components/CelularDoAluno.svelte';
+	import {
+		ICONE_DO_CELULAR,
+		SETA_SOB_O_CELULAR,
+		VER_NO_CELULAR,
+		rolarAtePalco
+	} from '$lib/components/celular-do-aluno';
 	import PreviaDaQuestao from '$lib/components/PreviaDaQuestao.svelte';
 	import {
 		apagarAtividade,
@@ -141,6 +147,9 @@
 		const proxima = data.questoes[i + passo];
 		if (proxima) escolhidaId = proxima.id;
 	}
+	/** O palco, para o "Ver no celular" da linha escolhida (no celular ele fica acima da lista). */
+	let palco = $state<HTMLElement>();
+	const verNoCelular = () => rolarAtePalco(palco);
 	// `?voltar=detalhe`: a prévia é uma tela fechada, e o X dela traz de volta
 	// para cá. O loader dela valida o token contra uma lista fechada.
 	const previa = $derived(
@@ -293,126 +302,131 @@
 			<span class="min-w-[200px] flex-1 text-pretty text-base-content/65">{estado.nota}</span>
 		</p>
 
-		<!-- Os dados da atividade, cada um com o seu rótulo, numa linha: idioma,
+		{#snippet detalhes()}
+			<!-- Os dados da atividade, cada um com o seu rótulo, numa linha: idioma,
 		     nível (troca aqui, na hora — é rótulo, adr-004), quando nasceu e os
 		     módulos em que está. Antes eram uma frase, um select solto e chips
 		     empilhados. -->
-		<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:flex sm:flex-wrap sm:gap-x-10">
-			<div class="min-w-0">
-				<dt class={ROTULO}>Idioma</dt>
-				<dd class="mt-1.5"><IdiomaTag tag={data.activity.idioma} /></dd>
-			</div>
-			<div class="min-w-0">
-				<dt class={ROTULO}><label for="nivel-da-atividade">Nível</label></dt>
-				<dd class="mt-1.5 flex items-center gap-2">
-					<select
-						id="nivel-da-atividade"
-						class="select h-8 min-h-8 w-auto py-0 text-[12.5px]"
-						value={data.activity.level ?? ''}
-						disabled={salvandoNivel}
-						onchange={(e) => trocarNivel(e.currentTarget.value)}
-					>
-						<option value="">Sem nível</option>
-						{#each NIVEIS as n (n.id)}
-							<option value={n.id}>{rotuloDoNivel(n.id)}</option>
-						{/each}
-					</select>
-					{#if salvandoNivel}<Loading variant="fila" size={8} label="Salvando o nível" />{/if}
-				</dd>
-			</div>
-			<div class="min-w-0">
-				<dt class={ROTULO}>Criada em</dt>
-				<dd class="mt-1.5 text-[13.5px] leading-tight font-semibold">
-					{data.activity.createdAt}
-					<span class="mt-0.5 block text-[12px] font-normal text-base-content/65"
-						>editada {data.activity.updatedAt}</span
-					>
-				</dd>
-			</div>
-			<div class="col-span-2 min-w-0 sm:col-span-1">
-				<dt class={ROTULO}>Módulos</dt>
-				<dd class="mt-1.5 flex flex-wrap items-center gap-1.5">
-					{#each data.modulos.dela as m (m.id)}
-						<a
-							href={resolve('/(studio)/modulos/[id]', { id: m.id })}
-							class="rounded-full px-2.5 py-1 text-[12px] font-bold no-underline {CLASSE_DA_ETIQUETA[
-								m.color
-							]}">{m.name}</a
-						>
-					{/each}
-					{#if data.modulos.outros.length > 0}
-						<label class="sr-only" for="acrescentar-modulo">Acrescentar a um módulo</label>
+			<dl class="grid grid-cols-2 gap-x-6 gap-y-4 sm:flex sm:flex-wrap sm:gap-x-10">
+				<div class="min-w-0">
+					<dt class={ROTULO}>Idioma</dt>
+					<dd class="mt-1.5"><IdiomaTag tag={data.activity.idioma} /></dd>
+				</div>
+				<div class="min-w-0">
+					<dt class={ROTULO}><label for="nivel-da-atividade">Nível</label></dt>
+					<dd class="mt-1.5 flex min-w-0 items-center gap-2">
+						<!-- `max-w-full`: a largura natural de um select é a da opção mais
+					     longa ("B2 · Intermediário superior"), e no celular ela passava
+					     da coluna e da borda do cartão. -->
 						<select
-							id="acrescentar-modulo"
-							bind:value={moduloEscolhido}
-							onchange={acrescentarAoModulo}
-							disabled={acrescentandoAoModulo}
-							class="select h-8 min-h-8 w-auto py-0 text-[12px]"
+							id="nivel-da-atividade"
+							class="select h-8 min-h-8 w-auto max-w-full min-w-0 py-0 text-[12.5px]"
+							value={data.activity.level ?? ''}
+							disabled={salvandoNivel}
+							onchange={(e) => trocarNivel(e.currentTarget.value)}
 						>
-							<option value="">+ Acrescentar</option>
-							{#each data.modulos.outros as m (m.id)}
-								<option value={m.id}>{m.name}</option>
+							<option value="">Sem nível</option>
+							{#each NIVEIS as n (n.id)}
+								<option value={n.id}>{rotuloDoNivel(n.id)}</option>
 							{/each}
 						</select>
-					{:else if data.modulos.dela.length === 0}
-						<span class="text-[13px] text-base-content/65">nenhum</span>
-					{/if}
-				</dd>
-			</div>
-		</dl>
-
-		{#if temAudio && !audioPronto}
-			<!-- Só quando FALTA: numa atividade saudável a linha era ruído, e o botão um
-			     convite a refazer trabalho já feito, deixando o link fora do ar à toa. -->
-			<div
-				class="mt-4 flex flex-wrap items-center gap-x-3.5 gap-y-3 rounded-[12px] border border-error/30 bg-error/6 px-3.5 py-3"
-			>
-				<span
-					class="grid size-[30px] shrink-0 place-items-center rounded-[9px] bg-error/13 text-error"
-				>
-					{@render icone('M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 9a4.2 4.2 0 010 6')}
-				</span>
-				<div class="min-w-[220px] flex-1">
-					<p class="mb-0.5 text-[13.5px] font-bold text-error">
-						{#if data.audio.done === 0}
-							Faltam os {data.audio.total}
-							{data.audio.total === 1 ? 'áudio' : 'áudios'}
-						{:else}
-							Faltam {data.audio.total - data.audio.done} dos {data.audio.total} áudios
-						{/if}
-					</p>
-					<p class="text-[12.5px] leading-relaxed text-pretty text-base-content/65">
-						Ainda estão sendo gerados, ou a geração falhou. Gerar de novo tira o link do ar por
-						alguns minutos; quem já está respondendo termina normalmente.
-					</p>
+						{#if salvandoNivel}<Loading variant="fila" size={8} label="Salvando o nível" />{/if}
+					</dd>
 				</div>
-				<button
-					type="button"
-					class="btn h-10 w-full motion-tap gap-2 rounded-[9px] btn-error text-[13px] font-bold sm:w-auto"
-					onclick={regerar}
-					disabled={regerando}
-				>
-					{#if regerando}
-						<Loading variant="fila" size={12} tone="current" label="Gerando áudio" />
-						Gerando…
-					{:else}
-						Gerar áudio de novo
-					{/if}
-				</button>
-			</div>
-		{/if}
+				<div class="min-w-0">
+					<dt class={ROTULO}>Criada em</dt>
+					<dd class="mt-1.5 text-[13.5px] leading-tight font-semibold">
+						{data.activity.createdAt}
+						<span class="mt-0.5 block text-[12px] font-normal text-base-content/65"
+							>editada {data.activity.updatedAt}</span
+						>
+					</dd>
+				</div>
+				<div class="col-span-2 min-w-0 sm:col-span-1">
+					<dt class={ROTULO}>Módulos</dt>
+					<dd class="mt-1.5 flex flex-wrap items-center gap-1.5">
+						{#each data.modulos.dela as m (m.id)}
+							<a
+								href={resolve('/(studio)/modulos/[id]', { id: m.id })}
+								class="rounded-full px-2.5 py-1 text-[12px] font-bold no-underline {CLASSE_DA_ETIQUETA[
+									m.color
+								]}">{m.name}</a
+							>
+						{/each}
+						{#if data.modulos.outros.length > 0}
+							<label class="sr-only" for="acrescentar-modulo">Acrescentar a um módulo</label>
+							<select
+								id="acrescentar-modulo"
+								bind:value={moduloEscolhido}
+								onchange={acrescentarAoModulo}
+								disabled={acrescentandoAoModulo}
+								class="select h-8 min-h-8 w-auto max-w-full min-w-0 py-0 text-[12px]"
+							>
+								<option value="">+ Acrescentar</option>
+								{#each data.modulos.outros as m (m.id)}
+									<option value={m.id}>{m.name}</option>
+								{/each}
+							</select>
+						{:else if data.modulos.dela.length === 0}
+							<span class="text-[13px] text-base-content/65">nenhum</span>
+						{/if}
+					</dd>
+				</div>
+			</dl>
 
-		{#if erroDoTopo}
-			<p class="mt-3 text-[13px] font-semibold text-error" role="alert">
-				{erroDoTopo}
-				{#if motivo}
-					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do motivo; a regra não enxerga a concatenação. -->
-					<a href={resolve('/(site)/planos') + '?motivo=' + motivo} class="font-bold"
-						>Ver os planos</a
+			{#if temAudio && !audioPronto}
+				<!-- Só quando FALTA: numa atividade saudável a linha era ruído, e o botão um
+			     convite a refazer trabalho já feito, deixando o link fora do ar à toa. -->
+				<div
+					class="mt-4 flex flex-wrap items-center gap-x-3.5 gap-y-3 rounded-[12px] border border-error/30 bg-error/6 px-3.5 py-3"
+				>
+					<span
+						class="grid size-[30px] shrink-0 place-items-center rounded-[9px] bg-error/13 text-error"
 					>
-				{/if}
-			</p>
-		{/if}
+						{@render icone('M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM16 9a4.2 4.2 0 010 6')}
+					</span>
+					<div class="min-w-[220px] flex-1">
+						<p class="mb-0.5 text-[13.5px] font-bold text-error">
+							{#if data.audio.done === 0}
+								Faltam os {data.audio.total}
+								{data.audio.total === 1 ? 'áudio' : 'áudios'}
+							{:else}
+								Faltam {data.audio.total - data.audio.done} dos {data.audio.total} áudios
+							{/if}
+						</p>
+						<p class="text-[12.5px] leading-relaxed text-pretty text-base-content/65">
+							Ainda estão sendo gerados, ou a geração falhou. Gerar de novo tira o link do ar por
+							alguns minutos; quem já está respondendo termina normalmente.
+						</p>
+					</div>
+					<button
+						type="button"
+						class="btn h-10 w-full motion-tap gap-2 rounded-[9px] btn-error text-[13px] font-bold sm:w-auto"
+						onclick={regerar}
+						disabled={regerando}
+					>
+						{#if regerando}
+							<Loading variant="fila" size={12} tone="current" label="Gerando áudio" />
+							Gerando…
+						{:else}
+							Gerar áudio de novo
+						{/if}
+					</button>
+				</div>
+			{/if}
+
+			{#if erroDoTopo}
+				<p class="mt-3 text-[13px] font-semibold text-error" role="alert">
+					{erroDoTopo}
+					{#if motivo}
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do motivo; a regra não enxerga a concatenação. -->
+						<a href={resolve('/(site)/planos') + '?motivo=' + motivo} class="font-bold"
+							>Ver os planos</a
+						>
+					{/if}
+				</p>
+			{/if}
+		{/snippet}
 
 		{#snippet actions()}
 			<a
@@ -579,8 +593,12 @@
 			<div
 				class="grid gap-5 rounded-[14px] border border-line bg-base-200 p-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:gap-8 lg:p-6"
 			>
-				<!-- O PALCO: a questão escolhida no celular, como o aluno a vê. -->
-				<div class="flex items-center justify-center gap-2.5 lg:sticky lg:top-6 lg:self-start">
+				<!-- O PALCO: a questão escolhida no celular, como o aluno a vê. No celular
+				     as setas não cabem dos lados do aparelho e descem para baixo dele. -->
+				<div
+					bind:this={palco}
+					class="flex scroll-mt-4 flex-col items-center gap-3 lg:sticky lg:top-6 lg:flex-row lg:justify-center lg:gap-2.5 lg:self-start"
+				>
 					<button
 						type="button"
 						onclick={() => andar(-1)}
@@ -634,6 +652,28 @@
 					>
 						{@render icone('M9 5l7 7-7 7', 'size-[15px]')}
 					</button>
+					{#if escolhida && data.questoes.length > 1}
+						<div class="flex gap-2.5 lg:hidden">
+							<button
+								type="button"
+								onclick={() => andar(-1)}
+								disabled={escolhida.posicao === 1}
+								class={SETA_SOB_O_CELULAR}
+							>
+								{@render icone('M15 5l-7 7 7 7', 'size-[15px]')}
+								Anterior
+							</button>
+							<button
+								type="button"
+								onclick={() => andar(1)}
+								disabled={escolhida.posicao === data.questoes.length}
+								class={SETA_SOB_O_CELULAR}
+							>
+								Próxima
+								{@render icone('M9 5l7 7-7 7', 'size-[15px]')}
+							</button>
+						</div>
+					{/if}
 				</div>
 
 				<!-- O ROTEIRO, na ordem em que o aluno responde, ligado pelo fio. A linha
@@ -688,36 +728,47 @@
 									>
 								</button>
 								{#if ativa}
-									<p
-										class="flex min-w-0 items-center gap-[7px] px-2.5 pt-0.5 pb-2.5 text-[12.5px] lg:ps-[80px]"
+									<!-- No celular o painel começa depois da bolha (44px): a 10px da
+									     borda, o fio do roteiro, que passa por trás da linha escolhida,
+									     cortava o cadeado. -->
+									<div
+										class="flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 ps-11 pt-0.5 pb-2.5 text-[12.5px] lg:ps-[80px]"
 									>
-										<svg
-											class="size-3.5 shrink-0 text-warning"
-											viewBox="0 0 24 24"
-											fill="none"
-											aria-hidden="true"
-										>
-											<rect
-												x="4"
-												y="10.5"
-												width="16"
-												height="10"
-												rx="2.5"
-												stroke="currentColor"
-												stroke-width="2"
-											/>
-											<path
-												d="M8 10.5V7.5a4 4 0 118 0v3"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-											/>
-										</svg>
-										<span class="shrink-0">Resposta</span>
-										<span class="min-w-0 truncate font-content font-semibold" dir="auto"
-											>{q.resposta}</span
-										>
-									</p>
+										<p class="flex min-w-0 flex-[1_1_200px] items-center gap-[7px]">
+											<svg
+												class="size-3.5 shrink-0 text-warning"
+												viewBox="0 0 24 24"
+												fill="none"
+												aria-hidden="true"
+											>
+												<rect
+													x="4"
+													y="10.5"
+													width="16"
+													height="10"
+													rx="2.5"
+													stroke="currentColor"
+													stroke-width="2"
+												/>
+												<path
+													d="M8 10.5V7.5a4 4 0 118 0v3"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+												/>
+											</svg>
+											<span class="shrink-0">Resposta</span>
+											<span class="min-w-0 truncate font-content font-semibold" dir="auto"
+												>{q.resposta}</span
+											>
+										</p>
+										<!-- No celular o aparelho fica acima da lista, e escolher uma
+									     linha o troca longe da vista: isto leva até ele. -->
+										<button type="button" onclick={verNoCelular} class={VER_NO_CELULAR}>
+											{@render icone(ICONE_DO_CELULAR, 'size-[15px]')}
+											Ver no celular
+										</button>
+									</div>
 								{/if}
 							</li>
 						{/each}

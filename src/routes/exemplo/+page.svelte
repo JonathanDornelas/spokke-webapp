@@ -207,7 +207,8 @@
 					class="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-[18px] outline-none
 					       lg:grid lg:grid-cols-2 lg:[align-content:safe_center] lg:items-center lg:gap-14 lg:px-16 lg:py-13"
 				>
-					<AmbientShapes edges="both" />
+					<!-- No celular a questão começa colada no topo: só a faixa de baixo. -->
+					<AmbientShapes edges="both" edgesNoCelular="bottom" />
 					{#key indice}
 						<div class="relative z-1 min-w-0 q-in" style="--q-shift: {deslocamento}">
 							<EnunciadoDaQuestao resposta={atual} />

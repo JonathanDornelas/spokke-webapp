@@ -450,6 +450,7 @@
 	hint={rodape}
 	rolagem="colunas"
 	{confirmarSaida}
+	concluido={data.published && !rotuloNoAr}
 >
 	<!-- No desktop, duas colunas que rolam cada uma por dentro (a de contexto com
 	     400px, como no desenho); no celular, uma rolagem só, e o contexto desce. -->
@@ -882,7 +883,10 @@
 				class="btn h-[46px] flex-1 motion-tap gap-2 btn-plain font-semibold no-underline lg:flex-none"
 			>
 				{@render icone('M8 5.5l10 6.5-10 6.5z')}
-				Pré-visualizar
+				<!-- No celular, "Prévia": com "Pré-visualizar" o rodapé não cabia numa
+				     linha e o "Cancelar" descia sozinho para outra (como "Do zero" na revisão). -->
+				<span class="lg:hidden">Prévia</span>
+				<span class="hidden lg:inline">Pré-visualizar</span>
 			</a>
 			<button
 				type="submit"

@@ -9,6 +9,8 @@
 	// **some quando há um só**: um filtro de uma opção é ruído, e um com os dez
 	// idiomas sempre devolveria lista vazia.
 	import { idiomasPresentes, SEM_IDIOMA } from '$lib/idiomas';
+	// O formato select só existe na barra das listas: a mesma classe dos vizinhos.
+	import { SELECT_DA_LISTA } from './lista/lista';
 
 	let {
 		tags,
@@ -42,12 +44,7 @@
 {#if opcoes > 1}
 	{#if formato === 'select'}
 		<label class="sr-only" for={id}>Filtrar por idioma</label>
-		<select
-			{id}
-			bind:value={valor}
-			onchange={() => onmudou?.(valor)}
-			class="select h-10 min-h-10 w-auto py-0 text-[13px]"
-		>
+		<select {id} bind:value={valor} onchange={() => onmudou?.(valor)} class={SELECT_DA_LISTA}>
 			<option value="">Todos os idiomas</option>
 			{#each presentes.idiomas as i (i.tag)}
 				<option value={i.tag}>{i.rotulo}</option>

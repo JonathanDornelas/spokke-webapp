@@ -204,7 +204,10 @@ código de acesso da etapa 4). Ela cresce e recolhe a altura junto com a opacida
 curva de movimento. Fechar veio primeiro: só com opacidade o bloco sumia e, terminada a saída, tudo
 abaixo dele pulava duzentos e tantos pixels de uma vez — um pulo ATRASADO em relação ao clique, que
 o dono do repositório leu como abrupto. Depois abrir: nascendo com a altura toda, a bandeja de
-turmas da etapa 4 empurrava as opções uns 300px num único quadro, e a leitura foi a mesma.
+turmas da etapa 4 empurrava as opções uns 300px num único quadro, e a leitura foi a mesma. **Abrir
+mede a altura a cada quadro** (`tick`): o conteúdo pode mudar no meio da abertura — o esqueleto da
+prévia vira os cartões —, e medida uma vez a sanfona saltava a diferença no último quadro (a
+mesma queixa, "abrupta", voltou assim). Fechar mede uma vez, com o bloco ainda montado.
 
 **Os números são TOKENS, e duas fontes os espelham**: o `app.css` (`--duration-*`, `--ease-*`,
 `--stagger`, as `animate-*`) e `$lib/movimento.ts` (para as transições do Svelte e as esperas em

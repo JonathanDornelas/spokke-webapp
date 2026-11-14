@@ -210,9 +210,16 @@
 			salvando = true;
 			try {
 				await submit();
-				if (!alvo.result?.ok) return;
-				if (alvo === criarMateriaisEmLote) formulario?.limpar();
-				else fechar();
+				// O erro e a contagem do lote ficam no fim do corpo da bandeja, que rola:
+				// o formulário os traz para a vista.
+				if (!alvo.result?.ok) {
+					void formulario?.mostrarResultado();
+					return;
+				}
+				if (alvo === criarMateriaisEmLote) {
+					formulario?.limpar();
+					void formulario?.mostrarResultado();
+				} else fechar();
 				await invalidateAll();
 			} finally {
 				salvando = false;
