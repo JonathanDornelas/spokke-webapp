@@ -33,19 +33,33 @@
 	// topo deixa a metade de baixo chapada. 'bottom' é só a de baixo, para painel
 	// cujo conteúdo começa colado no topo (a prévia do editor de item): ali uma
 	// faixa no topo cairia atrás do rótulo, e a regra é nunca atrás de texto.
+	// `edgesNoCelular`: o `edges` abaixo de `lg`, para a tela cujo LEIAUTE muda
+	// ali. A questão do Player fica no meio do cartão no desktop ('both') e
+	// começa colada no topo no celular, onde a faixa de cima caía atrás do rótulo
+	// e do enunciado — lá ela é 'bottom'. Sem ele, vale `edges` nos dois.
 	let {
 		height = 'clamp(9rem, 21vh, 12.5rem)',
 		tone = 'primary',
 		layout = 'band',
 		edges = 'top',
+		edgesNoCelular,
 		scale = 1
 	}: {
 		height?: string;
 		tone?: 'primary' | 'success';
 		layout?: 'band' | 'column' | 'corner' | 'tela';
 		edges?: 'top' | 'bottom' | 'both';
+		edgesNoCelular?: 'top' | 'bottom' | 'both';
 		scale?: number;
 	} = $props();
+
+	// Qual faixa existe em cada tamanho, e a classe que a esconde onde não existe.
+	const noCelular = $derived(edgesNoCelular ?? edges);
+	const temTopo = $derived({ desktop: edges !== 'bottom', celular: noCelular !== 'bottom' });
+	const temBase = $derived({ desktop: edges !== 'top', celular: noCelular !== 'top' });
+	function soOnde(faixa: { desktop: boolean; celular: boolean }) {
+		return faixa.desktop && faixa.celular ? '' : faixa.desktop ? 'max-lg:hidden' : 'lg:hidden';
+	}
 
 	// Classes inteiras e literais por tom — Tailwind só gera CSS para classes que
 	// aparecem completas no código-fonte, então nada de montar a string em runtime
@@ -193,13 +207,13 @@
 			       bg-primary/14 [clip-path:polygon(40%_0,60%_0,60%_40%,100%_40%,100%_60%,60%_60%,60%_100%,40%_100%,40%_60%,0_60%,0_40%,40%_40%)]"
 		></div>
 	</div>
-{:else if layout === 'column' || edges !== 'bottom'}
+{:else if layout === 'column' || temTopo.desktop || temTopo.celular}
 	<div
 		aria-hidden="true"
 		class="pointer-events-none absolute inset-x-0 top-0 overflow-hidden
 	       {layout === 'column'
 			? 'inset-y-0 [mask-image:linear-gradient(to_bottom,transparent_0%,#000_14%,#000_86%,transparent_100%)]'
-			: '[mask-image:linear-gradient(to_bottom,#000_46%,transparent_96%)]'}"
+			: `[mask-image:linear-gradient(to_bottom,#000_46%,transparent_96%)] ${soOnde(temTopo)}`}"
 		style="--amb-k: {scale}; {layout === 'column' ? '' : `height: ${height}`}"
 	>
 		{#if layout === 'column'}
@@ -231,11 +245,11 @@
 	</div>
 {/if}
 
-{#if layout === 'band' && (edges === 'both' || edges === 'bottom')}
+{#if layout === 'band' && (temBase.desktop || temBase.celular)}
 	<div
 		aria-hidden="true"
 		class="pointer-events-none absolute inset-x-0 bottom-0 overflow-hidden
-		       [mask-image:linear-gradient(to_top,#000_46%,transparent_96%)]"
+		       [mask-image:linear-gradient(to_top,#000_46%,transparent_96%)] {soOnde(temBase)}"
 		style="--amb-k: {scale}; height: {height}"
 	>
 		{@render faixaBase()}

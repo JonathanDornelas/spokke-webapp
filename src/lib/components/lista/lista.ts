@@ -14,9 +14,15 @@ export const BOTAO_NOVO =
 	'btn h-11 min-h-11 w-full motion-tap gap-2 btn-primary px-[18px] text-[14.5px] font-bold no-underline sm:w-auto';
 export const ICONE_MAIS = 'M12 5v14M5 12h14';
 
-/** Os selects da barra de filtros — a mesma altura do campo de busca. */
-/** No celular eles dividem a linha (`flex-1`) em vez de cada um quebrar para a sua. */
-export const SELECT_DA_LISTA = 'select h-10 min-h-10 w-auto flex-1 py-0 text-[13px] sm:flex-none';
+/**
+ * Os selects da barra de filtros, na altura do campo de busca. No celular eles
+ * dividem a linha (`flex-1`), dois por linha. O mínimo de 9,5rem é o que deixa:
+ * sem ele vale o mínimo AUTOMÁTICO do item de flex, que num `<select>` é a
+ * largura da opção mais longa ("B2 · Intermediário superior"), e cada select
+ * quebrava para uma linha só sua.
+ */
+export const SELECT_DA_LISTA =
+	'select h-10 min-h-10 w-auto min-w-[9.5rem] flex-1 py-0 text-[13px] sm:min-w-0 sm:flex-none';
 
 /**
  * A tabela. Sem `overflow-hidden` de propósito: o menu "⋯" de uma linha abre

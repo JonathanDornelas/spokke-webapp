@@ -262,9 +262,14 @@
 				/>
 			</svg>
 		</a>
+		<!-- No celular a frase inteira saía cortada em "fic…", e o que se perdia era
+		     justamente o aviso: lá ela é a curta. -->
 		<p class="min-w-0 flex-1 truncate text-[13px]">
 			<strong class="font-bold">Prévia do aluno</strong>
-			<span class="text-base-content/65">· nada do que você responder fica salvo</span>
+			<span class="text-base-content/65 sm:hidden">· nada fica salvo</span>
+			<span class="hidden text-base-content/65 sm:inline"
+				>· nada do que você responder fica salvo</span
+			>
 		</p>
 		<!-- Qual versão está na tela: com rascunho, é ele (o que vai ao ar ao
 		     publicar); sem rascunho, a que já está no ar. -->
@@ -356,7 +361,9 @@
 					       lg:grid lg:grid-cols-2 lg:[align-content:safe_center] lg:items-center lg:gap-14 lg:px-16
 					       {gradeNaTela && tecladoAberto ? 'lg:py-6' : 'lg:py-13'}"
 				>
-					<AmbientShapes edges="both" />
+					<!-- No celular a questão começa colada no topo: a faixa de cima cairia
+					     atrás do rótulo e do enunciado (a mesma da `/q/[n]`). -->
+					<AmbientShapes edges="both" edgesNoCelular="bottom" />
 
 					{#key indice}
 						<div class="relative z-1 min-w-0 {movimento}" style="--q-shift: {deslocamento}">

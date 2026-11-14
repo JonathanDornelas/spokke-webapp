@@ -14,6 +14,8 @@
 	import ScoreBar from '$lib/components/ScoreBar.svelte';
 	import { withMock } from '$lib/dev/with-mock';
 	import { NIVEIS, rotuloDoNivel, type NivelId } from '$lib/atividades/nivel';
+	import { skillLabels } from '$lib/kernel/interactions/skill-schema';
+	import type { Skill } from '$lib/kernel/interactions/types';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
 	import FiltroIdioma from '$lib/components/FiltroIdioma.svelte';
 	import { casaComFiltro } from '$lib/idiomas';
@@ -52,7 +54,8 @@
 		id: string;
 		title: string;
 		itemCount: number;
-		skills: string[];
+		/** As chaves do kernel; o nome na tela sai de `skillLabels`. */
+		skills: Skill[];
 		language: string;
 		idioma: string | null;
 		noAr: boolean;
@@ -219,6 +222,14 @@
 		return `${n} ${n === 1 ? um : varios}`;
 	}
 
+	/** "8 questões · Escuta, Leitura" — a linha de baixo do título, nas duas formas da lista. */
+	function resumoDasQuestoes(a: ActivityRow) {
+		const quantas = palavra(a.itemCount, 'questão', 'questões');
+		return a.skills.length
+			? `${quantas} · ${a.skills.map((s) => skillLabels[s]).join(', ')}`
+			: quantas;
+	}
+
 	async function confirmar() {
 		if (!confirmando) return;
 		const { acao, ids } = confirmando;
@@ -324,8 +335,10 @@
 	<div class="relative flex min-h-[70vh] items-center overflow-hidden px-4 py-12 lg:px-7 lg:py-14">
 		<AmbientShapes height="230px" />
 		<div class="relative z-1 max-w-[46ch] animate-entrada">
+			<!-- "Boas-vindas", e não "Bem-vinda": a saudação vale para quem quer que
+			     abra a conta, e o cadastro não pergunta como a pessoa quer ser tratada. -->
 			<p class="mb-4 text-xs font-bold tracking-[0.13em] text-primary uppercase">
-				Bem-vinda, {data.teacher.firstName}
+				Boas-vindas, {data.teacher.firstName}
 			</p>
 			<h1
 				class="mb-3.5 font-display text-[30px] leading-[1.08] font-semibold tracking-[-0.025em] text-pretty lg:text-4xl"
@@ -336,7 +349,9 @@
 				Cole uma lista de frases que você já usa em aula. O gerador propõe os exercícios, você
 				revisa e publica. O link fica pronto para mandar no grupo da turma.
 			</p>
-			<div class="flex flex-wrap gap-3">
+			<!-- No celular os dois dividem a largura toda, como o "Nova atividade" da
+			     lista; lado a lado, cada um do tamanho do próprio texto. -->
+			<div class="grid gap-3 sm:flex sm:flex-wrap">
 				<a
 					href={resolve('/(studio)/atividades/nova')}
 					class="btn btn-lg min-h-[50px] motion-tap btn-primary text-base font-bold no-underline"
@@ -381,7 +396,9 @@
 			<!-- A tarefa começada vem ANTES da lista: é a retomada, não mais um
 			     item qualquer. -->
 			<a
-				href={resolve('/(studio)/atividades/[id]/materiais', { id: data.resume.id })}
+				href={data.resume.etapa === 3
+					? resolve('/(studio)/atividades/[id]/revisar', { id: data.resume.id })
+					: resolve('/(studio)/atividades/[id]/materiais', { id: data.resume.id })}
 				class="mb-[18px] flex flex-col gap-4 rounded-box bg-base-300 px-[22px] py-[22px] no-underline
 				       lg:flex-row lg:items-center lg:gap-[26px] lg:px-[26px]"
 			>
@@ -559,10 +576,7 @@
 								class="block truncate font-semibold text-base-content {LINK_DA_LINHA}">{a.title}</a
 							>
 							<div class="mt-0.5 truncate text-xs text-base-content/65">
-								{a.itemCount}
-								{a.itemCount === 1 ? 'questão' : 'questões'}{a.skills.length
-									? ` · ${a.skills.join(', ')}`
-									: ''}{a.level ? ` · ${a.level}` : ''}
+								{resumoDasQuestoes(a)}{a.level ? ` · ${a.level}` : ''}
 							</div>
 						</div>
 						<span class="min-w-0"><IdiomaTag tag={a.idioma} /></span>
@@ -607,10 +621,7 @@
 							{@render menu(a)}
 						</div>
 						<p class="mb-2.5 ps-8 text-xs text-base-content/65">
-							{a.itemCount}
-							{a.itemCount === 1 ? 'questão' : 'questões'}{a.skills.length
-								? ` · ${a.skills.join(', ')}`
-								: ''}
+							{resumoDasQuestoes(a)}{a.level ? ` · ${a.level}` : ''}
 						</p>
 						{#if a.score.correct + a.score.partial + a.score.incorrect > 0}
 							<div class="mb-2.5 ps-8">
@@ -622,9 +633,16 @@
 								/>
 							</div>
 						{/if}
-						<div class="flex items-center gap-3 ps-8 text-[13px]">
+						<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 ps-8 text-[13px]">
 							<IdiomaTag tag={a.idioma} />
-							{@render tentativas(a)}
+							<!-- Escrito por extenso: o número sozinho só se lia com o cabeçalho
+							     "Tentativas" da tabela, que o cartão não tem. Rascunho não tem
+							     link, e portanto nem tentativa: nada aparece. -->
+							{#if a.attempts !== null}
+								<span class="whitespace-nowrap text-base-content/65"
+									>{palavra(a.attempts, 'tentativa', 'tentativas')}</span
+								>
+							{/if}
 						</div>
 					</li>
 				{/each}

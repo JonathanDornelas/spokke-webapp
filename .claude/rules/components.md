@@ -666,6 +666,14 @@ acesso da etapa 4), é uma SANFONA: entra com `desdobrar` e sai com `recolher`, 
 altura junto com a opacidade e 8px de deslocamento — a exceção a "só transform e opacity", com o
 porquê em design-system.md "Movimento".
 
+- **Abrir mede a altura A CADA QUADRO** (`tick`, pelo `scrollHeight` do que está dentro agora);
+  fechar mede uma vez. Na prévia de um material o esqueleto vira os cartões no meio da abertura, e o
+  cartão de uma frase longa é mais alto que o esqueleto: medida uma vez, a sanfona abria até a
+  altura do esqueleto e saltava o resto no fim.
+- **O que chega depois entra em ESTADO, não num `{#await}`.** O pendente do `{#await}` só é
+  desenhado um microtick depois de o bloco montar, e a sanfona media o bloco VAZIO (abria até 67px
+  e saltava 140 no fim). Em estado, o esqueleto (ou o conteúdo) já está lá quando ela mede.
+
 ## Bandeja — `Bandeja.svelte`
 
 Todo formulário de CRIAR e EDITAR do Studio que não é atividade abre aqui, pela direita, sobre a
@@ -769,6 +777,11 @@ conteúdo fica no meio do cartão (Player, acesso); `'bottom'` onde ele começa 
 vazio é embaixo (as quatro etapas do wizard, a prévia do editor de item); `'top'` só no hero,
 onde o conteúdo vem depois. Faixa do lado errado cai atrás de texto, que é o que a regra proíbe.
 
+**`edgesNoCelular` é o `edges` abaixo de `lg`**, para a tela cujo leiaute muda ali. A QUESTÃO do
+Player (e da prévia do aluno e do `/exemplo`, que são a mesma casca) fica no meio do cartão no
+desktop e começa colada no topo no celular, onde a faixa de cima caía atrás do rótulo da habilidade
+e do enunciado: lá é `edges="both" edgesNoCelular="bottom"`. Sem ele, vale `edges` nos dois.
+
 As quatro etapas do wizard não montam a faixa cada uma: ela vive uma vez em `WizardShell.svelte`,
 ancorada embaixo (150px no celular, 190px no desktop). Ela vem ANTES do conteúdo no DOM e o
 conteúdo é `relative` — entre irmãos posicionados sem `z-index`, quem vem depois pinta por cima —,
@@ -795,7 +808,7 @@ desenho: etiqueta, título e uma linha de contexto à esquerda, as ações à di
 números que importam, separados por um filete. Fundo `base-200`, 16px de raio, e as formas de
 ambiente no canto oposto ao texto (`AmbientShapes layout="corner"`).
 
-Props: `{ numbers?: { value: string | number; label: string; tone?: 'primary' | 'error' | 'muted' }[]; badge?: Snippet; actions?: Snippet; children: Snippet }`.
+Props: `{ numbers?: { value: string | number; label: string; tone?: 'primary' | 'error' | 'muted' }[]; badge?: Snippet; actions?: Snippet; detalhes?: Snippet; children: Snippet }`.
 
 - **Os números são uma lista curta em linha**, não uma grade que espalha quatro valores pela
   largura toda: lidos juntos eles respondem uma pergunta só ("qual é o tamanho disto?"), e a
@@ -805,7 +818,13 @@ Props: `{ numbers?: { value: string | number; label: string; tone?: 'primary' | 
   cor dela, ou um ícone. `children` é o `h1` (22px no celular, 28 no desktop) mais a linha de
   contexto em 13,5px. `actions` são os botões de 42px — `btn-plain` para o secundário, porque o
   `btn-neutral` some sobre o fundo `base-200` do cartão; no celular eles descem para uma linha
-  própria e dividem a largura.
+  própria e dividem a largura, e quando os dois rótulos não cabem lado a lado (item de flex não
+  encolhe abaixo do próprio texto) um fica sobre o outro, cada um com a linha inteira — antes
+  "Editar no wizard" e "Enviar para turma" passavam 15px da borda num celular de 390.
+- `detalhes` é o que vem sob o título e a linha de contexto (os dados da atividade, o aviso do
+  áudio). **No celular ocupa a largura inteira do cartão**: na coluna do título, recuada pela
+  etiqueta, o select de nível e as datas passavam da borda. No desktop vem depois das ações e alinha
+  com o título (o recuo da etiqueta, 46px mais o vão de 18).
 
 ---
 
@@ -1018,8 +1037,11 @@ Props: `{ contexto: 'biblioteca' | 'wizard'; conjunto: MaterialRow[]; biblioteca
 - `conjunto` é o que o RENDIMENTO conta (a biblioteca inteira, ou o da atividade) e de onde a
   prévia tira as alternativas erradas. `biblioteca` é onde procurar repetido — no wizard é
   atividade + `materiaisDisponiveis`, porque o servidor reaproveita da biblioteca inteira.
-- Métodos via `bind:this`: `novo()`, `editar(row)`, `limpar()`. A página chama `editar` da
-  linha da lista; o componente carrega os campos CRUS (nunca o resumo) e trava o tipo.
+- Métodos via `bind:this`: `novo()`, `editar(row)`, `limpar()` e `mostrarResultado()`. A página
+  chama `editar` da linha da lista; o componente carrega os campos CRUS (nunca o resumo) e trava o
+  tipo. **`mostrarResultado()` vem depois de cada envio** (e de aceitar as propostas da IA): o
+  resultado mora no FIM do corpo, depois dos campos, e no celular ficava fora da vista — o professor
+  tocava em "Adicionar" e não via nem o "3 adicionados" nem o erro.
 - `resultado` é o `.result` da remote function em uso — as três formas (erro, um material com
   `reused`, lote com contagens) são `ResultadoMaterial`, e as remote functions devolvem
   `ok: true as const` / `false as const` para a união discriminar.
@@ -1064,7 +1086,10 @@ montado com estas peças, sempre nesta ordem:
   usa `BOTAO_NOVO` com `ICONE_MAIS` (`lista.ts`): largura inteira no celular, na ponta no desktop.
 - `FerramentasDaLista.svelte` — `{ busca: $bindable; rotulo; children? }`: o campo de busca ocupa o
   que sobra da linha, e os selects de filtro e de ordem vêm em `children`, com `SELECT_DA_LISTA`
-  (no celular eles dividem a linha). O `FiltroIdioma` em formato select tem a mesma altura.
+  (no celular eles dividem a linha, dois por linha). O mínimo de 9,5rem da classe é o que deixa:
+  sem ele vale o mínimo AUTOMÁTICO do item de flex, que num `<select>` é a largura da opção mais
+  longa ("B2 · Intermediário superior"), e cada select quebrava para uma linha só sua. O
+  `FiltroIdioma` em formato select usa a mesma classe.
 - `ChipsDaLista.svelte` — `{ opcoes: { id, label, n }[]; valor: $bindable; rotulo; onmudou? }`
   (genérico no `id`): a situação, com a contagem. Chip de zero some (menos o primeiro e o escolhido),
   e com uma opção só a fileira inteira some.
@@ -1137,6 +1162,12 @@ tela — numa tela baixa o aparelho não encolhe.
 - **Sem `data-surface="player"`**, como o celular da home e o Player de verdade (`a/[slug]/q/[n]`):
   o alvo de 48px inflava as setas do "ordenar" (22px no desenho), as peças do "montar" e as palavras
   do "tocar", e a prévia saía diferente do que o aluno vê.
+- **O palco no celular** (`celular-do-aluno.ts`, a revisão e a tela da atividade): o aparelho fica
+  ACIMA do roteiro, então as setas, que no desktop ficam dos lados dele, descem para baixo
+  (`SETA_SOB_O_CELULAR`, "Anterior" e "Próxima" com ícone e texto), e a linha escolhida ganha "Ver no
+  celular" (`VER_NO_CELULAR`, `rolarAtePalco`): escolher uma linha troca a questão longe da vista.
+  O painel da linha escolhida começa depois da bolha também no celular — a 10px da borda, o fio do
+  roteiro, que passa por trás do fundo translúcido dela, cortava "Resposta".
 
 `material-form.ts` guarda o que os dois loaders e as duas páginas compartilham: `MaterialRow`
 (a linha das listas, com os campos crus para editar), `TIPOS` (rótulo, "o que o aluno faz",

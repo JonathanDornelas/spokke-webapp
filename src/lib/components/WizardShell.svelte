@@ -26,7 +26,8 @@
 		aside,
 		larguraAside = 'estreita',
 		rolagem = 'pagina',
-		confirmarSaida
+		confirmarSaida,
+		concluido = false
 	}: {
 		step: number;
 		backHref: string;
@@ -61,6 +62,11 @@
 		 * há o que publicar — o desenho "Studio Publicar A"). Sem, ele só sai.
 		 */
 		confirmarSaida?: { titulo: string; texto: string; ficar: string; sair: string };
+		/**
+		 * O wizard ACABOU (no ar, nada por publicar): a saída vira "Fechar". Ao lado
+		 * de "Está no ar", "Cancelar" lia como desfazer a publicação.
+		 */
+		concluido?: boolean;
 	} = $props();
 	const colunas = $derived(rolagem === 'colunas');
 
@@ -183,9 +189,11 @@
 			href={sair}
 			onclick={aoCancelar}
 			class="order-last shrink-0 rounded-field px-3 py-2.5 text-[13.5px] font-semibold text-base-content/65 no-underline transition-colors hover:bg-base-200 hover:text-base-content lg:order-first"
-			title="Sai da criação. O rascunho continua salvo na lista de atividades."
+			title={concluido
+				? 'Volta para a lista de atividades.'
+				: 'Sai da criação. O rascunho continua salvo na lista de atividades.'}
 		>
-			Cancelar
+			{concluido ? 'Fechar' : 'Cancelar'}
 		</a>
 		{#if hint}
 			<span class="hidden text-[12.5px] text-base-content/65 lg:inline">{hint}</span>

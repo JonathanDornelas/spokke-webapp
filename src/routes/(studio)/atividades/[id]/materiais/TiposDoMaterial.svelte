@@ -7,7 +7,9 @@
 	// mesma regra de "entra com estes tipos" da geração, e UM exemplo de cada tipo
 	// (escuta, fala, leitura, escrita), como QUESTÃO RESUMIDA — os quatro cartões do
 	// desenho. O tipo desligado aparece apagado.
+	import { untrack } from 'svelte';
 	import { skillLabels } from '$lib/kernel/interactions/skill-schema';
+	import type { QuestaoResumida as QuestaoResumidaDoMaterial } from '$lib/atividades/questao-resumida';
 	import type { Skill } from '$lib/kernel/interactions/types';
 	import { TIPOS, bloqueioNoMaterial } from '$lib/atividades/tipos-por-material';
 	import QuestaoResumida from '$lib/components/QuestaoResumida.svelte';
@@ -33,13 +35,49 @@
 	} = $props();
 
 	let aberta = $state(false);
-	// Só consulta com a prévia aberta: são vários materiais na lista, e cada um
-	// pedindo a sua ao montar seria uma ida ao servidor por cartão sem ninguém ter
-	// pedido. Fechando, o bloco SAI com o conteúdo que tinha — o efeito de dentro
-	// fica parado durante a saída, então ele não esvazia no meio do recolher.
-	const consulta = $derived(
-		aberta ? previaDoMaterial({ activityId, contentId: materialId, tipos }) : null
-	);
+
+	/**
+	 * Os cartões da prévia, em ESTADO — e não num `{#await}` da consulta. Duas
+	 * coisas dependem disso:
+	 *
+	 * - **Trocar um tipo não pisca.** Cada troca pede uma prévia nova ao servidor,
+	 *   e com o `{#await}` os cartões sumiam, o esqueleto voltava por um quadro (38px
+	 *   mais alto que eles) e os cartões voltavam. Agora os de agora ficam até os
+	 *   novos chegarem, e trocam no lugar (o tipo desligado só esmaece).
+	 * - **Abrir anima até a altura certa.** A sanfona (`desdobrar`) mede o que já
+	 *   está dentro no instante em que monta, e o `{#await}` só desenha o pendente um
+	 *   microtick depois: ela media a bandeja vazia, abria até 67px e saltava o resto
+	 *   no fim. Em estado, o conteúdo (o esqueleto ou os cartões) já está lá.
+	 *
+	 * Só consulta com a prévia aberta: são vários materiais na lista, e cada um
+	 * pedindo a sua ao montar seria uma ida ao servidor por cartão sem ninguém ter
+	 * pedido. Fechando, os cartões FICAM — a saída recolhe com eles, e reabrir já
+	 * nasce com eles enquanto a consulta confere os tipos de agora.
+	 */
+	let itens = $state<QuestaoResumidaDoMaterial[] | null>(null);
+	let falhou = $state(false);
+	// A chave dos tipos, e não o array: a página manda um array novo a cada
+	// recarga, com os mesmos tipos, e isso não é motivo para perguntar de novo.
+	const chaveDosTipos = $derived([...tipos].sort().join(','));
+	$effect(() => {
+		if (!aberta) return;
+		void chaveDosTipos;
+		let valendo = true;
+		untrack(() => previaDoMaterial({ activityId, contentId: materialId, tipos: [...tipos] })).then(
+			(resposta) => {
+				if (!valendo) return;
+				itens = resposta;
+				falhou = false;
+			},
+			() => {
+				if (valendo) falhou = true;
+			}
+		);
+		// Trocou de novo antes de a resposta chegar: a anterior não pinta mais nada.
+		return () => {
+			valendo = false;
+		};
+	});
 
 	/**
 	 * A largura de cada cartão sai da largura da FAIXA (`cqw`). Com espaço, os
@@ -116,7 +154,7 @@
 	</button>
 </div>
 
-{#if aberta && consulta}
+{#if aberta}
 	<div
 		id="previa-{materialId}"
 		class="border-t border-line bg-base-200 pt-3.5 pb-4"
@@ -130,35 +168,37 @@
 		     primeiro vale também para o ENCAIXE da rolagem (`scroll-ps`): sem ele o
 		     navegador encaixava o primeiro cartão colado na borda. -->
 		<div class="@container flex snap-x scroll-ps-[15px] gap-[9px] overflow-x-auto ps-[15px] pb-1.5">
-			{#await consulta}
-				{#each [0, 1, 2, 3] as i (i)}
-					<div
-						class="{LARGURA} h-[178px] shrink-0 skeleton rounded-[13px]"
-						style="animation-delay: {i * 120}ms"
-					></div>
-				{/each}
-			{:then itens}
-				{#if itens.length === 0}
+			{#if itens === null}
+				{#if falhou}
 					<p class="pe-[15px] text-[12.5px] text-base-content/65">
-						Este material ainda não rende questão sozinho: as alternativas erradas vêm dos outros
-						materiais do mesmo tipo.
+						Não deu para montar a prévia agora.
 					</p>
 				{:else}
-					{#each itens as item (item.id)}
-						<div class="{LARGURA} shrink-0 snap-start">
-							<QuestaoResumida questao={item} tamanho="pequena" {dir} {lang} />
-						</div>
+					<!-- O esqueleto tem a altura do cartão: com a de antes ele era 38px mais
+					     alto, e a bandeja encolhia quando os cartões chegavam. -->
+					{#each [0, 1, 2, 3] as i (i)}
+						<div
+							class="{LARGURA} h-[140px] shrink-0 skeleton rounded-[13px]"
+							style="animation-delay: {i * 120}ms"
+						></div>
 					{/each}
-					<!-- O respiro do fim: com o vão de 9px, o último cartão para a 15px da
-					     borda, como o primeiro. Padding no fim de uma faixa rolável não
-					     entra na conta da rolagem em todo navegador. -->
-					<span class="w-1.5 shrink-0" aria-hidden="true"></span>
 				{/if}
-			{:catch}
+			{:else if itens.length === 0}
 				<p class="pe-[15px] text-[12.5px] text-base-content/65">
-					Não deu para montar a prévia agora.
+					Este material ainda não rende questão sozinho: as alternativas erradas vêm dos outros
+					materiais do mesmo tipo.
 				</p>
-			{/await}
+			{:else}
+				{#each itens as item (item.id)}
+					<div class="{LARGURA} shrink-0 snap-start">
+						<QuestaoResumida questao={item} tamanho="pequena" {dir} {lang} />
+					</div>
+				{/each}
+				<!-- O respiro do fim: com o vão de 9px, o último cartão para a 15px da
+				     borda, como o primeiro. Padding no fim de uma faixa rolável não
+				     entra na conta da rolagem em todo navegador. -->
+				<span class="w-1.5 shrink-0" aria-hidden="true"></span>
+			{/if}
 		</div>
 	</div>
 {/if}

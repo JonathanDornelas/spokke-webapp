@@ -20,6 +20,12 @@
 	import Loading from '$lib/components/Loading.svelte';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import CelularDoAluno from '$lib/components/CelularDoAluno.svelte';
+	import {
+		ICONE_DO_CELULAR,
+		SETA_SOB_O_CELULAR,
+		VER_NO_CELULAR,
+		rolarAtePalco
+	} from '$lib/components/celular-do-aluno';
 	import PreviaDaQuestao from '$lib/components/PreviaDaQuestao.svelte';
 	import { textoDoPasso, type ProgressoDaGeracao } from '$lib/atividades/geracao';
 	import {
@@ -120,6 +126,9 @@
 		const i = navegacao.findIndex((q) => q.id === escolhida.id);
 		escolhidaId = navegacao[(i + passo + navegacao.length) % navegacao.length]?.id ?? null;
 	}
+	/** O palco, para o "Ver no celular" da linha escolhida (no celular ele fica acima da lista). */
+	let palco = $state<HTMLElement>();
+	const verNoCelular = () => rolarAtePalco(palco);
 
 	// ── arrastar ────────────────────────────────────────────────────────────
 	// `svelte-dnd-action`, pela alça: tem teclado (espaço pega, setas movem) e o
@@ -410,7 +419,10 @@
 		</button>
 	</div>
 	{#if ativa}
-		<div class="flex flex-wrap items-center gap-2 px-2.5 pt-0.5 pb-2.5 lg:ps-[106px]">
+		<!-- No celular o painel começa depois da bolha (64px): a 10px da borda, o
+		     fio do roteiro, que passa por trás da linha escolhida, cortava a
+		     palavra "Resposta". -->
+		<div class="flex flex-wrap items-center gap-2 px-2.5 ps-16 pt-0.5 pb-2.5 lg:ps-[106px]">
 			<span class="flex min-w-0 flex-[1_1_200px] items-center gap-[7px] text-[12.5px]">
 				<svg
 					class="size-3.5 shrink-0 text-warning"
@@ -438,24 +450,28 @@
 				<span class="min-w-0 truncate font-content font-semibold" dir="auto">{q.resposta}</span>
 			</span>
 			{#if posicao}
-				<button
-					type="button"
-					onclick={() => mover(q.id, -1)}
-					disabled={posicao === 1}
-					aria-label="Mover para cima"
-					class="grid size-10 shrink-0 place-items-center rounded-[9px] border border-line bg-base-100 transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-45"
-				>
-					{@render icone('M12 19V5M6 11l6-6 6 6', 'size-[15px]')}
-				</button>
-				<button
-					type="button"
-					onclick={() => mover(q.id, 1)}
-					disabled={posicao === roteiro.length}
-					aria-label="Mover para baixo"
-					class="grid size-10 shrink-0 place-items-center rounded-[9px] border border-line bg-base-100 transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-45"
-				>
-					{@render icone('M12 5v14M6 13l6 6 6-6', 'size-[15px]')}
-				</button>
+				<!-- As duas setas quebram JUNTAS: soltas, no celular a de subir ficava
+				     ao lado da resposta e a de descer ia para a linha de baixo. -->
+				<span class="flex shrink-0 gap-2">
+					<button
+						type="button"
+						onclick={() => mover(q.id, -1)}
+						disabled={posicao === 1}
+						aria-label="Mover para cima"
+						class="grid size-10 shrink-0 place-items-center rounded-[9px] border border-line bg-base-100 transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-45"
+					>
+						{@render icone('M12 19V5M6 11l6-6 6 6', 'size-[15px]')}
+					</button>
+					<button
+						type="button"
+						onclick={() => mover(q.id, 1)}
+						disabled={posicao === roteiro.length}
+						aria-label="Mover para baixo"
+						class="grid size-10 shrink-0 place-items-center rounded-[9px] border border-line bg-base-100 transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-45"
+					>
+						{@render icone('M12 5v14M6 13l6 6 6-6', 'size-[15px]')}
+					</button>
+				</span>
 			{/if}
 			<button
 				type="button"
@@ -480,6 +496,12 @@
 						label="Salvando"
 					/>{/if}
 				{q.dentro ? 'Descartar' : 'Aceitar'}
+			</button>
+			<!-- No celular o aparelho fica lá em cima, e escolher uma linha o troca
+			     longe da vista: isto leva até ele. -->
+			<button type="button" onclick={verNoCelular} class={VER_NO_CELULAR}>
+				{@render icone(ICONE_DO_CELULAR, 'size-[15px]')}
+				Ver no celular
 			</button>
 		</div>
 	{/if}
@@ -564,10 +586,12 @@
 		     altura FIXA: numa tela baixa o palco rola, e o `safe center` impede que o
 		     topo do aparelho fique fora do alcance da rolagem. -->
 		<div class="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-			<!-- O PALCO: a questão escolhida, no celular de tamanho fixo. -->
+			<!-- O PALCO: a questão escolhida, no celular de tamanho fixo. No celular as
+			     setas não cabem dos lados do aparelho e descem para baixo dele. -->
 			<section
+				bind:this={palco}
 				aria-label="A questão escolhida, como o aluno vê"
-				class="flex shrink-0 [align-items:safe_center] justify-center gap-2.5 border-b border-line bg-base-200 px-4 py-6 lg:w-[clamp(30rem,30%,45rem)] lg:overflow-y-auto lg:border-e lg:border-b-0 lg:px-3.5"
+				class="flex shrink-0 flex-col items-center gap-3 border-b border-line bg-base-200 px-4 py-6 lg:w-[clamp(30rem,30%,45rem)] lg:flex-row lg:[align-items:safe_center] lg:justify-center lg:gap-2.5 lg:overflow-y-auto lg:border-e lg:border-b-0 lg:px-3.5"
 			>
 				<button
 					type="button"
@@ -655,6 +679,18 @@
 				>
 					{@render icone('M9 5l7 7-7 7', 'size-[15px]')}
 				</button>
+				{#if escolhida && navegacao.length > 1}
+					<div class="flex gap-2.5 lg:hidden">
+						<button type="button" onclick={() => andar(-1)} class={SETA_SOB_O_CELULAR}>
+							{@render icone('M15 5l-7 7 7 7', 'size-[15px]')}
+							Anterior
+						</button>
+						<button type="button" onclick={() => andar(1)} class={SETA_SOB_O_CELULAR}>
+							Próxima
+							{@render icone('M9 5l7 7-7 7', 'size-[15px]')}
+						</button>
+					</div>
+				{/if}
 			</section>
 
 			<!-- O ROTEIRO -->

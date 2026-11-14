@@ -23,13 +23,24 @@
 		numbers = [],
 		badge,
 		actions,
+		detalhes,
 		children
 	}: {
 		numbers?: Numero[];
 		/** A etiqueta à esquerda do título: iniciais, sigla da turma ou um ícone. */
 		badge?: Snippet;
-		/** Os botões. No celular eles descem para uma linha própria e dividem a largura. */
+		/**
+		 * Os botões. No celular eles descem para uma linha própria e dividem a
+		 * largura; quando os dois rótulos não cabem lado a lado, um fica sobre o outro.
+		 */
 		actions?: Snippet;
+		/**
+		 * O que vem sob o título e a linha de contexto: os dados da atividade, um
+		 * aviso. No celular ocupa a largura INTEIRA do cartão — na coluna do
+		 * título, recuada pela etiqueta, o select de nível e as datas passavam da
+		 * borda. No desktop alinha com o título, depois das ações.
+		 */
+		detalhes?: Snippet;
 		/** Título e linha de contexto. */
 		children: Snippet;
 	} = $props();
@@ -57,8 +68,19 @@
 			<div class="min-w-0 flex-1">
 				{@render children()}
 			</div>
+			{#if detalhes}
+				<!-- Uma linha própria do flex: no celular entre o título e as ações; no
+				     desktop por último (`order-last`), com o recuo da etiqueta (46px + o
+				     vão de 18px) para começar onde o título começa. -->
+				<div class="w-full min-w-0 lg:order-last {badge ? 'lg:ps-16' : ''}">
+					{@render detalhes()}
+				</div>
+			{/if}
 			{#if actions}
-				<div class="flex w-full gap-2 *:flex-1 lg:w-auto lg:*:flex-none">
+				<!-- `flex-wrap`: o item de flex não encolhe abaixo do próprio texto, e
+				     "Editar no wizard" com "Enviar para turma" passavam 15px da borda num
+				     celular de 390. Quebrando, cada um ocupa a linha inteira. -->
+				<div class="flex w-full flex-wrap gap-2 *:flex-1 lg:w-auto lg:flex-nowrap lg:*:flex-none">
 					{@render actions()}
 				</div>
 			{/if}

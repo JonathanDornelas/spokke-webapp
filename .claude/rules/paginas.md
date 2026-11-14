@@ -112,7 +112,10 @@ até o fim do conteúdo, o botão ia para baixo da dobra e a rodinha sobre a col
 o `overscroll-contain` do corpo segurava o gesto. A lista também é uma
 (`MaterialList.svelte`): muda só a quarta coluna ("Origem" aqui, "Em uso" lá) e o que remover
 significa. No celular só um dos dois cabe: o formulário cobre a lista, e "Ver os N materiais" /
-"Adicionar" alternam entre eles.
+"Adicionar" alternam entre eles ("Ver o material" com um, "Ver a lista" sem nenhum). **A etapa abre
+no formulário só sem material**: quem volta da revisão quer ver o que já está ali, e caía em
+"Adicionar material". Depois de enviar, o formulário rola até o resultado ("3 adicionados" ou o
+erro), que no celular ficava abaixo da dobra.
 
 **"Tipo do Material": quatro cartões só com o nome** (Sentença, Vocabulário, Texto, Diálogo —
 "Sentença" era "Par de frases", e o título era "O que o aluno vai fazer"; os dois mudaram a pedido
@@ -215,8 +218,9 @@ tentativa de aluno no relatório dele.
   item passa pelo mesmo `buildRuntimeItem` do Player — se o gabarito aparecesse ali, estaria
   vazando de verdade.
 - **Uma faixa FORA do cartão do Player** é do professor: o X, "Prévia do aluno · nada do que você
-  responder fica salvo" e qual versão está na tela (o rascunho, ou a que está no ar). Dentro do
-  cartão é o que o aluno vê.
+  responder fica salvo" (no celular, "· nada fica salvo": a frase inteira saía cortada justamente
+  no aviso) e qual versão está na tela (o rascunho, ou a que está no ar). Dentro do cartão é o que
+  o aluno vê.
 - A escuta cujo áudio ainda está na fila diz isso no lugar do player (o link nem abriria para o
   aluno), e a questão incompleta aparece na sequência com "Abrir no editor".
 
@@ -234,7 +238,10 @@ atividade aparece na lista como rascunho, e é por isso que o rótulo é "Cancel
 "Descartar". **Na etapa 4, com algo por publicar, ele pergunta antes** (o desenho "Studio
 Publicar A"): um `<dialog>` do próprio `WizardShell` (`confirmarSaida`) com "Sair sem publicar?",
 a consequência numa frase e "Continuar publicando" / "Sair sem publicar" — azul, não vermelho,
-porque sair não apaga nada.
+porque sair não apaga nada. **No ar e sem nada pendente, ele é "Fechar"** (`concluido`): ao lado de
+"Está no ar", "Cancelar" lia como desfazer a publicação. No celular o "Pré-visualizar" da etapa 4 é
+"Prévia", para o rodapé caber numa linha (com "Publicar e enviar" ele ainda desce: os três não cabem
+em 358px).
 
 **A etapa 4 é PUBLICAR E ENVIAR, numa tela só** (o desenho "Studio Publicar A"; as duas decisões
 moravam em telas diferentes). À esquerda: o título pelo estado ("Pronta para publicar", "Mudanças
@@ -300,7 +307,10 @@ com o trecho escolhido na cor da marca (`.range`). Sem voz no idioma ou sem tran
 **No wizard cada material é um cartão** (o desenho: tipo, conteúdo, "Editar" e remover numa
 linha, tudo centralizado na vertical; embaixo, o "Gera" com os chips de ligado e desligado). A
 "Prévia" abre por baixo, descendo com opacidade (`desdobrar`), e fecha recolhendo a altura
-(`recolher` — design-system.md "Movimento"). **Ela mostra UM exemplo de cada tipo**, como no
+(`recolher` — design-system.md "Movimento"). **Trocar um tipo com ela aberta troca os cartões no
+lugar**: os de agora ficam até os novos chegarem (em estado, não num `{#await}`), e o tipo
+desligado só esmaece. Com o `{#await}` o esqueleto voltava por um quadro a cada troca, mais alto
+que os cartões, e a faixa piscava. **Ela mostra UM exemplo de cada tipo**, como no
 desenho: no máximo quatro QUESTÕES RESUMIDAS (`QuestaoResumida.svelte`, components.md), na ordem
 escuta, fala, leitura, escrita (`umaPorHabilidade`). De cada habilidade fica a primeira que entra
 com os tipos de agora; o tipo desligado aparece apagado. Houve uma versão com tudo o que o
@@ -347,7 +357,9 @@ pedido do dono do repositório). Duas colunas no desktop, cada uma rolando por d
   dono do repositório): o "montar" de frase longa e o "ordenar" de quatro falas passavam da tela, e
   o fim deles ficava escondido. E o celular é o do aluno de verdade: as setas do "ordenar", as
   peças e as palavras do "tocar" saíam infladas pelo alvo de 48px de `data-surface="player"`, que
-  nem o Player nem o celular da home usam.
+  nem o Player nem o celular da home usam. **No celular o palco vem antes do roteiro**, com as setas
+  embaixo do aparelho ("Anterior" / "Próxima"), e a linha escolhida tem "Ver no celular", que rola
+  até ele (components.md "O celular do aluno").
 - **O roteiro**: "N questões geradas", "Gerar novamente" e "Aceitar todas" (só quando todas
   cabem), os chips por habilidade com "N de M aceitas", e a lista NA ORDEM EM QUE O ALUNO
   RESPONDE, ligada por um fio: alça de arrastar, a bolha da habilidade, a posição, o enunciado, o
@@ -1054,6 +1066,15 @@ retorno) ou antes da busca (a retomada "Você parou aqui", que é tarefa começa
 são os de `$lib/components/lista/` (components.md "Listas do Studio"). A linha inteira abre o
 item — o título é o link e cobre a linha —, e o "⋯" dela tem as ações daquele item.
 
+**A retomada é o rascunho MEXIDO por último** (não o criado por último, e nunca um arquivado), com
+os materiais DELE — a conta era a biblioteca inteira, e um rascunho recém-criado aparecia com "200
+materiais colados" — e leva PARA a etapa em que ele parou: com questões geradas, a revisão; sem, os
+materiais (a atividade só existe depois do "Continuar" da etapa 1). Cair nos materiais com as
+questões prontas deixava o "Gerar" a um toque de refazer a revisão. Na lista de atividades, a
+linha de baixo do título diz as habilidades em português, na ordem de sempre (escuta, fala,
+leitura, escrita), e no cartão do celular as tentativas vão por extenso ("3 tentativas"): sem o
+cabeçalho da coluna, o número sozinho não se lia.
+
 **Atividades e materiais se arquivam e se apagam em massa.** Marcar linhas mostra a barra com
 "Arquivar" (ou "Desarquivar", na situação "Arquivadas") e "Apagar"; o "⋯" de cada linha faz o
 mesmo com uma. Arquivar e apagar passam por uma confirmação (`ConfirmarAcao.svelte`, um
@@ -1084,7 +1105,9 @@ para "a disposição confusa" do topo):
    AÇÃO DO ESTADO ao lado de "Editar no wizard": "Publicar", "Publicar as mudanças", "Enviar para
    turma" ou "Desarquivar". O estado era um cartão à parte sob este, e o rascunho tinha três avisos
    de "publique" espalhados pela tela. Os números embaixo: as questões sempre; tentativas,
-   terminadas e turmas só no ar (num rascunho elas são sempre zero).
+   terminadas e turmas só no ar (num rascunho elas são sempre zero). No celular os dados ocupam a
+   largura inteira do cartão (o `detalhes` do `HeaderCard`) e os dois botões ficam um sobre o
+   outro: na coluna do título o select de nível e o "Enviar para turma" passavam da borda.
 2. **"Como a turma entra"** (QR, link e código NUM cartão só) **só existe no ar**: antes de publicar
    não há link, e o lugar dele era uma caixa repetindo "publique".
 3. **As questões têm o desenho da REVISÃO** — o celular (`CelularDoAluno`) com a questão escolhida,
@@ -1092,7 +1115,8 @@ para "a disposição confusa" do topo):
    etiqueta do material e o trecho —, **só para ver**: nada se arrasta, nada se edita (editar é no
    wizard). A linha escolhida mostra a resposta, com o cadeado. O rodapé do celular é "Responder na
    prévia", que leva à prévia do aluno; a questão no celular usa a mesma seed dela. As linhas saem do
-   mesmo `questoesDoRoteiro` da revisão (`$lib/server/atividades/roteiro.ts`).
+   mesmo `questoesDoRoteiro` da revisão (`$lib/server/atividades/roteiro.ts`). No celular, como na
+   revisão: setas embaixo do aparelho e "Ver no celular" na linha escolhida.
 4. **"Quem recebeu e quem respondeu" só existe no ar E com alguma resposta**: a distribuição das
    respostas (as três faixas, a legenda em porcentagem) e os envios por turma com abriram e
    terminaram.
