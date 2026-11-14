@@ -69,6 +69,7 @@
 			maxSegundos={resposta.gravacao.maxSegundos}
 			ouvido={resposta.ouvido}
 			ouvindo={resposta.ouvindo}
+			erro={resposta.erro}
 			corrigida={compacto && resposta.feedback !== null}
 		/>
 		{#if !(compacto && resposta.feedback)}
@@ -91,8 +92,10 @@
 		</div>
 	{/if}
 
-	{#if resposta.erro}
-		<!-- Falha no caminho, não veredito: ícone e texto, sem as cores da correção. -->
+	{#if resposta.erro && q.interaction !== 'speak'}
+		<!-- Falha no caminho, não veredito: ícone e texto, sem as cores da correção.
+		     Na fala quem mostra é a própria interação, no lugar do "pronta para
+		     enviar" — aqui embaixo os dois apareciam juntos. -->
 		<p
 			class="mt-3.5 flex items-start gap-2.5 rounded-field border border-line bg-base-200 px-4 py-3 text-[13.5px] leading-snug"
 			role="status"

@@ -13,12 +13,15 @@
 	import Loading from '$lib/components/Loading.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import MaterialForm, { type MaterialRef, type Modo } from '$lib/components/MaterialForm.svelte';
+	import MaterialForm, {
+		type MaterialRef,
+		type Modo,
+		type SugestaoDeTraducao
+	} from '$lib/components/MaterialForm.svelte';
 	import MaterialList from '$lib/components/MaterialList.svelte';
 	import WizardShell from '$lib/components/WizardShell.svelte';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import {
-		KIND_TO_KERNEL,
 		PILL_TONE,
 		TIPOS,
 		tipoDe,
@@ -32,7 +35,18 @@
 	import type { ResultadoMaterial } from '$lib/components/MaterialForm.svelte';
 	import type { EstadoDaIa, RespostaDaGeracao } from '$lib/billing/ia';
 	import type { ContentUnitKind } from '$lib/kernel/content/types';
-	import { estimarRendimento } from '$lib/kernel/content/rendimento';
+	import { untrack } from 'svelte';
+	import { DURACAO } from '$lib/movimento';
+	import type { Skill } from '$lib/kernel/interactions/types';
+	import {
+		alternarNoGeral,
+		alternarNoMaterial,
+		montarPlano,
+		type PlanoDeTipos,
+		type TiposPorMaterial
+	} from '$lib/atividades/tipos-por-material';
+	import BlocoDeGeracao from './BlocoDeGeracao.svelte';
+	import TiposDoMaterial from './TiposDoMaterial.svelte';
 	import {
 		adicionarMaterial,
 		adicionarMateriaisEmLote,
@@ -40,6 +54,7 @@
 		gerarItens,
 		materiaisDisponiveis,
 		removerMaterial,
+		salvarPlanoDeGeracao,
 		usarDaBiblioteca
 	} from '../../atividades.remote';
 
@@ -56,6 +71,8 @@
 		materials: MaterialRow[];
 		ia: EstadoDaIa;
 		traducaoAutomatica: boolean;
+		plano: { itemTarget: number; geral: Skill[]; porMaterial: TiposPorMaterial };
+		capacidades: { tts: boolean; asr: boolean };
 	}
 
 	const MOCK: PageData = {
@@ -111,7 +128,13 @@
 			fontes: { imagem: false, video: false },
 			idiomas: null
 		},
-		traducaoAutomatica: false
+		traducaoAutomatica: false,
+		plano: {
+			itemTarget: 8,
+			geral: ['listening', 'speaking', 'reading', 'writing'],
+			porMaterial: {}
+		},
+		capacidades: { tts: true, asr: true }
 	};
 
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
@@ -168,10 +191,14 @@
 
 	// A sugestão de tradução enquanto o professor digita. Falhar é normal (o
 	// tradutor pode estar carregando): a tela diz e o servidor traduz ao salvar.
-	async function sugerir(texto: string, de: string, para: string): Promise<string | null> {
+	async function sugerir(
+		texto: string,
+		de: string,
+		para: string
+	): Promise<SugestaoDeTraducao | null> {
 		try {
 			const r = await sugerirTraducao({ texto, de, para });
-			return r.ok ? r.traducao : null;
+			return r.ok ? { traducao: r.traducao, alternativas: r.alternativas } : null;
 		} catch {
 			return null;
 		}
@@ -214,7 +241,8 @@
 			target: m.primary,
 			source: m.secondary,
 			note: m.note,
-			example: m.example
+			example: m.example,
+			variants: m.variants
 		}))
 	]);
 
@@ -256,12 +284,14 @@
 		);
 	}
 
+	/** Adicionar FECHA o modal: o que entrou aparece na lista, atrás dele. */
 	async function trazerDaBiblioteca() {
 		if (escolhidos.length === 0) return;
 		trazendo = true;
 		try {
 			await usarDaBiblioteca({ activityId: data.activity.id, contentIds: escolhidos });
 			escolhidos = [];
+			mostrarBiblioteca = false;
 			await disponiveis.refresh();
 			await invalidateAll();
 		} finally {
@@ -277,8 +307,30 @@
 		filtroIdiomaBib = (disponiveis.current ?? []).some((m) => m.idioma === data.activity.tag)
 			? data.activity.tag
 			: '';
-		formAberto = false;
 	}
+
+	// O modal da biblioteca é um `<dialog>` de verdade (foco preso, Esc e véu vêm
+	// do elemento), no molde do `PlanosModal`: a saída anima com ele ainda aberto
+	// e o `close()` vem no fim dela.
+	let dialogoBib = $state<HTMLDialogElement>();
+	let fechandoBib = $state(false);
+	$effect(() => {
+		if (!dialogoBib) return;
+		if (mostrarBiblioteca && !dialogoBib.open) {
+			fechandoBib = false;
+			dialogoBib.showModal();
+		} else if (!mostrarBiblioteca && dialogoBib.open && !fechandoBib) {
+			fechandoBib = true;
+			const el = dialogoBib;
+			const terminar = () => {
+				if (!fechandoBib) return;
+				fechandoBib = false;
+				if (!mostrarBiblioteca && el.open) el.close();
+			};
+			el.addEventListener('animationend', terminar, { once: true });
+			setTimeout(terminar, DURACAO.curta + 60);
+		}
+	});
 
 	async function remover(m: MaterialRow) {
 		removendoId = m.id;
@@ -292,13 +344,74 @@
 		}
 	}
 
+	// ── o que gerar ─────────────────────────────────────────────────────────
+	// Quantas questões entram e os tipos de cada material. O estado é da TELA
+	// (o professor mexe e vê na hora) e vai para o servidor sozinho, depois de
+	// uma pausa, para voltar à etapa e encontrar o que ele deixou.
+	let quantidade = $state(untrack(() => data.plano.itemTarget));
+	let planoLocal = $state<PlanoDeTipos>(
+		untrack(() => ({ geral: data.plano.geral, porMaterial: data.plano.porMaterial }))
+	);
+	const ids = $derived(data.materials.map((m) => m.id));
+	// Material que entra nasce com o bloco de cima; o que sai, sai do plano.
+	const plano = $derived(montarPlano(planoLocal.geral, planoLocal.porMaterial, ids));
+
+	const indisponiveis = $derived(
+		new Map<Skill, string>([
+			...(data.capacidades.tts ? [] : [['listening', 'sem voz para este idioma agora'] as const]),
+			...(data.capacidades.asr
+				? []
+				: [['speaking', 'a transcrição de fala está desligada'] as const])
+		])
+	);
+
+	const planoParaEnviar = () => ({
+		itemTarget: quantidade,
+		geral: plano.geral,
+		tiposPorMaterial: plano.porMaterial
+	});
+	let salvarEm: ReturnType<typeof setTimeout> | undefined;
+	function agendarSalvar() {
+		clearTimeout(salvarEm);
+		salvarEm = setTimeout(() => {
+			void salvarPlanoDeGeracao({ activityId: data.activity.id, plano: planoParaEnviar() }).catch(
+				() => {}
+			);
+		}, 700);
+	}
+	// O clique que deixaria um material sem tipo nenhum volta o mesmo plano
+	// (`tipos-por-material.ts`): aí não há o que salvar.
+	function alternarGeral(tipo: Skill) {
+		const novo = alternarNoGeral(plano, tipo, ids, indisponiveis);
+		if (novo === plano) return;
+		planoLocal = novo;
+		agendarSalvar();
+	}
+	function alternarMaterial(material: string, tipo: Skill) {
+		const novo = alternarNoMaterial(plano, material, tipo, ids, indisponiveis);
+		if (novo === plano) return;
+		planoLocal = novo;
+		agendarSalvar();
+	}
+
 	// ── gerar ───────────────────────────────────────────────────────────────
+	// `gerarItens` só COMEÇA o trabalho: a tela "Gerando", na revisão, mostra
+	// cada passo enquanto ele anda no servidor.
 	let gerando = $state(false);
+	let erroAoGerar = $state<string | null>(null);
 	async function onGerarItens() {
+		clearTimeout(salvarEm);
 		gerando = true;
+		erroAoGerar = null;
 		try {
-			await gerarItens({ activityId: data.activity.id });
+			const r = await gerarItens({ activityId: data.activity.id, plano: planoParaEnviar() });
+			if (!r.ok) {
+				erroAoGerar = r.error;
+				return;
+			}
 			await goto(resolve('/(studio)/atividades/[id]/revisar', { id: data.activity.id }));
+		} catch {
+			erroAoGerar = 'Não deu para começar a geração agora. Tente de novo.';
 		} finally {
 			gerando = false;
 		}
@@ -306,20 +419,16 @@
 
 	const total = $derived(data.materials.length);
 	const daBiblioteca = $derived(data.materials.filter((m) => m.daBiblioteca).length);
-	// O rodapé diz o que o conjunto JÁ rende — é a mesma conta do bloco de
-	// rendimento do formulário, sem escuta e fala, que dependem do provedor.
-	const rendimento = $derived(
-		estimarRendimento(
-			data.materials.map((m) => ({ kind: KIND_TO_KERNEL[m.kind], questions: m.questions.length }))
-		)
-	);
+	const podeGerar = $derived(total > 0 && plano.geral.length > 0);
+	const palavraQuestoes = $derived(quantidade === 1 ? 'questão' : 'questões');
 	const statusTexto = $derived(`${total} ${total === 1 ? 'material' : 'materiais'}`);
 	const hintTexto = $derived(
-		total === 0
-			? 'Precisa de ao menos 1 material para avançar.'
-			: rendimento.itens === 0
-				? `${statusTexto} · ainda não dá para gerar nenhuma questão`
-				: `${statusTexto} · dá para gerar ao menos ${rendimento.itens} ${rendimento.itens === 1 ? 'questão' : 'questões'}`
+		erroAoGerar ??
+			(total === 0
+				? 'Precisa de ao menos 1 material para avançar.'
+				: plano.geral.length === 0
+					? 'Ligue ao menos um tipo de questão para gerar.'
+					: `${quantidade} ${palavraQuestoes} em rodízio entre os ${statusTexto}: nenhum repete antes de todos entrarem. O resto fica de fora na revisão, para você trocar.`)
 	);
 </script>
 
@@ -327,7 +436,7 @@
 
 <WizardShell
 	step={2}
-	backHref={resolve('/(studio)/atividades/nova')}
+	backHref={resolve('/(studio)/atividades/[id]/detalhes', { id: data.activity.id })}
 	backLabel="Detalhes"
 	status={statusTexto}
 	hint={hintTexto}
@@ -411,183 +520,23 @@
 							</svg>
 							Adicionar
 						</button>
-						{#if !mostrarBiblioteca}
-							<button
-								type="button"
-								onclick={abrirBiblioteca}
-								class="btn btn-sm motion-tap gap-2 btn-outline"
-							>
-								<svg
-									class="size-[15px] shrink-0"
-									viewBox="0 0 24 24"
-									fill="none"
-									aria-hidden="true"
-								>
-									<path
-										d="M3 5.5h6a3 3 0 013 3v10a2.5 2.5 0 00-2.5-2.5H3zM21 5.5h-6a3 3 0 00-3 3v10a2.5 2.5 0 012.5-2.5H21z"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linejoin="round"
-									/>
-								</svg>
-								Usar da biblioteca
-							</button>
-						{/if}
+						<button
+							type="button"
+							onclick={abrirBiblioteca}
+							class="btn btn-sm motion-tap gap-2 btn-outline"
+						>
+							<svg class="size-[15px] shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<path
+									d="M3 5.5h6a3 3 0 013 3v10a2.5 2.5 0 00-2.5-2.5H3zM21 5.5h-6a3 3 0 00-3 3v10a2.5 2.5 0 012.5-2.5H21z"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linejoin="round"
+								/>
+							</svg>
+							Usar da biblioteca
+						</button>
 					</div>
 				</div>
-
-				<!-- A biblioteca é do professor, não da atividade: trazer daqui LIGA o
-			     material às duas, não copia (paginas.md "Materiais"). -->
-				{#if mostrarBiblioteca}
-					<section class="mb-4 min-w-0 rounded-box border border-line bg-base-200 p-4">
-						<div class="mb-3 flex items-baseline gap-3">
-							<h3 class="font-display text-[20px] font-semibold">Da sua biblioteca</h3>
-							<div class="flex-1"></div>
-							<button
-								type="button"
-								onclick={() => (mostrarBiblioteca = false)}
-								class="p-1 text-[12.5px] font-semibold text-base-content/65 hover:text-base-content"
-								>Fechar</button
-							>
-						</div>
-
-						{#await disponiveis}
-							<div class="h-[3.25rem] skeleton"></div>
-						{:then lista}
-							{#if lista.length === 0}
-								<p class="text-[13px] leading-snug text-base-content/65">
-									Tudo que você já cadastrou já está nesta atividade.
-								</p>
-							{:else}
-								{@const visiveis = filtrar(lista)}
-								<!-- Busca e filtro por tipo: a biblioteca cresce a cada atividade,
-							     e rolar uma lista de 200 frases para achar as três da aula
-							     passada não é escolher, é procurar. -->
-								<div class="mb-3 flex flex-wrap items-center gap-2">
-									<input
-										bind:value={buscaBiblioteca}
-										placeholder="Buscar…"
-										class="input h-auto min-w-[9rem] flex-1 py-2 text-[13.5px]"
-										aria-label="Buscar na biblioteca"
-									/>
-									<div class="flex flex-wrap gap-1.5">
-										{#each [{ id: 'todos' as const, label: 'Todos' }, ...TIPOS] as f (f.id)}
-											<button
-												type="button"
-												onclick={() => (filtroBiblioteca = f.id)}
-												aria-pressed={filtroBiblioteca === f.id}
-												class="rounded-full px-3 py-1.5 text-[12px] transition-colors
-											       {filtroBiblioteca === f.id
-													? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
-													: 'border border-line bg-base-100 font-semibold text-base-content/65'}"
-												>{f.label}</button
-											>
-										{/each}
-									</div>
-									<FiltroIdioma
-										tags={lista.map((m) => m.idioma)}
-										bind:valor={filtroIdiomaBib}
-										formato="chips"
-									/>
-								</div>
-
-								{#if visiveis.length === 0}
-									<p class="text-[13px] leading-snug text-base-content/65">
-										Nada aqui com esse filtro.
-									</p>
-								{:else}
-									<!-- `max-h` em proporção da viewport: a lista rola dentro do
-								     painel em vez de empurrar o resto da tela para baixo. -->
-									<ul class="grid max-h-[45vh] list-none gap-2 overflow-y-auto p-0">
-										{#each visiveis as m (m.id)}
-											{@const marcado = escolhidos.includes(m.id)}
-											{@const tipo = tipoDe(m.kind)}
-											<li>
-												<!-- A linha INTEIRA alterna a escolha: um alvo de 2px no fim
-											     da linha é o pior jeito de marcar quinze itens. -->
-												<button
-													type="button"
-													onclick={() => alternarEscolha(m.id)}
-													aria-pressed={marcado}
-													class="flex w-full min-w-0 items-center gap-3 rounded-field border px-3.5 py-2.5 text-start
-												       transition-[border-color,background-color]
-												       {marcado ? 'border-primary bg-base-300' : 'border-line bg-base-100 hover:border-primary'}"
-												>
-													<span
-														class="grid size-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px]
-													       {marcado ? 'border-primary bg-primary text-primary-content' : 'border-line'}"
-													>
-														{#if marcado}
-															<svg
-																class="size-[11px]"
-																viewBox="0 0 24 24"
-																fill="none"
-																aria-hidden="true"
-															>
-																<path
-																	d="M4 12.5l5 5L20 6.5"
-																	stroke="currentColor"
-																	stroke-width="3"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																/>
-															</svg>
-														{/if}
-													</span>
-													<span
-														class="shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap {PILL_TONE[
-															tipo.tone
-														]}">{tipo.label}</span
-													>
-													<span class="min-w-0 flex-1">
-														<span
-															class="block truncate font-content text-[14px]"
-															dir={data.activity.dir}
-															data-content-lang={m.idioma ?? data.activity.tag}>{m.primary}</span
-														>
-														<span class="block truncate text-[12px] text-base-content/65"
-															>{m.secondary}</span
-														>
-													</span>
-													<IdiomaTag tag={m.idioma} compacta />
-												</button>
-											</li>
-										{/each}
-									</ul>
-
-									<div class="mt-3 flex flex-wrap items-center gap-2.5">
-										<button
-											type="button"
-											onclick={() =>
-												(escolhidos =
-													escolhidos.length === visiveis.length ? [] : visiveis.map((m) => m.id))}
-											class="p-1 text-[12.5px] font-semibold text-base-content/65 hover:text-base-content"
-											>{escolhidos.length === visiveis.length
-												? 'Limpar seleção'
-												: `Selecionar os ${visiveis.length}`}</button
-										>
-										<div class="flex-1"></div>
-										<button
-											type="button"
-											onclick={trazerDaBiblioteca}
-											disabled={escolhidos.length === 0 || trazendo}
-											class="btn btn-sm motion-tap btn-primary"
-										>
-											{#if trazendo}
-												<Loading variant="fila" size={11} tone="current" label="Trazendo" />
-												Trazendo…
-											{:else if escolhidos.length === 0}
-												Trazer
-											{:else}
-												Trazer {escolhidos.length}
-											{/if}
-										</button>
-									</div>
-								{/if}
-							{/if}
-						{/await}
-					</section>
-				{/if}
 
 				{#if total === 0}
 					<div
@@ -599,6 +548,14 @@
 						</p>
 					</div>
 				{:else}
+					<BlocoDeGeracao
+						bind:quantidade
+						{plano}
+						materiais={ids}
+						{indisponiveis}
+						onquantidade={agendarSalvar}
+						onalternar={alternarGeral}
+					/>
 					<MaterialList
 						materiais={data.materials}
 						contexto="wizard"
@@ -608,7 +565,19 @@
 						{removendoId}
 						onedit={editar}
 						onremove={remover}
-					/>
+					>
+						{#snippet detalhe(m)}
+							<TiposDoMaterial
+								activityId={data.activity.id}
+								materialId={m.id}
+								tipos={plano.porMaterial[m.id] ?? plano.geral}
+								{indisponiveis}
+								dir={data.activity.dir}
+								lang={data.activity.tag}
+								onalternar={(tipo) => alternarMaterial(m.id, tipo)}
+							/>
+						{/snippet}
+					</MaterialList>
 					<p class="mt-3.5 text-[12.5px] leading-relaxed text-pretty text-base-content/65">
 						Remover tira o material desta atividade. Ele continua na sua biblioteca e em outras
 						atividades que o usem.
@@ -624,7 +593,7 @@
 	{#snippet actions()}
 		<button
 			type="button"
-			onclick={() => (mostrarBiblioteca ? (mostrarBiblioteca = false) : abrirBiblioteca())}
+			onclick={abrirBiblioteca}
 			class="btn h-[46px] flex-1 motion-tap btn-neutral lg:flex-none"
 		>
 			<span class="lg:hidden">Biblioteca</span>
@@ -633,14 +602,17 @@
 		<button
 			type="button"
 			onclick={onGerarItens}
-			disabled={total === 0 || gerando}
+			disabled={!podeGerar || gerando}
 			class="btn h-[46px] flex-1 motion-tap gap-2.5 btn-primary lg:flex-none lg:px-5"
 		>
 			{#if gerando}
-				<Loading variant="fila" size={13} tone="current" label="Gerando" />
-				Gerando…
+				<Loading variant="fila" size={13} tone="current" label="Começando a geração" />
+				Começando…
+			{:else if total > 0 && plano.geral.length === 0}
+				Ligue um tipo
 			{:else}
-				Gerar itens
+				<span class="lg:hidden">Gerar {quantidade}</span>
+				<span class="hidden lg:inline">Gerar {quantidade} {palavraQuestoes}</span>
 				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 					<path
 						d="M5 12h13M13 6l6 6-6 6"
@@ -654,3 +626,205 @@
 		</button>
 	{/snippet}
 </WizardShell>
+
+<!-- A BIBLIOTECA num modal: a biblioteca é do professor, não da atividade, e
+     trazer daqui LIGA o material às duas, não copia (paginas.md "Materiais").
+     Escolher é marcar várias linhas e adicionar de uma vez; adicionar fecha. -->
+<dialog
+	bind:this={dialogoBib}
+	onclose={() => (mostrarBiblioteca = false)}
+	oncancel={(e) => {
+		e.preventDefault();
+		mostrarBiblioteca = false;
+	}}
+	onclick={(e) => {
+		if (e.target === dialogoBib) mostrarBiblioteca = false;
+	}}
+	aria-labelledby="biblioteca-titulo"
+	class="m-auto max-h-[calc(100dvh-1.75rem)] w-[calc(100vw-1.75rem)] max-w-[760px] overflow-hidden rounded-box border border-line bg-base-100 p-0 text-base-content
+	       shadow-[0_34px_70px_-34px_rgba(15,20,32,0.55)] backdrop:bg-overlay backdrop:backdrop-blur-[3px]
+	       {fechandoBib
+		? 'animate-modal-saida backdrop:animate-veu-saida'
+		: 'backdrop:animate-veu open:animate-entrada-curta'} lg:max-h-[calc(100dvh-3.75rem)]"
+>
+	<div class="flex max-h-[inherit] flex-col">
+		<header class="flex shrink-0 items-start gap-3 border-b border-line px-5 py-4 lg:px-6">
+			<div class="min-w-0 flex-1">
+				<h2
+					id="biblioteca-titulo"
+					class="font-display text-[20px] font-semibold tracking-[-0.02em]"
+				>
+					Da sua biblioteca
+				</h2>
+				<p class="mt-0.5 text-[12.5px] text-base-content/65">
+					O que você marcar entra nesta atividade e continua na biblioteca.
+				</p>
+			</div>
+			<button
+				type="button"
+				onclick={() => (mostrarBiblioteca = false)}
+				aria-label="Fechar a biblioteca"
+				class="btn btn-circle size-[38px] shrink-0 motion-tap btn-plain"
+			>
+				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path
+						d="M6 6l12 12M18 6L6 18"
+						stroke="currentColor"
+						stroke-width="2.2"
+						stroke-linecap="round"
+					/>
+				</svg>
+			</button>
+		</header>
+
+		{#await disponiveis}
+			<div class="px-5 py-5 lg:px-6"><div class="h-[3.25rem] skeleton"></div></div>
+		{:then lista}
+			{@const visiveis = filtrar(lista)}
+			<!-- O MESMO material que já está na atividade (outro registro, o mesmo
+			     texto) aparece travado: trazê-lo de novo repetiria as questões. -->
+			{@const selecionaveis = visiveis.filter((m) => !m.jaNaAtividade)}
+			<div class="min-h-0 flex-1 overflow-y-auto px-5 py-4 lg:px-6">
+				{#if lista.length === 0}
+					<p class="text-[13.5px] leading-snug text-base-content/65">
+						Tudo que você já cadastrou já está nesta atividade.
+					</p>
+				{:else}
+					<!-- Busca e filtro por tipo: a biblioteca cresce a cada atividade, e
+					     rolar uma lista de 200 frases para achar as três da aula passada
+					     não é escolher, é procurar. -->
+					<div class="mb-3 flex flex-wrap items-center gap-2">
+						<input
+							bind:value={buscaBiblioteca}
+							placeholder="Buscar…"
+							class="input h-auto min-w-[9rem] flex-1 py-2 text-[13.5px]"
+							aria-label="Buscar na biblioteca"
+						/>
+						<div class="flex flex-wrap gap-1.5">
+							{#each [{ id: 'todos' as const, label: 'Todos' }, ...TIPOS] as f (f.id)}
+								<button
+									type="button"
+									onclick={() => (filtroBiblioteca = f.id)}
+									aria-pressed={filtroBiblioteca === f.id}
+									class="rounded-full px-3 py-1.5 text-[12px] transition-colors
+									       {filtroBiblioteca === f.id
+										? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
+										: 'border border-line bg-base-100 font-semibold text-base-content/65'}"
+									>{f.label}</button
+								>
+							{/each}
+						</div>
+						<FiltroIdioma
+							tags={lista.map((m) => m.idioma)}
+							bind:valor={filtroIdiomaBib}
+							formato="chips"
+						/>
+					</div>
+
+					{#if visiveis.length === 0}
+						<p class="text-[13px] leading-snug text-base-content/65">Nada aqui com esse filtro.</p>
+					{:else}
+						<ul class="grid list-none gap-2 p-0">
+							{#each visiveis as m (m.id)}
+								{@const marcado = escolhidos.includes(m.id)}
+								{@const tipo = tipoDe(m.kind)}
+								<li>
+									<!-- A linha INTEIRA alterna a escolha: um alvo de 2px no fim da
+									     linha é o pior jeito de marcar quinze itens. -->
+									<button
+										type="button"
+										onclick={() => alternarEscolha(m.id)}
+										disabled={m.jaNaAtividade}
+										aria-pressed={marcado}
+										class="flex w-full min-w-0 items-center gap-3 rounded-field border px-3.5 py-2.5 text-start
+										       transition-[border-color,background-color] disabled:cursor-not-allowed disabled:opacity-60
+										       {marcado ? 'border-primary bg-base-300' : 'border-line bg-base-100 hover:border-primary'}"
+									>
+										<span
+											class="grid size-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px]
+											       {marcado ? 'border-primary bg-primary text-primary-content' : 'border-line'}"
+										>
+											{#if marcado}
+												<svg class="size-[11px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+													<path
+														d="M4 12.5l5 5L20 6.5"
+														stroke="currentColor"
+														stroke-width="3"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+													/>
+												</svg>
+											{/if}
+										</span>
+										<span
+											class="shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap {PILL_TONE[
+												tipo.tone
+											]}">{tipo.label}</span
+										>
+										<span class="min-w-0 flex-1">
+											<span
+												class="block truncate font-content text-[14px]"
+												dir={data.activity.dir}
+												data-content-lang={m.idioma ?? data.activity.tag}>{m.primary}</span
+											>
+											<span class="block truncate text-[12px] text-base-content/65"
+												>{m.secondary}</span
+											>
+										</span>
+										{#if m.jaNaAtividade}
+											<span
+												class="shrink-0 rounded-full border border-line bg-base-200 px-2.5 py-1 text-[11.5px] font-semibold whitespace-nowrap text-base-content/65"
+												>já está nesta atividade</span
+											>
+										{/if}
+										<IdiomaTag tag={m.idioma} compacta />
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				{/if}
+			</div>
+			<footer
+				class="flex shrink-0 flex-wrap items-center gap-2.5 border-t border-line bg-base-200 px-5 py-3.5 lg:px-6"
+			>
+				{#if selecionaveis.length > 0}
+					<button
+						type="button"
+						onclick={() =>
+							(escolhidos =
+								escolhidos.length === selecionaveis.length ? [] : selecionaveis.map((m) => m.id))}
+						class="p-1 text-[12.5px] font-semibold text-base-content/65 hover:text-base-content"
+						>{escolhidos.length === selecionaveis.length
+							? 'Limpar seleção'
+							: `Selecionar os ${selecionaveis.length}`}</button
+					>
+				{/if}
+				<div class="flex-1"></div>
+				<button
+					type="button"
+					onclick={() => (mostrarBiblioteca = false)}
+					class="btn h-[42px] flex-1 motion-tap btn-plain font-semibold sm:flex-none sm:px-5"
+					>Cancelar</button
+				>
+				{#if lista.length > 0}
+					<button
+						type="button"
+						onclick={trazerDaBiblioteca}
+						disabled={escolhidos.length === 0 || trazendo}
+						class="btn h-[42px] flex-1 motion-tap gap-2 btn-primary font-bold sm:flex-none sm:px-5"
+					>
+						{#if trazendo}
+							<Loading variant="fila" size={11} tone="current" label="Adicionando" />
+							Adicionando…
+						{:else if escolhidos.length === 0}
+							Adicionar
+						{:else}
+							Adicionar {escolhidos.length}
+						{/if}
+					</button>
+				{/if}
+			</footer>
+		{/await}
+	</div>
+</dialog>

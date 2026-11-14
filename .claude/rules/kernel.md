@@ -161,7 +161,9 @@ para os geradores de `VocabItem` que faltam (`vocab-image-choice`, `speak-vocab`
 
 `(ContentUnit, LanguageProfile) => Item[]`. Função pura, sem I/O, em `kernel/generators/`.
 
-De **um** `SentencePair` saem:
+De **um** `SentencePair` saem (a lacuna do `cloze-target` é a palavra do MEIO, mascarada pela
+POSIÇÃO dela no segmentador do idioma — mascarar pelo texto trocava a primeira ocorrência, e em "I
+have a cat." o "a" caía dentro de "have"):
 
 | Gerador              | Prompt        | Interação  | Habilidades         |
 | -------------------- | ------------- | ---------- | ------------------- |
@@ -228,8 +230,19 @@ fala; sem TTS não sai item de escuta**, em vez de gerar exercício que não cor
 
 ### O corte: `selectItems`
 
-Os geradores produzem a matéria-prima; o que vira rascunho é o que o professor pediu na etapa 1
-(`generators/select.ts`). Sem isso, 20 frases viravam cem exercícios e ele descartava 88 na mão.
+Os geradores produzem a matéria-prima; o que vira rascunho é o que o professor pediu na etapa de
+materiais (`generators/select.ts`). Sem isso, 20 frases viravam cem exercícios e ele descartava 88
+na mão.
+
+**Os tipos podem ser POR MATERIAL** (`GenerationPlan.skillsPorMaterial`, `{ [contentId]: Skill[] }`):
+material ausente segue `skills`; presente e vazio não gera nada. É a mesma regra de "exige tudo o
+que pediu" (abaixo), aplicada à fila de cada material. `entraComOsTipos` expõe a regra para a
+prévia de um material antes de gerar.
+
+**A quantidade separa, não corta** (`separarPelaQuantidade`): `dentro` é a escolha de
+`selectItems` (o número pedido, os tetos, o rodízio justo, o fecho por último) e `fora` é todo o
+resto que o professor quis, em rodízio (o primeiro de cada material, depois o segundo). O servidor
+grava os dois no rascunho, o `fora` marcado como descartado, para a revisão trocar o que entra.
 
 - **Teto duro de 15 questões por atividade** (`MAX_ITENS`) — acima disso o aluno abandona no
   meio e o relatório do professor fica pela metade.
@@ -266,8 +279,14 @@ Os geradores produzem a matéria-prima; o que vira rascunho é o que o professor
 
 ### Nível 3 — autoria manual
 
-Para quando o professor quer algo específico. Ele escolhe a interação e o formulário é
-**gerado a partir do `authoringSchema`**. Tipo novo nasce com tela de edição sem escrever UI.
+Para quando o professor quer algo específico: editar uma questão gerada ou criar uma do zero, nos
+oito formatos (o modal da revisão, paginas.md "O editor de questão"). Ele não escreve o payload: o
+editor tem campos LEGÍVEIS por formato (`camposSchema` em `$lib/atividades/questao.ts`) e o
+servidor os transforma no payload do kernel (`montarQuestao`, `server/atividades/item-editado.ts`)
+— a frase vira peças pelo segmentador do idioma (regra nº 5), a lacuna é achada pela fronteira de
+palavra, e tudo termina no `authoringSchema` da interação. Tipo de interação novo pede o seu
+`camposSchema` e o seu caso em `montarQuestao`/`questaoDoItem`: o formulário não sai sozinho do
+schema, porque um campo de JSON não é o que o professor preenche.
 
 ## Distratores: a regra que mantém tudo agnóstico
 
@@ -301,6 +320,11 @@ revisão diz "aceita mais N respostas". O kernel só decide o TAMANHO da diferen
 mais ou a menos, nada que o normalizador já iguale, teto de três); quem pede as candidatas e
 confere o sentido é o servidor (`server/atividades/variantes-aceitas.ts`, server.md "Tradução do
 material").
+
+**O par de frases também guarda variações** (`SentencePair.variants`): as que o tradutor sugeriu
+quando o professor cadastrou a frase (o formulário de material as mostra como "automática") e as
+que ele escreveu. `translate-type` as aceita depois da resposta principal. As da geração continuam
+vindo por cima, sem repetir as do material.
 
 - **Só com `answerLang: 'source'`.** No idioma alvo o que se ensina é a FORMA: para "Ela trabalha
   aqui há dois anos" o tradutor propõe "She works here for two years", e numa aula de present

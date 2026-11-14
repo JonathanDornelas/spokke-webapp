@@ -14,7 +14,8 @@ import { CHAVE, notificar } from '$lib/server/notificacoes';
 export async function avisarAudioQueFalhou(teacherId: string, hash: string): Promise<void> {
 	try {
 		const itens = await prisma.item.findMany({
-			where: { activityVersion: { activity: { teacherId, archivedAt: null } } },
+			// A questão tirada da atividade não vai para o aluno: não precisa do aviso.
+			where: { discarded: false, activityVersion: { activity: { teacherId, archivedAt: null } } },
 			select: {
 				id: true,
 				prompt: true,

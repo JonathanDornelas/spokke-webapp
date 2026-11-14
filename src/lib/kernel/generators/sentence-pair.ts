@@ -1,6 +1,6 @@
 import type { SentencePair } from '../content/types';
 import type { Item } from '../item';
-import { tokenize } from '../language/tokenize';
+import { segmentosDePalavra, tokenize } from '../language/tokenize';
 import { distractorPhrases, distractorTokens } from './distractors';
 import type { ContentRef, Generator, GeneratorContext } from './types';
 
@@ -69,7 +69,14 @@ export const translateType: Generator<SentencePair> = {
 				text: content.data.target,
 				instructionKey: 'translate-to-source'
 			},
-			interaction: { type: 'type', payload: { accepted: [content.data.source] } },
+			// As variações do material (as que o tradutor sugeriu e o professor
+			// manteve, mais as que ele escreveu) também valem como resposta certa.
+			interaction: {
+				type: 'type',
+				payload: {
+					accepted: [...new Set([content.data.source, ...(content.data.variants ?? [])])]
+				}
+			},
 			// A resposta vem na língua do ALUNO: ele lê o inglês e escreve em
 			// português. É o único gerador que inverte, e sem dizer isso a
 			// correção usava o profile errado.
@@ -176,18 +183,21 @@ export const listenChoice: Generator<SentencePair> = {
 export const clozeTarget: Generator<SentencePair> = {
 	id: 'cloze-target',
 	generate: (content, ctx) => {
-		const tokens = tokenize(content.data.target, ctx.targetProfile);
+		const frase = content.data.target;
+		// As palavras COM a posição de cada uma (regra nº 5: a fronteira é a do
+		// segmentador do idioma). Mascarar pelo TEXTO da palavra trocava a primeira
+		// ocorrência dele na frase: em "I have a cat." a lacuna do "a" caía dentro
+		// de "have" ("I h___ve a cat.").
+		const palavras = segmentosDePalavra(frase, ctx.targetProfile).filter((s) => s.palavra);
 		// Precisa de contexto ao redor da lacuna para o exercício fazer sentido.
-		if (tokens.length < 3) return [];
+		if (palavras.length < 3) return [];
 
 		// A lacuna cai numa posição determinística, nunca aleatória: a mesma
 		// frase gera sempre o mesmo item.
-		const blankIndex = Math.floor(tokens.length / 2);
-		const answer = tokens[blankIndex];
-		const masked = content.data.target.replace(answer, '___');
-		// Se a palavra não aparece isolada no texto original (idioma sem
-		// espaço, por exemplo), não force uma máscara torta.
-		if (masked === content.data.target) return [];
+		const lacuna = palavras[Math.floor(palavras.length / 2)];
+		if (!lacuna) return [];
+		const answer = lacuna.texto;
+		const masked = `${frase.slice(0, lacuna.inicio)}___${frase.slice(lacuna.inicio + answer.length)}`;
 
 		const item: Item = {
 			...base(content, 'cloze-target', ctx),

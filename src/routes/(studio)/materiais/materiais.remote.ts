@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { command, form, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { requireTeacher } from '$lib/server/auth/guard';
+import { comCota, motivoDeCriar } from '$lib/server/billing/cota';
 import { materiais } from '$lib/server/db/repos/content-units';
 import {
 	camposMaterial,
@@ -159,5 +160,51 @@ export const apagarMaterial = command(
 	async ({ contentId }) => {
 		const teacher = teacherOf();
 		return { removed: await materiais(teacher).remove(contentId) };
+	}
+);
+
+// ── em massa ────────────────────────────────────────────────────────────
+// Os ids vêm da tela; o escopo, da sessão — o repositório só toca o que é
+// deste professor (regra nº 4).
+const idsDaLista = z.array(z.string()).min(1).max(500);
+
+/** Apagar vários. Sai da biblioteca e dos rascunhos; o que está no ar continua intacto. */
+export const apagarMateriais = command(
+	z.object({ contentIds: idsDaLista }),
+	async ({ contentIds }) => {
+		const teacher = teacherOf();
+		return { removidos: await materiais(teacher).removerVarios(contentIds) };
+	}
+);
+
+/** Arquivar vários: saem da biblioteca e do limite do plano; quem já os usa continua usando. */
+export const arquivarMateriais = command(
+	z.object({ contentIds: idsDaLista }),
+	async ({ contentIds }) => {
+		const teacher = teacherOf();
+		return { arquivados: await materiais(teacher).arquivar(contentIds) };
+	}
+);
+
+/** Desarquivar volta a ocupar vaga: todos cabem, ou nenhum muda. */
+export const desarquivarMateriais = command(
+	z.object({ contentIds: idsDaLista }),
+	async ({ contentIds }) => {
+		const teacher = teacherOf();
+		return comCota(teacher, 'materiais', contentIds.length, async (tx, cabem, estado) => {
+			const repo = materiais(teacher, tx);
+			const pedem = await repo.contarArquivados(contentIds);
+			if (cabem < pedem) {
+				return {
+					ok: false as const,
+					motivo: motivoDeCriar(estado, 'materiais'),
+					error:
+						cabem === 0
+							? 'Não cabe nenhum no seu plano: apague ou arquive outros materiais antes, ou escolha um plano maior.'
+							: `Cabem só ${cabem} no seu plano. Desmarque alguns, arquive outros antes ou escolha um plano maior.`
+				};
+			}
+			return { ok: true as const, quantos: await repo.desarquivar(contentIds) };
+		});
 	}
 );

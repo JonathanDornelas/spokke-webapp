@@ -375,16 +375,20 @@
 		if (p.tipo === 'vazio')
 			return {
 				forte: 'Tudo pronto para começar.',
+				// O módulo LIBERA no mapa e não manda e-mail (adr-004): sem data, a fase ainda não
+				// foi programada para a turma, e é isso que a tela diz.
 				texto: p.abre
 					? `A primeira fase abre ${p.abre}.`
-					: 'A primeira fase chega pelo seu e-mail.',
+					: 'A primeira fase ainda não tem data marcada.',
 				icone: ICONE.cal,
 				destaque: false
 			};
 		if (p.tipo === 'esperar')
 			return {
 				forte: 'Você está em dia.',
-				texto: p.abre ? `A próxima fase abre ${p.abre}.` : 'A próxima fase chega pelo seu e-mail.',
+				texto: p.abre
+					? `A próxima fase abre ${p.abre}.`
+					: 'A próxima fase ainda não tem data marcada.',
 				icone: ICONE.cal,
 				destaque: false
 			};

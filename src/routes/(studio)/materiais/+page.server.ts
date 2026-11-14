@@ -48,6 +48,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			secondary,
 			idioma: idiomaOuNulo(row.targetLang),
 			usedIn: row._count.activities,
+			// Arquivado: fora da biblioteca e do limite do plano, num filtro à parte.
+			arquivado: row.archivedAt !== null,
 			// Os campos crus, para "Editar" reabrir o mesmo formulário preenchido
 			// — `secondary` é resumo (o texto vem cortado) e reeditar a partir
 			// dele perderia conteúdo. São também o que a tela compara para dizer
@@ -64,6 +66,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			raw: 'text' in data ? data.text : '',
 			note: 'note' in data ? (data.note ?? '') : '',
 			example: 'example' in data ? (data.example ?? '') : '',
+			variants: 'variants' in data ? (data.variants ?? []) : [],
 			questions: 'questions' in data ? data.questions : [],
 			lines: 'lines' in data ? data.lines : []
 		};
@@ -97,8 +100,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		materials,
 		// Quantos estão em uso de verdade — "3 no total, 2 em atividades" é o
-		// que o professor quer saber antes de apagar alguma coisa.
-		usedInCount: materials.filter((m) => m.usedIn > 0).length,
+		// que o professor quer saber antes de apagar alguma coisa. Os arquivados
+		// ficam fora das duas contas: saíram da biblioteca.
+		usedInCount: materials.filter((m) => !m.arquivado && m.usedIn > 0).length,
+		archivedCount: materials.filter((m) => m.arquivado).length,
 		idiomaPadrao,
 		ia: await estadoDaIa(teacher, iaIdiomas),
 		// A mesma língua do aluno (`iaIdiomas.origem`) é o destino da tradução

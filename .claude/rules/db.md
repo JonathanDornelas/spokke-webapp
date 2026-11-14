@@ -58,6 +58,12 @@ falso em TODA liberação de módulo (módulo não manda e-mail): o convite nasc
 `atividades(teacher).apagarDeVez`. Não troque esses RESTRICT por Cascade: são eles que impedem que
 apagar um professor leve respostas de aluno por acidente.
 
+`ContentUnit.archivedAt` arquiva o material, como `Activity.archivedAt`: fora da biblioteca e do
+limite de materiais do plano (`uso.ts` conta só os não arquivados), fora do "usar da biblioteca"
+(`materiais(teacher).list()`) e do reaproveitamento (`findEquivalent` não devolve arquivado). As
+atividades que já o usam continuam com ele: os vínculos não mudam. Desarquivar volta a ocupar vaga,
+conferida dentro de `comCota`.
+
 `ContentUnit.targetLang` é a TAG DE IDIOMA do material (nula = sem idioma; `$lib/idiomas.ts`). Dentro
 de uma atividade é sempre a dela — `createForActivity` e `link` a gravam, e só dão tag a quem não tem.
 Na biblioteca, a escolhida; e ela só muda enquanto o material não está em atividade nenhuma.
@@ -123,9 +129,12 @@ Nunca faça `UPDATE` em `ActivityVersion` ou `Item` de uma versão publicada.
 desfazer a correção manual sem recorrigir. `reviewedAt` nulo num item de rubrica significa
 "ainda não corrigida", nunca "errou".
 
-`Activity` guarda `itemTarget` e `skills`: o que a etapa 1 do wizard passou a perguntar. Ficam
-na ATIVIDADE e não na versão porque são preferência do professor — regerar os itens tem que
-respeitar a mesma escolha sem ele repetir nada. A habilidade de cada ITEM continua derivada
+`Activity` guarda `itemTarget`, `skills` e `tiposPorMaterial`: o plano de geração da etapa de
+materiais. Ficam na ATIVIDADE e não na versão porque são preferência do professor — regerar os
+itens tem que respeitar a mesma escolha sem ele repetir nada. `tiposPorMaterial` é Json
+(`{ [contentUnitId]: Skill[] }`, lido por `lerTiposPorMaterial` com Zod; nulo = todos seguem
+`skills`), com a lista INTEIRA de cada material, e `skills` é a união deles (o bloco de cima da
+tela). Material que entra depois nasce com `skills`. A habilidade de cada ITEM continua derivada
 (kernel.md); isto é o filtro aplicado sobre o que os geradores produziram.
 
 `AttemptItem` tem `@@unique([attemptId, itemId])`: **uma resposta por item por tentativa**, e
@@ -133,9 +142,20 @@ respeitar a mesma escolha sem ele repetir nada. A habilidade de cada ITEM contin
 "Verificar" criava uma linha nova e o item contava duas vezes na distribuição de acerto do
 professor — o banco de dev já tinha seis pares duplicados quando a restrição entrou.
 
-`Item.discarded` é a etapa de revisão: descartar MARCA, não apaga — sem isso "Restaurar" não
-teria o que restaurar. A publicação é que remove os descartados de vez, porque a versão
-publicada é imutável e carregar item morto nela não faz sentido.
+`Item.discarded` é a etapa de revisão: a questão "fora da atividade". Descartar MARCA, não apaga —
+sem isso "Aceitar" não teria o que pôr de volta. A geração também grava assim as que passaram da
+quantidade pedida (`replaceDraftItems(id, dentro, fora)`: as de fora depois, já marcadas). Toda
+leitura que CONTA questões do rascunho filtra `discarded` (a lista de atividades, a etapa 4, o
+detalhe, a prévia). A publicação é que remove as de fora de vez, porque a versão publicada é
+imutável e carregar item morto nela não faz sentido.
+
+**A ordem das de dentro é o ROTEIRO do aluno** (`Item.order`), e o professor a muda arrastando na
+revisão: `reordenarRascunho(activityId, ids)` só aceita EXATAMENTE as de dentro do rascunho, sem
+repetir nem faltar — uma lista velha (a tela aberta noutra aba) é recusada inteira em vez de
+embaralhar o que mudou —, regrava `order` numa transação e põe as de fora depois. Aceitar uma de
+fora (uma ou todas) e criar uma do zero levam a questão para o FIM do roteiro, antes do
+"associar" que fecha quando ele é a última (`ordemComEntradas`): o fecho que o professor arrastou
+para outro lugar fica onde ele pôs.
 
 **Rascunho é uma `ActivityVersion` SEM `Publication`.** É essa a distinção que o código usa
 (`atividades(teacher).draft()`): gerar itens reescreve o rascunho, publicar cria a `Publication`
@@ -190,8 +210,10 @@ a coluna saiu (migration `audio_de_atividade_nao_vence`, que apagou antes as lin
 sem a coluna elas contariam como prontas apontando para objeto que já não existia). Linha que
 existe é arquivo que existe.
 
-**Quem apaga é `limparAudioSemUso`** (`server/tts/limpeza.ts`), chamado por `apagarAtividade`:
-"hashes de todos os itens que ainda existem" contra "áudios do professor", e o que sobra sai —
+**Quem apaga é `limparAudioSemUso`** (`server/tts/limpeza.ts`), chamado ao apagar a atividade, ao
+gerar de novo, ao tirar uma questão, ao salvar uma escuta que mudou ou deixou de ser escuta e ao
+publicar: "hashes das questões EM USO" (publicadas e as de dentro do rascunho; a tirada da atividade
+não segura o áudio) contra "áudios do professor", e o que sobra sai —
 objeto primeiro, linha depois, para uma falha do bucket ser tentada de novo na próxima vez. A
 conta é por conteúdo de propósito: a mesma frase em duas atividades é um arquivo só, e apagar
 uma não leva o áudio da outra. Arquivar não apaga nada (desarquivar devolve tudo).

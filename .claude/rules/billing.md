@@ -36,8 +36,9 @@ crédito pela foto, um por minuto de fala começado). A mesma função desenha o
 e a conta de por que cada valor cabe no preço dos planos está em `docs/adr-003-ia-gemini.md`,
 seção 6. Mudar um valor de `CUSTO_IA` é refazer essa conta.
 
-**Os limites são de ESTOQUE** — contam o que existe agora. Atividade arquivada não conta; material
-reaproveitado (`findEquivalent`) não ocupa vaga nova. Créditos renovam por ciclo mensal e não
+**Os limites são de ESTOQUE** — contam o que existe agora. Atividade arquivada não conta, material
+arquivado também não; material reaproveitado (`findEquivalent`) não ocupa vaga nova. Desarquivar
+volta a ocupar, e por isso passa pela trava de cota. Créditos renovam por ciclo mensal e não
 acumulam.
 
 ## Um ponto de decisão

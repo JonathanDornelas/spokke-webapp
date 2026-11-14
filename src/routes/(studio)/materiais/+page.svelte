@@ -1,7 +1,12 @@
 <script lang="ts">
 	// Biblioteca. Apagar um material remove ele da biblioteca e dos rascunhos —
 	// as versões PUBLICADAS guardam uma cópia congelada e continuam intactas
-	// (regra inviolável 7, db.md "Versionamento imutável").
+	// (regra inviolável 7, db.md "Versionamento imutável"). Arquivar tira da
+	// biblioteca e do limite do plano sem mexer em atividade nenhuma.
+	//
+	// No desenho comum das listas do Studio (components.md "Listas do Studio"):
+	// cabeçalho com "Novo material", busca e filtros, chips de situação, a barra
+	// do que está marcado, a tabela e a paginação. A linha inteira abre a edição.
 	//
 	// O formulário é o MESMO da etapa 2 do wizard (`MaterialForm.svelte`), e
 	// grava o mesmo `ContentUnit` (os dois passam por `montarMaterial`). Aqui
@@ -11,20 +16,33 @@
 	import { onMount, tick } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import Bandeja from '$lib/components/Bandeja.svelte';
-	import Loading from '$lib/components/Loading.svelte';
-	import MaterialForm, { type Modo } from '$lib/components/MaterialForm.svelte';
+	import MaterialForm, {
+		type Modo,
+		type SugestaoDeTraducao
+	} from '$lib/components/MaterialForm.svelte';
 	import MaterialList from '$lib/components/MaterialList.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import FiltroIdioma from '$lib/components/FiltroIdioma.svelte';
+	import CabecalhoDaLista from '$lib/components/lista/CabecalhoDaLista.svelte';
+	import FerramentasDaLista from '$lib/components/lista/FerramentasDaLista.svelte';
+	import ChipsDaLista from '$lib/components/lista/ChipsDaLista.svelte';
+	import BarraDeSelecao from '$lib/components/lista/BarraDeSelecao.svelte';
+	import VazioDaLista from '$lib/components/lista/VazioDaLista.svelte';
+	import ConfirmarAcao from '$lib/components/lista/ConfirmarAcao.svelte';
+	import { BOTAO_NOVO, ICONE_MAIS, POR_PAGINA, SELECT_DA_LISTA } from '$lib/components/lista/lista';
 	import { casaComFiltro, idiomaDe } from '$lib/idiomas';
+	import { casaComBusca } from '$lib/busca';
 	import { TIPOS, type MaterialKind, type MaterialRow } from '$lib/components/material-form';
 	import { withMock } from '$lib/dev/with-mock';
 	import {
-		apagarMaterial,
+		apagarMateriais,
+		arquivarMateriais,
 		atualizarMaterial,
 		criarMaterial,
-		criarMateriaisEmLote
+		criarMateriaisEmLote,
+		desarquivarMateriais
 	} from './materiais.remote';
 	import { aceitarPropostasIa, gerarPropostasIa } from './ia.remote';
 	import { gerarComArquivo } from '$lib/client/arquivo-ia';
@@ -36,6 +54,7 @@
 	interface PageData {
 		materials: MaterialRow[];
 		usedInCount: number;
+		archivedCount: number;
 		/** O idioma com que um material novo nasce — o que o professor mais usa. */
 		idiomaPadrao: string | null;
 		ia: EstadoDaIa;
@@ -62,6 +81,7 @@
 			}
 		],
 		usedInCount: 1,
+		archivedCount: 0,
 		idiomaPadrao: 'en-US',
 		ia: {
 			configurada: false,
@@ -79,35 +99,68 @@
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
 	const data = $derived(withMock(dataProp, MOCK));
 
-	// Filtros são só de tela: a biblioteca inteira é do professor e já veio no
-	// loader — uma ida ao servidor por clique de chip não compraria nada.
-	let filtroKind = $state<MaterialKind | null>(null);
-	let filtroIdioma = $state('');
+	// ── busca, filtros e ordem: de TELA ─────────────────────────────────────
+	// A biblioteca inteira é do professor e já veio no loader. O arquivado é uma
+	// situação à parte: "Todos" não o mistura, porque ele saiu da biblioteca.
+	type Situacao = 'todos' | 'emUso' | 'semUso' | 'arquivados';
+	type Ordem = 'recentes' | 'nome' | 'uso';
 	let busca = $state('');
+	let situacao = $state<Situacao>('todos');
+	let filtroKind = $state<MaterialKind | ''>('');
+	let filtroIdioma = $state('');
+	let ordem = $state<Ordem>('recentes');
 	let pagina = $state(1);
-	const POR_PAGINA = 12;
+
+	const ativos = $derived(data.materials.filter((m) => !m.arquivado));
+	const situacoes = $derived<{ id: Situacao; label: string; n: number }[]>([
+		{ id: 'todos', label: 'Todos', n: ativos.length },
+		{ id: 'emUso', label: 'Em atividades', n: data.usedInCount },
+		{ id: 'semUso', label: 'Sem uso', n: ativos.length - data.usedInCount },
+		{ id: 'arquivados', label: 'Arquivados', n: data.archivedCount }
+	]);
 
 	const visiveis = $derived(
-		data.materials.filter((m) => {
-			if (filtroKind && m.kind !== filtroKind) return false;
-			if (!casaComFiltro(m.idioma ?? null, filtroIdioma)) return false;
-			const termo = busca.trim().toLowerCase();
-			if (!termo) return true;
-			return m.primary.toLowerCase().includes(termo) || m.secondary.toLowerCase().includes(termo);
-		})
+		data.materials
+			.filter((m) => {
+				if (situacao === 'arquivados' ? !m.arquivado : m.arquivado) return false;
+				if (situacao === 'emUso' && m.usedIn === 0) return false;
+				if (situacao === 'semUso' && m.usedIn > 0) return false;
+				if (filtroKind && m.kind !== filtroKind) return false;
+				if (!casaComFiltro(m.idioma ?? null, filtroIdioma)) return false;
+				return casaComBusca(m.primary, busca) || casaComBusca(m.secondary, busca);
+			})
+			.sort((x, y) =>
+				ordem === 'nome'
+					? x.primary.localeCompare(y.primary, 'pt-BR')
+					: ordem === 'uso'
+						? y.usedIn - x.usedIn
+						: 0
+			)
 	);
-
 	// A biblioteca cresce sozinha: tudo que o professor cola dentro de uma
 	// atividade entra aqui. Sem paginar, uma tabela de duzentas linhas.
 	const naPagina = $derived(visiveis.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA));
 
-	// Filtrar ou buscar volta para a primeira página — ficar na 3ª depois de o
-	// resultado encolher para 4 linhas deixava a tabela vazia sem explicação.
+	const filtrando = $derived(
+		!!busca.trim() || !!filtroKind || !!filtroIdioma || situacao !== 'todos'
+	);
+	function limparFiltros() {
+		busca = '';
+		filtroKind = '';
+		filtroIdioma = '';
+		situacao = 'todos';
+	}
+
+	// Filtrar ou buscar volta para a primeira página e desmarca: a ação em massa
+	// vale para o que está na tela.
+	let marcados = $state<string[]>([]);
 	$effect(() => {
 		void filtroKind;
 		void filtroIdioma;
 		void busca;
+		void situacao;
 		pagina = 1;
+		marcados = [];
 	});
 
 	// ── o painel ────────────────────────────────────────────────────────────
@@ -118,15 +171,16 @@
 	/** A tag de idioma escolhida no formulário — vale também para a IA. */
 	let idioma = $state<string | null>(null);
 	let salvando = $state(false);
-	let apagandoId = $state<string | null>(null);
-	/** Confirmação antes de apagar: a consequência vai escrita, não num alert(). */
-	let confirmando = $state<MaterialRow | null>(null);
 
 	// O foco só pega depois de o painel deixar de ser `hidden`.
 	async function abrirNovo() {
 		painel = true;
 		await tick();
 		formulario?.novo();
+	}
+	async function abrirComIa() {
+		await abrirNovo();
+		modo = 'ia';
 	}
 	function editar(m: MaterialRow) {
 		painel = true;
@@ -135,9 +189,7 @@
 	// O "Criar com IA" do início chega com `?novo=ia`: o painel abre já no modo
 	// da IA, em vez de deixar o professor procurar a aba depois de chegar.
 	onMount(async () => {
-		if (page.url.searchParams.get('novo') !== 'ia') return;
-		await abrirNovo();
-		modo = 'ia';
+		if (page.url.searchParams.get('novo') === 'ia') await abrirComIa();
 	});
 	function fechar() {
 		painel = false;
@@ -207,10 +259,14 @@
 
 	// A sugestão de tradução enquanto o professor digita — do idioma do material
 	// para a língua do aluno. Falhar é normal: o servidor traduz ao salvar.
-	async function sugerir(texto: string, de: string, para: string): Promise<string | null> {
+	async function sugerir(
+		texto: string,
+		de: string,
+		para: string
+	): Promise<SugestaoDeTraducao | null> {
 		try {
 			const r = await sugerirTraducao({ texto, de, para });
-			return r.ok ? r.traducao : null;
+			return r.ok ? { traducao: r.traducao, alternativas: r.alternativas } : null;
 		} catch {
 			return null;
 		}
@@ -227,187 +283,262 @@
 		return r.ok;
 	}
 
-	async function apagar(m: MaterialRow) {
-		apagandoId = m.id;
+	// ── arquivar, desarquivar, apagar ───────────────────────────────────────
+	type AcaoDaLista = 'arquivar' | 'apagar';
+	let confirmando = $state<{ acao: AcaoDaLista; ids: string[] } | null>(null);
+	let dialogoAberto = $state(false);
+	let ocupado = $state<string | null>(null);
+	let erro = $state<string | null>(null);
+	let aviso = $state<string | null>(null);
+	const alvo = $derived(
+		confirmando ? data.materials.filter((m) => confirmando?.ids.includes(m.id)) : []
+	);
+	const emUsoNoAlvo = $derived(alvo.filter((m) => m.usedIn > 0).length);
+
+	function palavra(n: number, um: string, varios: string) {
+		return `${n} ${n === 1 ? um : varios}`;
+	}
+
+	function pedir(acaoDaLista: AcaoDaLista, ids: string[]) {
+		erro = null;
+		aviso = null;
+		confirmando = { acao: acaoDaLista, ids };
+		dialogoAberto = true;
+	}
+
+	async function confirmar() {
+		if (!confirmando) return;
+		const { acao: qual, ids } = confirmando;
+		ocupado = ids.length === 1 ? ids[0] : 'varios';
+		erro = null;
 		try {
-			await apagarMaterial({ contentId: m.id });
-			confirmando = null;
-			if (editando?.id === m.id) fechar();
+			if (qual === 'arquivar') {
+				const r = await arquivarMateriais({ contentIds: ids });
+				aviso = `${palavra(r.arquivados, 'material arquivado', 'materiais arquivados')}. Estão em "Arquivados".`;
+			} else {
+				const r = await apagarMateriais({ contentIds: ids });
+				aviso = `${palavra(r.removidos, 'material apagado', 'materiais apagados')}.`;
+			}
+			if (editando && ids.includes(editando.id)) fechar();
+			marcados = marcados.filter((id) => !ids.includes(id));
+			dialogoAberto = false;
 			await invalidateAll();
+		} catch {
+			erro = 'Não deu para concluir agora. Tente de novo em instantes.';
 		} finally {
-			apagandoId = null;
+			ocupado = null;
 		}
 	}
 
-	const chip = 'rounded-full px-3.5 py-[7px] text-[12.5px] font-semibold transition-colors';
-	const chipOn = 'border-[1.5px] border-primary bg-primary text-primary-content';
-	const chipOff = 'border-[1.5px] border-line bg-base-100 hover:border-primary';
+	/** Desarquivar não pede confirmação: nada se perde, e a vaga é conferida no servidor. */
+	async function desarquivar(ids: string[]) {
+		ocupado = ids.length === 1 ? ids[0] : 'varios';
+		erro = null;
+		aviso = null;
+		try {
+			const r = await desarquivarMateriais({ contentIds: ids });
+			if (!r.ok) {
+				erro = r.error;
+				return;
+			}
+			aviso = `${palavra(r.quantos, 'material voltou', 'materiais voltaram')} para a biblioteca.`;
+			marcados = marcados.filter((id) => !ids.includes(id));
+			await invalidateAll();
+		} catch {
+			erro = 'Não deu para concluir agora. Tente de novo em instantes.';
+		} finally {
+			ocupado = null;
+		}
+	}
+
+	const ICONE = {
+		editar: 'M5 19h3l10-10-3-3L5 16z',
+		arquivar: 'M4 7.5h16v3H4zM5.5 10.5v8h13v-8M10 14h4',
+		desarquivar: 'M4 7.5h16v3H4zM5.5 10.5v8h13v-8M12 18v-5M9.5 15.5L12 13l2.5 2.5',
+		apagar: 'M6 7h12M9.5 7V5h5v2M8 7l.8 12h6.4L16 7'
+	};
+	const acoesDaLinha = (m: MaterialRow) => [
+		{ rotulo: 'Editar', icone: ICONE.editar, onclick: () => editar(m) },
+		m.arquivado
+			? { rotulo: 'Desarquivar', icone: ICONE.desarquivar, onclick: () => desarquivar([m.id]) }
+			: { rotulo: 'Arquivar', icone: ICONE.arquivar, onclick: () => pedir('arquivar', [m.id]) },
+		{ rotulo: 'Apagar', icone: ICONE.apagar, perigo: true, onclick: () => pedir('apagar', [m.id]) }
+	];
 </script>
 
 <svelte:head><title>Materiais · Spokke</title></svelte:head>
 
-<div class="pagina-studio">
-	<div class="mb-4 flex flex-wrap items-end gap-x-4 gap-y-3">
-		<div class="min-w-[180px] flex-1">
-			<h1 class="mb-1 font-display text-[22px] font-semibold tracking-[-0.024em] lg:text-[26px]">
-				Materiais
+{#if data.materials.length === 0}
+	<!-- A biblioteca vazia é um hero, como a lista vazia de atividades e a de
+	     turmas: o ganho numa frase e os caminhos para começar. -->
+	<div class="relative flex min-h-[70vh] items-center overflow-hidden px-4 py-12 lg:px-7 lg:py-14">
+		<AmbientShapes height="230px" />
+		<div class="relative z-1 max-w-[52ch] animate-entrada">
+			<p class="mb-4 text-xs font-bold tracking-[0.13em] text-primary uppercase">Materiais</p>
+			<h1
+				class="mb-3.5 font-display text-[30px] leading-[1.1] font-semibold tracking-[-0.025em] text-pretty lg:text-4xl"
+			>
+				Cadastre a frase uma vez e use em quantas atividades quiser.
 			</h1>
-			<p class="text-[13px] text-base-content/65">
-				{data.materials.length}
-				{data.materials.length === 1 ? 'material' : 'materiais'} · {data.usedInCount} em atividades
+			<p class="mb-[26px] text-[15.5px] leading-relaxed text-pretty text-base-content/65">
+				Tudo que você cola dentro de uma atividade também entra aqui. Na próxima, é só trazer da
+				biblioteca em vez de digitar de novo.
 			</p>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			<label
-				class="flex min-h-[44px] min-w-[190px] items-center gap-2 rounded-field border border-line bg-base-200 px-3"
-			>
-				<svg
-					class="size-4 shrink-0 text-base-content/50"
-					viewBox="0 0 24 24"
-					fill="none"
-					aria-hidden="true"
-				>
-					<circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
-					<path d="M16 16l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-				</svg>
-				<span class="sr-only">Buscar no conteúdo</span>
-				<input
-					bind:value={busca}
-					type="search"
-					placeholder="Buscar no conteúdo"
-					class="min-w-0 flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-base-content/50"
-				/>
-			</label>
-			<button
-				type="button"
-				onclick={abrirNovo}
-				class="btn min-h-[44px] motion-tap gap-2 btn-primary"
-			>
-				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-					<path
-						d="M12 5v14M5 12h14"
-						stroke="currentColor"
-						stroke-width="2.2"
-						stroke-linecap="round"
-					/>
-				</svg>
-				Novo material
-			</button>
-		</div>
-	</div>
-
-	<div class="mb-[18px] flex flex-wrap items-center gap-x-4 gap-y-2">
-		<div class="flex flex-wrap gap-1.5">
-			<button
-				type="button"
-				onclick={() => (filtroKind = null)}
-				aria-pressed={filtroKind === null}
-				class="{chip} {filtroKind === null ? chipOn : chipOff}">Todos</button
-			>
-			{#each TIPOS as t (t.id)}
+			<div class="flex flex-wrap gap-3">
 				<button
 					type="button"
-					onclick={() => (filtroKind = filtroKind === t.id ? null : t.id)}
-					aria-pressed={filtroKind === t.id}
-					class="{chip} {filtroKind === t.id ? chipOn : chipOff}">{t.label}</button
+					onclick={abrirNovo}
+					class="btn btn-lg min-h-[50px] motion-tap btn-primary text-base font-bold"
 				>
-			{/each}
+					Cadastrar o primeiro material
+				</button>
+				{#if data.ia.configurada}
+					<button
+						type="button"
+						onclick={abrirComIa}
+						class="btn btn-lg min-h-[50px] motion-tap btn-outline text-base font-bold"
+					>
+						Gerar com IA
+					</button>
+				{/if}
+			</div>
 		</div>
-		<FiltroIdioma
-			tags={data.materials.map((m) => m.idioma)}
-			bind:valor={filtroIdioma}
-			formato="chips"
-		/>
 	</div>
+{:else}
+	<div class="pagina-studio">
+		<CabecalhoDaLista titulo="Materiais">
+			{palavra(ativos.length, 'material', 'materiais')} · {data.usedInCount} em atividades
+			{#snippet acao()}
+				<button type="button" onclick={abrirNovo} class={BOTAO_NOVO}>
+					<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path d={ICONE_MAIS} stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+					</svg>
+					Novo material
+				</button>
+			{/snippet}
+		</CabecalhoDaLista>
 
-	{#if data.materials.length === 0}
-		<div
-			class="rounded-box border-[1.5px] border-dashed border-line bg-base-200 p-[30px] text-center"
-		>
-			<p class="mb-1.5 font-display text-[20px] font-semibold">Nenhum material ainda</p>
-			<p class="mx-auto max-w-[460px] text-[13.5px] leading-snug text-base-content/65">
-				Tudo que você colar dentro de uma atividade entra aqui e pode ser reusado na próxima. Ou
-				comece pela biblioteca, em "Novo material".
-			</p>
-		</div>
-	{:else if visiveis.length === 0}
-		<p class="rounded-box border border-line px-[18px] py-5 text-[13.5px] text-base-content/65">
-			Nenhum material bate com esse filtro.
+		<FerramentasDaLista bind:busca rotulo="Buscar no conteúdo">
+			<label class="sr-only" for="filtro-tipo">Filtrar por tipo</label>
+			<select id="filtro-tipo" bind:value={filtroKind} class={SELECT_DA_LISTA}>
+				<option value="">Todos os tipos</option>
+				{#each TIPOS as t (t.id)}
+					<option value={t.id}>{t.label}</option>
+				{/each}
+			</select>
+			<FiltroIdioma tags={data.materials.map((m) => m.idioma)} bind:valor={filtroIdioma} />
+			<label class="sr-only" for="ordem-materiais">Ordenar materiais</label>
+			<select id="ordem-materiais" bind:value={ordem} class={SELECT_DA_LISTA}>
+				<option value="recentes">Mais recentes</option>
+				<option value="nome">A–Z</option>
+				<option value="uso">Mais usados</option>
+			</select>
+		</FerramentasDaLista>
+
+		<ChipsDaLista opcoes={situacoes} bind:valor={situacao} rotulo="Filtrar materiais" />
+
+		{#if aviso}
+			<p class="mb-3 text-[13.5px] font-semibold text-base-content/75" role="status">{aviso}</p>
+		{/if}
+		{#if erro && !dialogoAberto}
+			<p class="mb-3 text-[13.5px] font-semibold text-error" role="alert">{erro}</p>
+		{/if}
+
+		{#if marcados.length > 0}
+			<BarraDeSelecao
+				quantos={marcados.length}
+				singular="material marcado"
+				plural="materiais marcados"
+				onlimpar={() => (marcados = [])}
+			>
+				{#if situacao === 'arquivados'}
+					<button
+						type="button"
+						onclick={() => desarquivar(marcados)}
+						disabled={ocupado !== null}
+						class="btn btn-sm motion-tap btn-plain font-semibold"
+					>
+						Desarquivar
+					</button>
+				{:else}
+					<button
+						type="button"
+						onclick={() => pedir('arquivar', marcados)}
+						disabled={ocupado !== null}
+						class="btn btn-sm motion-tap btn-plain font-semibold"
+					>
+						Arquivar
+					</button>
+				{/if}
+				<button
+					type="button"
+					onclick={() => pedir('apagar', marcados)}
+					disabled={ocupado !== null}
+					class="btn btn-sm motion-tap btn-outline-error font-semibold"
+				>
+					Apagar
+				</button>
+			</BarraDeSelecao>
+		{/if}
+
+		{#if visiveis.length === 0}
+			<VazioDaLista
+				texto={situacao === 'arquivados' && !busca.trim()
+					? 'Nenhum material arquivado.'
+					: busca.trim()
+						? `Nenhum material com “${busca.trim()}”.`
+						: 'Nenhum material com esse filtro.'}
+				onlimpar={filtrando ? limparFiltros : undefined}
+			/>
+		{:else}
+			<MaterialList
+				materiais={naPagina}
+				contexto="biblioteca"
+				editandoId={painel ? (editando?.id ?? null) : null}
+				removendoId={ocupado}
+				onedit={editar}
+				onremove={(m) => pedir('apagar', [m.id])}
+				bind:marcados
+				acoes={acoesDaLinha}
+			/>
+			<Pagination bind:pagina porPagina={POR_PAGINA} total={visiveis.length} rotulo="materiais" />
+		{/if}
+	</div>
+{/if}
+
+<ConfirmarAcao
+	bind:aberto={dialogoAberto}
+	titulo={confirmando?.acao === 'apagar'
+		? `Apagar ${palavra(alvo.length, 'material', 'materiais')}?`
+		: `Arquivar ${palavra(alvo.length, 'material', 'materiais')}?`}
+	rotuloDoBotao={confirmando?.acao === 'apagar' ? 'Apagar' : 'Arquivar'}
+	perigo={confirmando?.acao === 'apagar'}
+	ocupado={ocupado !== null}
+	{erro}
+	onconfirmar={confirmar}
+>
+	{#if confirmando?.acao === 'apagar'}
+		<p class="mb-3">
+			Sai da sua biblioteca e dos rascunhos{emUsoNoAlvo > 0
+				? ` (${palavra(emUsoNoAlvo, 'está em atividade', 'estão em atividades')})`
+				: ''}. As atividades que já estão no ar continuam intactas: elas guardam uma cópia
+			congelada.
 		</p>
 	{:else}
-		<MaterialList
-			materiais={naPagina}
-			contexto="biblioteca"
-			editandoId={painel ? (editando?.id ?? null) : null}
-			removendoId={apagandoId}
-			onedit={editar}
-			onremove={(m) => (confirmando = m)}
-		/>
-		<Pagination bind:pagina porPagina={POR_PAGINA} total={visiveis.length} rotulo="materiais" />
+		<p class="mb-3">
+			Sai da biblioteca e do limite do seu plano. As atividades que já usam continuam usando, e dá
+			para desarquivar depois, se couber no plano.
+		</p>
 	{/if}
-
-	{#if confirmando}
-		<div
-			class="mt-4 flex flex-wrap gap-3 rounded-box border border-s-[3px] border-line border-s-warning bg-base-200 px-[18px] py-4"
-			role="alertdialog"
-			aria-label="Confirmar exclusão"
-		>
-			<svg
-				class="size-[19px] shrink-0 text-warning"
-				viewBox="0 0 24 24"
-				fill="none"
-				aria-hidden="true"
-			>
-				<path
-					d="M12 3.5l9.5 16.5H2.5z"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linejoin="round"
-				/>
-				<path
-					d="M12 9.5v4.5M12 17h.01"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-				/>
-			</svg>
-			<div class="min-w-[200px] flex-1">
-				<p class="mb-1 text-sm font-semibold">
-					{#if confirmando.usedIn > 0}
-						Este material está em {confirmando.usedIn}
-						{confirmando.usedIn === 1 ? 'atividade' : 'atividades'}
-					{:else}
-						Apagar este material?
-					{/if}
-				</p>
-				<p class="text-[13px] leading-snug text-base-content/65">
-					Apagar remove ele da sua biblioteca e dos rascunhos. As atividades que já estão no ar
-					continuam intactas — elas guardam uma cópia congelada.
-				</p>
-			</div>
-			<div class="flex items-center gap-2.5">
-				<button
-					type="button"
-					onclick={() => (confirmando = null)}
-					class="btn btn-sm motion-tap btn-neutral whitespace-nowrap">Cancelar</button
-				>
-				<button
-					type="button"
-					onclick={() => confirmando && apagar(confirmando)}
-					disabled={apagandoId !== null}
-					class="btn btn-sm motion-tap gap-2 btn-error whitespace-nowrap"
-				>
-					{#if apagandoId}
-						<Loading variant="fila" size={11} tone="current" label="Apagando" />
-						Apagando…
-					{:else}
-						Apagar mesmo assim
-					{/if}
-				</button>
-			</div>
-		</div>
-	{/if}
-</div>
+	<ul class="grid list-none gap-1 p-0 text-[13px] text-base-content">
+		{#each alvo.slice(0, 5) as m (m.id)}
+			<li class="truncate font-content">· {m.primary}</li>
+		{/each}
+		{#if alvo.length > 5}
+			<li class="text-base-content/65">e mais {alvo.length - 5}</li>
+		{/if}
+	</ul>
+</ConfirmarAcao>
 
 <!-- A bandeja sobre a lista: cadastrar não tira o professor de onde ele confere.
      Ela fica MONTADA mesmo fechada (`manterMontada`) para o `bind:this` do
@@ -428,7 +559,7 @@
 			bind:modo
 			bind:editando
 			contexto="biblioteca"
-			conjunto={data.materials}
+			conjunto={ativos}
 			resultado={modo === 'ia' ? resultadoIa : resultado}
 			{salvando}
 			onfechar={fechar}

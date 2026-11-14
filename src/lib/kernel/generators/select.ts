@@ -16,6 +16,23 @@ export interface GenerationPlan {
 	target: number;
 	/** Habilidades desejadas. Vazio = todas. */
 	skills: Skill[];
+	/**
+	 * Os tipos de CADA material, escolhidos na etapa de materiais
+	 * (`{ [contentId]: Skill[] }`). Material ausente segue `skills`; presente e
+	 * vazio não gera nada — o professor desligou todos os tipos dele.
+	 */
+	skillsPorMaterial?: Record<string, Skill[]>;
+}
+
+/** Os itens que o professor quer de cada material, na ordem do gerador. */
+function filasDo(groups: GenerationGroup[], plan: GenerationPlan): Item[][] {
+	const geral = new Set(plan.skills);
+	return groups.map((group) => {
+		const doMaterial = plan.skillsPorMaterial?.[group.contentId];
+		if (doMaterial && doMaterial.length === 0) return [];
+		const desejadas = doMaterial ? new Set(doMaterial) : geral;
+		return group.items.filter((item) => querido(item, desejadas));
+	});
 }
 
 /**
@@ -63,6 +80,15 @@ function querido(item: Item, desejadas: Set<Skill>): boolean {
 	return exigidas.every((skill) => desejadas.has(skill));
 }
 
+/**
+ * A mesma regra para quem mostra ANTES de gerar o que um material daria com
+ * estes tipos (a prévia da etapa de materiais). Lista vazia não vale como
+ * "todos" aqui: material com todos os tipos desligados não gera nada.
+ */
+export function entraComOsTipos(item: Item, tipos: readonly Skill[]): boolean {
+	return tipos.length > 0 && querido(item, new Set(tipos));
+}
+
 /** Ordem estável para a passada de cobertura quando o professor não escolheu nada. */
 const TODAS_AS_HABILIDADES: Skill[] = ['listening', 'speaking', 'reading', 'writing'];
 
@@ -90,7 +116,7 @@ export function selectItems(
 	const fecho = closing && querido(closing, desejadas) ? closing : null;
 	const alvoDosDemais = fecho ? Math.max(1, alvo - 1) : alvo;
 
-	const filas = groups.map((group) => group.items.filter((item) => querido(item, desejadas)));
+	const filas = filasDo(groups, plan);
 	const maiorFila = filas.reduce((max, fila) => Math.max(max, fila.length), 0);
 
 	const escolhidos: Item[] = [];
@@ -177,4 +203,30 @@ export function selectItems(
 	}
 
 	return fecho ? [...escolhidos, fecho] : escolhidos;
+}
+
+/**
+ * Gera para TODOS e separa pela quantidade — pedido do dono do repositório: a
+ * etapa de materiais não deixa questão de fora, a revisão é que deixa. `dentro`
+ * é a escolha de `selectItems` (o número pedido, os tetos, o rodízio justo);
+ * `fora` é todo o resto que o professor quis, na ordem do rodízio (o primeiro
+ * de cada material, depois o segundo…), para ele trocar na revisão o que entra.
+ */
+export function separarPelaQuantidade(
+	groups: GenerationGroup[],
+	plan: GenerationPlan,
+	closing: Item | null = null
+): { dentro: Item[]; fora: Item[] } {
+	const dentro = selectItems(groups, plan, closing);
+	const ja = new Set(dentro.map((item) => item.id));
+	const filas = filasDo(groups, plan).map((fila) => fila.filter((item) => !ja.has(item.id)));
+	const maior = filas.reduce((max, fila) => Math.max(max, fila.length), 0);
+	const fora: Item[] = [];
+	for (let rodada = 0; rodada < maior; rodada++) {
+		for (const fila of filas) {
+			const item = fila[rodada];
+			if (item) fora.push(item);
+		}
+	}
+	return { dentro, fora };
 }

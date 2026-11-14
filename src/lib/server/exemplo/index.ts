@@ -1,14 +1,13 @@
 import { getInteraction } from '$lib/kernel/interactions/registry';
-import { gradingSchema, interactionSchema, localeSchema } from '$lib/kernel/item';
+import { interactionSchema, localeSchema } from '$lib/kernel/item';
 import { getProfile } from '$lib/kernel/language/profiles';
-import type { Score } from '$lib/kernel/grading/result';
+import { corrigirSemGravar, type Correcao } from '$lib/server/player/veredito';
 import {
 	buildRuntimeItem,
 	itemAudioHashes,
 	type RuntimeItem,
 	type StoredItemRow
 } from '$lib/server/player/runtime';
-import { payloadParaCorrigir } from '$lib/server/escrita';
 import { transcreverNoIdioma } from '$lib/server/asr/audiotext-provider';
 import {
 	guardarTranscricao,
@@ -152,51 +151,17 @@ function itemOuNada(id: string): StoredItemRow | null {
 	return ITENS.find((linha) => linha.id === id) ?? null;
 }
 
-export type Veredito = {
-	state: 'correct' | 'partial' | 'incorrect';
-	hint?: string;
-	marks?: Score['marks'];
-	expected?: string[];
-};
-
-export type Correcao = { ok: true; veredito: Veredito } | { ok: false; erro: string };
-
-function veredito(score: Score): Veredito {
-	return {
-		state: score.value >= 1 ? 'correct' : score.value > 0 ? 'partial' : 'incorrect',
-		hint: score.feedback,
-		marks: score.marks,
-		expected: score.expected
-	};
-}
+export type { Correcao, Veredito } from '$lib/server/player/veredito';
 
 /**
- * Corrige uma resposta, do mesmo jeito que `responderItem`: valida pelo
- * `answerSchema` da interação, usa o profile da língua da resposta e a seed do
- * item. Diferente dele, não grava nada — e o resultado está sempre ligado,
- * porque é o veredito que se veio ver.
+ * Corrige uma resposta pelo corretor que não grava (`corrigirSemGravar`, o
+ * mesmo da revisão do professor), com a seed do item. O resultado está sempre
+ * ligado: é o veredito que se veio ver.
  */
 export async function corrigirNoExemplo(itemId: string, resposta: unknown): Promise<Correcao> {
 	const linha = itemOuNada(itemId);
 	if (!linha) return { ok: false, erro: 'questão desconhecida' };
-
-	const interaction = interactionSchema.parse(linha.interaction);
-	const grading = gradingSchema.parse(linha.grading);
-	const locale = localeSchema.parse(linha.locale);
-	const registered = getInteraction(interaction.type);
-
-	const answer = registered.answerSchema.safeParse(resposta);
-	if (!answer.success) return { ok: false, erro: 'resposta em formato inesperado' };
-
-	const profile = getProfile(grading.answerLang === 'source' ? locale.source : locale.target);
-	const resultado = registered.grade(
-		await payloadParaCorrigir(interaction, grading, profile),
-		answer.data,
-		profile,
-		`${SEMENTE}:${linha.id}`
-	);
-	if (!resultado.ok) return { ok: false, erro: resultado.error };
-	return { ok: true, veredito: veredito(resultado.value) };
+	return corrigirSemGravar(linha, resposta, `${SEMENTE}:${linha.id}`);
 }
 
 /**

@@ -1,13 +1,22 @@
 <script lang="ts">
+	import Loading from './Loading.svelte';
+
 	type Size = 'md' | 'lg';
 
 	let {
 		recording = false,
+		abrindo = false,
 		ontoggle,
 		size = 'md',
 		hint
 	}: {
 		recording?: boolean;
+		/**
+		 * O navegador está abrindo o microfone, o que leva de um instante a mais
+		 * de um segundo. O botão espera como todo botão que espera: desabilitado,
+		 * com a `fila` no lugar do ícone. Sem essa resposta o aluno tocava de novo.
+		 */
+		abrindo?: boolean;
 		ontoggle?: () => void;
 		size?: Size;
 		/**
@@ -31,18 +40,33 @@
 		class="btn btn-circle {buttonSize[size]} btn-accent"
 		class:animate-[en-pulse-ring_1.9s_ease-out_infinite]={recording}
 		onclick={ontoggle}
+		disabled={abrindo}
+		aria-busy={abrindo}
 		aria-pressed={recording}
-		aria-label={recording ? 'Parar gravação agora' : 'Começar a gravar'}
+		aria-label={abrindo
+			? 'Abrindo o microfone'
+			: recording
+				? 'Parar gravação agora'
+				: 'Começar a gravar'}
 	>
-		<svg class={iconSize[size]} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-			<rect x="9" y="2.5" width="6" height="11" rx="3" stroke="currentColor" stroke-width="2" />
-			<path
-				d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3.5"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
+		{#if abrindo}
+			<Loading
+				variant="fila"
+				size={size === 'lg' ? 16 : 14}
+				tone="current"
+				label="Abrindo o microfone"
 			/>
-		</svg>
+		{:else}
+			<svg class={iconSize[size]} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<rect x="9" y="2.5" width="6" height="11" rx="3" stroke="currentColor" stroke-width="2" />
+				<path
+					d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3.5"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+				/>
+			</svg>
+		{/if}
 	</button>
 	{#if recording}
 		<!-- `items-end` + `origin-bottom`: a barra cresce da base, como onda de

@@ -35,10 +35,20 @@ Zod compartilhado, um helper) quebra o build com "all exports from this file mus
 functions". Schema compartilhado mora em `$lib/server/...` — foi por isso que
 `publicationSettingsSchema` foi parar em `$lib/server/player/settings.ts`.
 
-Existem hoje: `(studio)/atividades/atividades.remote.ts` (o wizard inteiro — criar atividade,
-adicionar material um a um ou colando uma lista, editar/remover material, trazer material da
-biblioteca, gerar itens, descartar e restaurar item, aceitar todos, criar item manual, salvar
-item, publicar) e
+Existem hoje: `(studio)/atividades/atividades.remote.ts` (o wizard inteiro — criar atividade e
+editar os detalhes dela (`editarDetalhes`), adicionar material um a um ou colando uma lista,
+editar/remover material, trazer material da biblioteca, o plano de geração
+(`salvarPlanoDeGeracao`, `previaDoMaterial`), começar a geração e acompanhá-la (`gerarItens`,
+`progressoDaGeracao`), descartar e aceitar questão, aceitar todas, responder a questão no palco
+da revisão (`corrigirNaRevisao`, que corrige SEM gravar pelo `corrigirSemGravar` de
+`server/player/veredito.ts` — o mesmo da atividade de exemplo — com a seed do runtime do palco),
+mudar a ordem do roteiro
+(`reordenarQuestoes`, que recusa a lista que não for exatamente a das de dentro), o editor de
+questão (`questaoParaEditar`,
+`previaDaQuestao`, `salvarQuestao`, que também cria do zero), publicar) e
+`(studio)/atividades/[id]/previa/previa.remote.ts` (`corrigirResposta`: a correção da PRÉVIA DO
+ALUNO, sem gravar nada, pelo `corrigirNaPrevia` de `$lib/server/atividades/previa.ts`, com a seed da
+versão — a fala vai pelo endpoint `previa/fala`) e
 `a/[slug]/player.remote.ts` (as três funções do aluno, mais a validação do código de acesso, as
 duas da retomada, o `naoSouEu` do link pessoal e o `relatarProblema` — sem sessão, com a tentativa
 como prova de origem, teto por IP e a lógica testável em `$lib/server/relatos`) e
@@ -70,7 +80,8 @@ Os que vieram com planos, módulos e escola, cada um com o seu guard:
   multipart pelo mesmo motivo da fala do aluno (arquivo em base64 dentro de JSON infla 33%), com
   o guard do professor e o mesmo `gerarPropostas`.
 - `(studio)/materiais/traducao.remote.ts` — `sugerirTraducao`, a tradução sugerida enquanto o
-  professor digita; não grava nada (ver "Tradução do material" abaixo).
+  professor digita, com as outras traduções certas (`alternativas`, pelo mesmo filtro das questões
+  de tradução: `variantesDaFrase`); não grava nada (ver "Tradução do material" abaixo).
 - `(studio)/modulos/modulos.remote.ts` — CRUD de módulo (com `duplicarModulo`: atividades e ordem, sem
   turmas nem programação), acrescentar/remover/reordenar, as turmas
   do módulo (`alocarTurmas`, `desalocarTurma`) e a programação de envio (`salvarProgramacao`,
@@ -83,7 +94,12 @@ Os que vieram com planos, módulos e escola, cada um com o seu guard:
   passa pelo hook): ativar plano, trial, cancelar, atender pedido, créditos de cortesia, escolas,
   reenfileirar job.
 - `atividades.remote.ts` ganhou `arquivarAtividade`, `desarquivarAtividade` (dentro da cota),
-  `apagarAtividade` (confere o título digitado) e `definirNivel`.
+  `apagarAtividade` (confere o título digitado) e `definirNivel` — e as versões EM MASSA da lista:
+  `arquivarAtividades`, `desarquivarAtividades` (todas cabem na cota, ou nenhuma muda) e
+  `apagarAtividades` (confere "apagar" digitado). `materiais.remote.ts`, o mesmo para a biblioteca:
+  `apagarMateriais`, `arquivarMateriais` e `desarquivarMateriais` (dentro da cota). Os ids vêm da
+  tela, o escopo vem da sessão: o repositório só toca o que é do professor, e o id de outro passa em
+  silêncio.
 
 **Lógica que precisa de teste mora em `$lib/server`, não no `.remote.ts`.** O SvelteKit recusa
 importar um `.remote.ts` cujos exports não são remote functions de verdade — então a remote confere a
@@ -284,6 +300,37 @@ conseguia publicar — a tela ficava em "0 de 10" para sempre. Isso não apareci
 `TTS_PROVIDER` estava vazio, porque aí o gerador não produz item de escuta e o contador nasce
 em "0 de 0". Gerando na etapa 2, a síntese acontece enquanto ele revisa na etapa 3.
 
+**Só o que ENTRA pede áudio.** A geração grava também as questões "fora" (as que passaram da
+quantidade), e sintetizar a escuta de todas seria fila e bucket para questões que talvez nunca
+entrem. Aceitar uma questão de fora (`descartarItem` com `descartado: false`, "Aceitar todas")
+pede o áudio dela na hora; a etapa 4 e o `publicarAtividade` contam e repõem só as de dentro.
+
+**E o áudio que deixa de ser usado sai do bucket.** `limparAudioSemUso` conta como "em uso" só as
+questões que vão para o aluno (as publicadas e as de dentro do rascunho), e roda quando uma questão
+deixa de usar um áudio: gerar de novo (as questões antigas saem), tirar uma questão da atividade,
+salvar no editor uma escuta que mudou a frase ou deixou de ser escuta, publicar (as de fora somem) e
+apagar a atividade. A conta continua por conteúdo: o arquivo que outra questão usa fica.
+
+## Geração das questões — em segundo plano, passo a passo
+
+`gerarItens` não gera: ele grava o plano, confere a atividade e COMEÇA a geração
+(`iniciarGeracao`, `$lib/server/atividades/geracao.ts`), devolvendo na hora. O trabalho
+(`executarGeracao`, testável com tudo por parâmetro) anda em passos — ler os materiais (e o
+dicionário do transcritor, no japonês e no chinês), traduzir as palavras do associar, montar,
+separar pela quantidade, conferir as outras traduções certas, salvar e pedir o áudio — e cada
+passo concluído atualiza o andamento, que a tela "Gerando" pergunta por `progressoDaGeracao`.
+
+- **O andamento mora na memória do processo web**, por atividade e só para o professor dela. É de
+  minutos e o resultado (o rascunho) vai para o banco; processo que reinicia no meio aparece como
+  "parou" (sem notícia há 4 minutos) e a tela oferece gerar de novo. Pronto ou falhado, ele fica 20
+  minutos — o professor pode ter saído da tela.
+- **Uma geração por atividade, três por professor.** Pedir de novo com uma andando não começa
+  outra; cada geração é CPU e pedido ao tradutor, o mesmo serviço que transcreve a fala dos alunos.
+- **Erro vira frase, nunca 500**: sem material, tipos que não geram nada ("ligue outro tipo"), ou o
+  genérico — com o detalhe no log.
+- Sem `getRequestEvent` lá dentro: o trabalho segue depois que a requisição terminou, então tudo
+  que ele usa (o repositório do professor, o tradutor) entra pronto em `FontesDaGeracao`.
+
 O `load` da etapa 4 e o `publicarAtividade` chamam o MESMO helper para repor o que faltar —
 item editado depois de gerado tem texto novo, logo hash novo. Enfileirar de um `load` é efeito
 colateral num GET, e é deliberado: `enfileirarAudioFaltante` pula o que tem áudio válido e o que
@@ -335,7 +382,10 @@ fila, storage e a espera da publicação sem subir o serviço de áudio.
 aluno digitar a resposta que quisesse: a correção continuaria "no servidor" corrigindo um texto
 que o próprio aluno escolheu (regra inviolável nº 2). Quem recebe o áudio é
 `routes/a/[slug]/fala/+server.ts` (e, na atividade de exemplo, `routes/exemplo/fala/+server.ts`,
-com teto por IP no lugar da tentativa e sem guardar nada; paginas.md "Exemplo").
+com teto por IP no lugar da tentativa e sem guardar nada; paginas.md "Exemplo"; e, na prévia do
+aluno, `(studio)/atividades/[id]/previa/fala/+server.ts`, com a sessão do professor dono da
+atividade e também sem guardar nada). O Player e a prévia passam as dicas pelo MESMO filtro de
+vocabulário (`server/asr/vocabulario.ts`), que descarta a frase inteira que item antigo trazia ali.
 
 **É um endpoint, não uma remote function** — o único caminho do Player que sobe binário. Remote
 function fala JSON, e áudio em base64 infla 33%. Ele segue todas as regras do Player mesmo
@@ -452,6 +502,11 @@ de até 32 textos, em sequência, e recusa resposta com contagem diferente da pe
   biblioteca. A sugestão ao vivo do formulário (`materiais/traducao.remote.ts`, `sugerirTraducao`)
   é conforto: não grava nada, tem guard e teto por professor (120 em 10 min — cada pedido é CPU do
   serviço que também transcreve a fala dos alunos), e pode falhar à vontade.
+- **As variações vêm junto quando é o SERVIDOR quem traduz** — a lista colada, e a frase salva
+  antes de a sugestão chegar (o botão não espera): `preencherTraducao` e `traduzirLote` pedem
+  também as variações (`variantesDasFrases`, o mesmo funil das questões de tradução, dois pedidos
+  para a lista inteira) e as gravam em `SentencePair.variants`, somadas às do professor. Sem isso
+  o material entrava sem as variações que a tela teria mostrado. Falhar nelas não impede gravar.
 - **Lote é tudo ou nada.** Tradutor fora do ar no meio da lista colada = nada gravado e a tela pede
   a tradução depois do separador. Um material avulso falha com `AVISO_SEM_TRADUTOR`, nunca 500.
 - **O par de idiomas**: no wizard, `activity.targetLang` → `activity.sourceLang`; na biblioteca, o
@@ -464,8 +519,9 @@ de até 32 textos, em sequência, e recusa resposta com contagem diferente da pe
 - **Ele também alimenta o "ligue os pares" do fecho**: `gerarItens` chama `paresDasFrases`, que
   escolhe palavras das frases (kernel puro), traduz num pedido e só guarda o par que faz a IDA E
   VOLTA (kernel.md "closing-match"). Sem tradutor ou com ele fora, volta vazio e a geração segue.
-- **E as variantes aceitas da questão de tradução** (kernel.md "Respostas aceitas"): depois do
-  `selectItems`, `comVariantesDaTraducao` pega os "traduza para o português" que ENTRARAM, pede
+- **E as variantes aceitas da questão de tradução** (kernel.md "Respostas aceitas"): depois de
+  separar pela quantidade, `comVariantesDaTraducao` pega os "traduza para o português" — os que
+  entraram E os de fora, que podem entrar na revisão e não podem chegar lá sem elas —, pede
   ao serviço as traduções ALTERNATIVAS da frase (`alternatives` no `/v1/translate`: as hipóteses
   do feixe perto da melhor na pontuação do modelo), filtra pelo tamanho da diferença no kernel e
   confere o sentido por ida e volta — a variante traduzida de novo tem de dar a frase original ou o

@@ -507,8 +507,8 @@
 											: r.proxima.abre
 												? `${r.proxima.tipo === 'vazio' ? 'A primeira' : 'Em dia. A próxima'} abre ${r.proxima.abre}`
 												: r.proxima.tipo === 'vazio'
-													? 'A primeira fase chega pelo seu e-mail'
-													: 'Em dia. A próxima chega pelo seu e-mail'}
+													? 'A primeira fase ainda não tem data'
+													: 'Em dia. A próxima ainda não tem data'}
 								</span>
 							</a>
 						</li>

@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { montarItemEditado, type EdicaoDoItem } from './item-editado';
+import { acharTrecho, montarQuestao, questaoDoItem, type ContextoDaQuestao } from './item-editado';
 import { readableAnswerKey } from '$lib/server/studio/answer-key';
+import { getInteraction } from '$lib/kernel/interactions/registry';
+import { enUS } from '$lib/kernel/language/profiles/en-US';
+import { jaJP } from '$lib/kernel/language/profiles/ja-JP';
+import { ptBR } from '$lib/kernel/language/profiles/pt-BR';
+import type { Questao } from '$lib/atividades/questao';
+
+const ligado = { tts: true, asr: true };
+const ctx = (extra: Partial<ContextoDaQuestao> = {}): ContextoDaQuestao => ({
+	alvo: enUS,
+	capacidades: ligado,
+	...extra
+});
 
 /** "Traduza a frase": lê em inglês, escreve em PORTUGUÊS (`answerLang: 'source'`). */
 const traduza = {
@@ -21,175 +33,356 @@ const ouca = {
 	grading: { mode: 'tolerant', tolerance: 0.9 }
 };
 
-/** "Ouça e monte": as peças saíram do texto do áudio. */
+/** "Monte a frase" gerado: a frase inteira não fica no item, só as peças. */
 const monte = {
-	prompt: { kind: 'audio', text: 'She is late', instructionKey: 'listen-and-assemble' },
+	prompt: { kind: 'text', text: 'Ela está atrasada.', instructionKey: 'assemble-from-source' },
 	interaction: {
 		type: 'assemble',
-		payload: { tokens: ['She', 'is', 'late'], distractors: [], accepted: [['She', 'is', 'late']] }
+		payload: {
+			tokens: ['She', 'is', 'late'],
+			distractors: ['was'],
+			accepted: [
+				['She', 'is', 'late'],
+				['is', 'She', 'late']
+			]
+		}
 	},
 	grading: { mode: 'sequence' }
 };
 
-const sem = (base: Partial<EdicaoDoItem>): EdicaoDoItem => ({
-	interaction: 'type',
-	gradingMode: 'tolerant',
-	...base
-});
+function ok(r: ReturnType<typeof montarQuestao>) {
+	if (!r.ok) throw new Error(r.error);
+	return r;
+}
 
-describe('montarItemEditado', () => {
-	it('salvar sem mudar nada PRESERVA a língua da resposta e o resto da correção', () => {
-		const r = montarItemEditado(
-			traduza,
-			sem({
-				payload: JSON.stringify({ accepted: ['Ela está atrasada.'] }),
-				promptText: 'She is late.',
-				instruction: 'Traduza a frase.'
-			})
-		);
-		expect(r.ok).toBe(true);
-		if (!r.ok) return;
-		// O bug: gravava `{ mode }` e a resposta em português passava a ser
+describe('montarQuestao', () => {
+	it('salvar sem mudar nada PRESERVA a língua da resposta', () => {
+		const r = ok(montarQuestao(questaoDoItem(traduza), ctx({ atual: traduza })));
+		// O bug antigo: gravava `{ mode }` e a resposta em português passava a ser
 		// corrigida com as regras do inglês (e ganhava o teclado do inglês).
 		expect(r.grading).toEqual({ mode: 'tolerant', tolerance: 0.9, answerLang: 'source' });
+		expect(r.interaction.payload).toEqual({ accepted: ['Ela está atrasada.'] });
+		expect(r.prompt.instructionKey).toBe('translate-to-source');
 	});
 
 	it('o enunciado igual ao padrão não é gravado como texto do professor', () => {
-		const r = montarItemEditado(
-			traduza,
-			sem({
-				payload: JSON.stringify({ accepted: ['x'] }),
-				promptText: 'She is late.',
-				instruction: 'Traduza a frase.'
-			})
+		const r = ok(montarQuestao(questaoDoItem(traduza), ctx({ atual: traduza })));
+		expect(r.prompt.instruction).toBeUndefined();
+		const escrito = ok(
+			montarQuestao(
+				{ ...questaoDoItem(traduza), enunciado: 'Passe para o português.' },
+				ctx({ atual: traduza })
+			)
 		);
-		expect(r.ok && r.prompt.instruction).toBe(undefined);
-		const p = montarItemEditado(
-			traduza,
-			sem({
-				payload: JSON.stringify({ accepted: ['x'] }),
-				promptText: 'She is late.',
-				instruction: 'Traduza para o português.'
-			})
-		);
-		expect(p.ok && p.prompt.instruction).toBe('Traduza para o português.');
+		expect(escrito.prompt.instruction).toBe('Passe para o português.');
 	});
 
-	it('o texto que é a própria questão não pode ser apagado', () => {
-		const r = montarItemEditado(
-			traduza,
-			sem({ payload: JSON.stringify({ accepted: ['x'] }), promptText: '  ' })
+	it('escuta sem a frase do áudio é recusada', () => {
+		const r = montarQuestao({ ...questaoDoItem(ouca), texto: ' ' }, ctx({ atual: ouca }));
+		expect(r.ok).toBe(false);
+	});
+
+	it('mudar a frase do áudio pede áudio novo e larga o arquivo antigo', () => {
+		const igual = ok(montarQuestao(questaoDoItem(ouca), ctx({ atual: ouca })));
+		expect(igual.audioMudou).toBe(false);
+		expect(igual.prompt.mediaId).toBe('med_1');
+
+		const outra = ok(
+			montarQuestao({ ...questaoDoItem(ouca), texto: 'He is late.' }, ctx({ atual: ouca }))
+		);
+		expect(outra.audioMudou).toBe(true);
+		expect(outra.prompt.mediaId).toBeUndefined();
+		// Na escuta, a frase ouvida é a resposta principal.
+		expect(outra.interaction.payload).toEqual({ accepted: ['He is late.', 'She is late.'] });
+	});
+
+	it('sem voz, a escuta nova é recusada', () => {
+		const r = montarQuestao(
+			{
+				tipo: 'escuta',
+				enunciado: '',
+				texto: 'Hello there',
+				campos: { interacao: 'type', aceitas: [], corrigeVoce: false }
+			},
+			ctx({ capacidades: { tts: false, asr: true } })
 		);
 		expect(r.ok).toBe(false);
 	});
 
-	it('o que o formulário não edita no prompt fica (o mediaId)', () => {
-		const r = montarItemEditado(
-			ouca,
-			sem({ payload: JSON.stringify({ accepted: ['She is late.'] }), promptText: 'She is late.' })
-		);
-		expect(r.ok && r.prompt.mediaId).toBe('med_1');
-		expect(r.ok && r.audioMudou).toBe(false);
-	});
-
-	it('mudar o texto de um áudio avisa que o arquivo antigo não serve mais', () => {
-		const r = montarItemEditado(
-			ouca,
-			sem({ payload: JSON.stringify({ accepted: ['She was late.'] }), promptText: 'She was late.' })
-		);
-		expect(r.ok && r.audioMudou).toBe(true);
-	});
-
-	it('áudio sem texto é recusado — é dele que o áudio sai', () => {
-		const r = montarItemEditado(
-			ouca,
-			sem({ payload: JSON.stringify({ accepted: ['x'] }), promptText: ' ' })
+	it('formato que não existe no tipo é recusado', () => {
+		const r = montarQuestao(
+			{ tipo: 'fala', enunciado: '', texto: '', campos: { interacao: 'order', falas: ['a', 'b'] } },
+			ctx()
 		);
 		expect(r.ok).toBe(false);
 	});
 
-	it('"digitar" em inglês vira lacuna, com o enunciado padrão da lacuna', () => {
-		const r = montarItemEditado(
-			ouca,
-			sem({
-				interaction: 'cloze',
-				payload: JSON.stringify({ masked: 'She ___ late.', accepted: ['is'] }),
-				promptText: 'She is late.',
-				instruction: 'Ouça e escreva o que você ouviu.'
-			})
-		);
-		expect(r.ok).toBe(true);
-		if (!r.ok) return;
-		expect(r.interaction.type).toBe('cloze');
-		expect(r.prompt.instructionKey).toBe('fill-the-blank');
-		// O enunciado do tipo antigo, escrito à mão, fica — é texto do professor.
-		expect(r.prompt.instruction).toBe('Ouça e escreva o que você ouviu.');
-	});
+	describe('lacuna', () => {
+		const lacuna = (frase: string, trecho: string, alvo = enUS): Questao['campos'] => {
+			const r = ok(
+				montarQuestao(
+					{
+						tipo: 'escrita',
+						enunciado: '',
+						texto: '',
+						campos: { interacao: 'cloze', frase, aceitas: [trecho] }
+					},
+					ctx({ alvo })
+				)
+			);
+			return r.interaction.payload as Questao['campos'];
+		};
 
-	it('"traduza para o português" não vira lacuna', () => {
-		const r = montarItemEditado(
-			traduza,
-			sem({
-				interaction: 'cloze',
-				payload: JSON.stringify({ masked: '___ late', accepted: ['x'] })
-			})
-		);
-		expect(r.ok).toBe(false);
-	});
-
-	it('lacuna sem ___ é recusada', () => {
-		const r = montarItemEditado(
-			ouca,
-			sem({
-				interaction: 'cloze',
-				payload: JSON.stringify({ masked: 'She is late.', accepted: ['is'] })
-			})
-		);
-		expect(r.ok).toBe(false);
-	});
-
-	it('correção que não vale para o tipo é recusada', () => {
-		const pl = JSON.stringify({ accepted: ['She is late.'] });
-		expect(
-			montarItemEditado(ouca, sem({ payload: pl, promptText: 'She is late.', gradingMode: 'asr' }))
-				.ok
-		).toBe(false);
-		expect(
-			montarItemEditado(
-				ouca,
-				sem({ payload: pl, promptText: 'She is late.', gradingMode: 'rubric' })
-			).ok
-		).toBe(true);
-		const lacuna = JSON.stringify({ masked: 'She ___ late.', accepted: ['is'] });
-		expect(
-			montarItemEditado(
-				ouca,
-				sem({ interaction: 'cloze', payload: lacuna, promptText: 'x', gradingMode: 'rubric' })
-			).ok
-		).toBe(false);
-	});
-
-	it('em "monte a frase" o gabarito e o texto do áudio ficam como o gerador fez', () => {
-		const r = montarItemEditado(monte, {
-			interaction: 'assemble',
-			gradingMode: 'sequence',
-			payload: JSON.stringify({ tokens: ['x'], distractors: [], accepted: [['x']] }),
-			promptText: 'Outra frase qualquer'
+		it('acha a palavra inteira, não um pedaço de outra', () => {
+			expect(lacuna('I have a cat.', 'a')).toEqual({ masked: 'I have ___ cat.', accepted: ['a'] });
 		});
-		expect(r.ok).toBe(true);
-		if (!r.ok) return;
-		expect(r.interaction.payload).toEqual(monte.interaction.payload);
-		expect(r.prompt.text).toBe('She is late');
+
+		it('aceita um trecho de várias palavras', () => {
+			expect(lacuna('She has been working here.', 'has been working')).toEqual({
+				masked: 'She ___ here.',
+				accepted: ['has been working']
+			});
+		});
+
+		it('funciona sem espaço entre as palavras (japonês)', () => {
+			expect(acharTrecho('明日友達に会います', '友達', jaJP)).toBe(2);
+		});
+
+		it('trecho que não está na frase é recusado', () => {
+			const r = montarQuestao(
+				{
+					tipo: 'escrita',
+					enunciado: '',
+					texto: '',
+					campos: { interacao: 'cloze', frase: 'I have a cat.', aceitas: ['av'] }
+				},
+				ctx()
+			);
+			expect(r.ok).toBe(false);
+		});
 	});
 
-	it('não deixa virar um tipo cujo gabarito o editor não monta', () => {
-		const r = montarItemEditado(ouca, sem({ interaction: 'choice', promptText: 'She is late.' }));
-		expect(r.ok).toBe(false);
+	describe('montar', () => {
+		it('a frase vira peças pelo segmentador do idioma', () => {
+			const r = ok(
+				montarQuestao(
+					{
+						tipo: 'leitura',
+						enunciado: '',
+						texto: '明日、友達に会います。',
+						campos: { interacao: 'assemble', frase: '明日友達に会います', distratores: [] }
+					},
+					ctx({ alvo: jaJP })
+				)
+			);
+			const payload = r.interaction.payload as { tokens: string[] };
+			expect(payload.tokens.length).toBeGreaterThan(2);
+			expect(payload.tokens.join('')).toBe('明日友達に会います');
+		});
+
+		it('sem frase escrita, as peças e as ordens aceitas gravadas continuam', () => {
+			const q = questaoDoItem(monte);
+			expect(q.campos).toEqual({ interacao: 'assemble', frase: '', distratores: ['was'] });
+			const r = ok(montarQuestao(q, ctx({ atual: monte })));
+			expect(r.interaction.payload).toMatchObject({
+				tokens: ['She', 'is', 'late'],
+				accepted: monte.interaction.payload.accepted
+			});
+		});
+
+		it('a frase do material abre o editor com a frase inteira', () => {
+			const q = questaoDoItem(monte, { fraseDoMaterial: 'She is late.' });
+			expect(q.campos).toMatchObject({ frase: 'She is late.' });
+		});
 	});
 
-	it('gabarito que não é JSON vira erro escrito, não 500', () => {
-		const r = montarItemEditado(ouca, sem({ payload: '{quebrado', promptText: 'She is late.' }));
-		expect(r).toEqual({ ok: false, error: expect.any(String) });
+	describe('escolher', () => {
+		const escolha = (
+			opcoes: string[],
+			certa: number,
+			tipo: Questao['tipo'] = 'leitura',
+			texto = ''
+		) =>
+			montarQuestao(
+				{ tipo, enunciado: '', texto, campos: { interacao: 'choice', opcoes, certa } },
+				ctx({ alvo: ptBR })
+			);
+
+		it('alternativas vazias saem e a certa continua apontando para ela', () => {
+			const r = ok(escolha(['', 'gato', '', 'cachorro'], 3, 'leitura', 'dog'));
+			expect(r.interaction.payload).toEqual({ options: ['gato', 'cachorro'], correctIndex: 1 });
+		});
+
+		it('alternativas iguais são recusadas, inclusive com o acento em duas formas', () => {
+			// "café" pré-composto contra "cafe" + acento combinante (regra nº 6).
+			expect(escolha(['café', 'café'], 0, 'leitura', 'coffee').ok).toBe(false);
+		});
+
+		it('na leitura, escolher sem nada para ler é recusado', () => {
+			expect(escolha(['gato', 'cachorro'], 0)).toEqual({
+				ok: false,
+				error: 'Escreva o que o aluno lê: a frase, o termo ou a pergunta.'
+			});
+		});
+
+		it('na escuta, a certa é a frase do áudio', () => {
+			expect(escolha(['She is late.', 'He is late.'], 1, 'escuta', 'She is late.').ok).toBe(false);
+			expect(escolha(['She is late.', 'He is late.'], 0, 'escuta', 'She is late.').ok).toBe(true);
+		});
+	});
+
+	describe('associar, ordenar, tocar, falar', () => {
+		it('par incompleto, par repetido e pares demais são recusados', () => {
+			const par = (pares: { esquerda: string; direita: string }[]) =>
+				montarQuestao(
+					{ tipo: 'leitura', enunciado: '', texto: '', campos: { interacao: 'match', pares } },
+					ctx()
+				);
+			expect(
+				par([
+					{ esquerda: 'dog', direita: '' },
+					{ esquerda: 'cat', direita: 'gato' }
+				]).ok
+			).toBe(false);
+			expect(
+				par([
+					{ esquerda: 'dog', direita: 'cão' },
+					{ esquerda: 'dog', direita: 'cachorro' }
+				]).ok
+			).toBe(false);
+			expect(
+				par(Array.from({ length: 6 }, (_, i) => ({ esquerda: `a${i}`, direita: `b${i}` }))).ok
+			).toBe(false);
+			expect(
+				ok(
+					par([
+						{ esquerda: 'dog', direita: 'cão' },
+						{ esquerda: 'cat', direita: 'gato' },
+						{ esquerda: '', direita: '' }
+					])
+				).grading.mode
+			).toBe('set');
+		});
+
+		it('ordenar recusa falas repetidas', () => {
+			const r = montarQuestao(
+				{
+					tipo: 'leitura',
+					enunciado: '',
+					texto: '',
+					campos: { interacao: 'order', falas: ['Hi!', 'hi', 'Bye'] }
+				},
+				ctx()
+			);
+			expect(r.ok).toBe(false);
+		});
+
+		it('tocar na palavra guarda os espaços e volta à mesma frase', () => {
+			const r = ok(
+				montarQuestao(
+					{
+						tipo: 'leitura',
+						enunciado: '',
+						texto: 'Qual é o verbo?',
+						campos: { interacao: 'select', frase: 'She works here.', certa: 'works' }
+					},
+					ctx()
+				)
+			);
+			const payload = r.interaction.payload as {
+				segments: { text: string; selectable: boolean }[];
+				correctIndex: number;
+			};
+			expect(payload.segments[payload.correctIndex]).toEqual({ text: 'works', selectable: true });
+			expect(payload.segments.find((s) => s.text === ' ')?.selectable).toBe(false);
+			const volta = questaoDoItem({
+				prompt: r.prompt,
+				interaction: r.interaction,
+				grading: r.grading
+			});
+			expect(volta.campos).toEqual({
+				interacao: 'select',
+				frase: 'She works here.',
+				certa: 'works'
+			});
+		});
+
+		it('tocar na palavra pede uma pista ou um enunciado próprio: "a palavra certa" não diz qual', () => {
+			const tocar = (texto: string, enunciado = '') =>
+				montarQuestao(
+					{
+						tipo: 'leitura',
+						enunciado,
+						texto,
+						campos: { interacao: 'select', frase: 'She works here.', certa: 'works' }
+					},
+					ctx()
+				);
+			expect(tocar('')).toEqual({
+				ok: false,
+				error: 'Diga ao aluno qual palavra tocar: escreva uma pista ou um enunciado seu.'
+			});
+			expect(tocar('trabalha').ok).toBe(true);
+			expect(tocar('', 'Toque no verbo.').ok).toBe(true);
+		});
+
+		it('fala nova sem transcrição ligada é recusada', () => {
+			const fala: Questao = {
+				tipo: 'fala',
+				enunciado: '',
+				texto: '',
+				campos: { interacao: 'speak', frase: 'Good morning' }
+			};
+			expect(montarQuestao(fala, ctx({ capacidades: { tts: true, asr: false } })).ok).toBe(false);
+			expect(ok(montarQuestao(fala, ctx())).grading.mode).toBe('asr');
+		});
+
+		it('digitar com "você corrige" vira escrita livre', () => {
+			const r = ok(
+				montarQuestao(
+					{
+						tipo: 'escrita',
+						enunciado: 'Conte o seu fim de semana.',
+						texto: '',
+						campos: { interacao: 'type', aceitas: ['I went to the beach.'], corrigeVoce: true }
+					},
+					ctx()
+				)
+			);
+			expect(r.grading.mode).toBe('rubric');
+		});
+
+		it('digitar no texto sem enunciado próprio é recusado: não há padrão', () => {
+			const r = montarQuestao(
+				{
+					tipo: 'escrita',
+					enunciado: '',
+					texto: 'Bom dia',
+					campos: { interacao: 'type', aceitas: ['Good morning'], corrigeVoce: false }
+				},
+				ctx()
+			);
+			expect(r.ok).toBe(false);
+		});
+	});
+
+	it('toda questão montada valida no authoringSchema e não leva gabarito ao aluno', () => {
+		const r = ok(
+			montarQuestao(
+				{
+					tipo: 'leitura',
+					enunciado: '',
+					texto: 'gato',
+					campos: { interacao: 'choice', opcoes: ['cat', 'dog'], certa: 0 }
+				},
+				ctx()
+			)
+		);
+		const tipo = getInteraction(r.interaction.type);
+		expect(tipo.authoringSchema.safeParse(r.interaction.payload).success).toBe(true);
+		expect(JSON.stringify(tipo.toRuntime(r.interaction.payload, 'seed'))).not.toContain(
+			'correctIndex'
+		);
 	});
 });
 

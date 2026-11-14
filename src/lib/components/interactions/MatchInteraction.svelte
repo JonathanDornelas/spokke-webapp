@@ -68,6 +68,17 @@
 		pendingLeft = null;
 	}
 
+	/**
+	 * As duas colunas dividem as LINHAS (`subgrid`): cada coluna ocupa todas elas, e
+	 * a linha tem a altura do cartão mais alto dos dois lados. Com uma grade por
+	 * coluna, "estante de livros" quebrando em duas linhas descia a coluna inteira
+	 * da direita, e os cartões deixavam de ficar lado a lado. Os cabeçalhos são
+	 * uma linha também — dos dois lados, mesmo quando só um tem nome. Navegador sem
+	 * `subgrid` volta às duas grades soltas, que era o desenho de antes.
+	 */
+	const comCabecalho = $derived(!!(leftLabel || rightLabel));
+	const linhas = $derived(Math.max(item.left.length, item.right.length) + (comCabecalho ? 1 : 0));
+
 	const cell =
 		'flex min-h-12 items-center rounded-box border-[1.5px] px-3.5 py-3 text-base transition-[transform,border-color,translate,scale] duration-150 hover:-translate-y-0.5';
 	const badge = 'grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold me-2.5';
@@ -78,8 +89,8 @@
 </p>
 
 <div class="grid grid-cols-2 gap-2.5">
-	<div class="grid gap-2.5">
-		{#if leftLabel}
+	<div class="grid grid-rows-subgrid gap-2.5" style:grid-row="span {linhas}">
+		{#if comCabecalho}
 			<p class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
 				{leftLabel}
 			</p>
@@ -108,8 +119,8 @@
 			</button>
 		{/each}
 	</div>
-	<div class="grid gap-2.5">
-		{#if rightLabel}
+	<div class="grid grid-rows-subgrid gap-2.5" style:grid-row="span {linhas}">
+		{#if comCabecalho}
 			<p class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
 				{rightLabel}
 			</p>

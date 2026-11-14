@@ -8,6 +8,13 @@ import { getProfile, labelForTag } from '$lib/kernel/language/profiles';
 import { KERNEL_TO_KIND, type MaterialRow } from '$lib/components/material-form';
 import { estadoDaIa } from '$lib/server/ia/estado';
 import { isTraducaoLigada } from '$lib/server/traducao';
+import { isTtsConfigured } from '$lib/server/tts';
+import { isAsrConfigured } from '$lib/server/asr';
+import {
+	lerTiposGerais,
+	lerTiposPorMaterial,
+	montarPlano
+} from '$lib/atividades/tipos-por-material';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const teacher = requireTeacher(locals);
@@ -34,7 +41,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 						? [
 								data.title,
 								data.questions.length === 0
-									? 'Sem perguntas — nada será gerado deste texto'
+									? 'Sem perguntas ainda: é delas que saem as questões'
 									: `${data.questions.length} ${data.questions.length === 1 ? 'pergunta' : 'perguntas'} · ${data.text.slice(0, 60)}`
 							]
 						: [data.lines[0]?.text ?? '', `${data.lines.length} falas`];
@@ -67,12 +74,20 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			raw: 'text' in data ? data.text : '',
 			note: 'note' in data ? (data.note ?? '') : '',
 			example: 'example' in data ? (data.example ?? '') : '',
+			variants: 'variants' in data ? (data.variants ?? []) : [],
 			questions: 'questions' in data ? data.questions : [],
 			lines: 'lines' in data ? data.lines : []
 		};
 	});
 
 	const profile = getProfile(activity.targetLang);
+	// O plano de geração: quantas questões entram e os tipos de cada material.
+	// Material que entrou depois do último ajuste nasce com o bloco de cima.
+	const plano = montarPlano(
+		lerTiposGerais(activity.skills),
+		lerTiposPorMaterial(activity.tiposPorMaterial),
+		units.map((u) => u.id)
+	);
 	return {
 		activity: {
 			id: activity.id,
@@ -89,6 +104,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		// "Gerar com IA" escreve no par de idiomas DA ATIVIDADE.
 		ia: await estadoDaIa(teacher, { alvo: activity.targetLang, origem: activity.sourceLang }),
 		// A tradução da frase do aluno sai sozinha quando há tradutor (adr-006).
-		traducaoAutomatica: isTraducaoLigada()
+		traducaoAutomatica: isTraducaoLigada(),
+		plano: { itemTarget: activity.itemTarget, geral: plano.geral, porMaterial: plano.porMaterial },
+		// Sem voz no idioma não há escuta; sem transcrição não há fala. Os tipos
+		// aparecem desligados, com o motivo, em vez de prometer o que não sai.
+		capacidades: {
+			tts: isTtsConfigured() && profile.tts.voices.length > 0,
+			asr: isAsrConfigured()
+		}
 	};
 };

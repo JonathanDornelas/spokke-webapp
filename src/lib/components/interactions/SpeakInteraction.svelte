@@ -17,9 +17,10 @@
 		ontoggle,
 		estado = 'ocioso',
 		segundos = 0,
-		maxSegundos = 30,
+		maxSegundos = 10,
 		ouvido = null,
 		ouvindo = false,
+		erro = null,
 		corrigida = false
 	}: {
 		item: SpeakRuntimeItem;
@@ -28,14 +29,23 @@
 		estado?: EstadoDaGravacao;
 		segundos?: number;
 		maxSegundos?: number;
-		/** O que o serviço entendeu da gravação, antes de enviar. */
+		/**
+		 * O que o serviço entendeu da gravação, antes de enviar. Texto vazio quer
+		 * dizer que ele ouviu e não reconheceu palavra nenhuma.
+		 */
 		ouvido?: string | null;
 		/** A gravação subiu e a transcrição ainda não voltou. */
 		ouvindo?: boolean;
 		/**
-		 * Já corrigida e sem como regravar: o microfone e o "Entendemos" saem (o
-		 * veredito embaixo já diz o que se ouviu). Só o celular da home usa — ali a
-		 * frase e o veredito precisam caber na tela do aparelho.
+		 * O que deu errado no caminho até o serviço de áudio: fila cheia, gravação
+		 * vazia, sem conexão. Toma o lugar do "pronta para enviar", que diante de
+		 * uma recusa do servidor seria mentir para o aluno.
+		 */
+		erro?: string | null;
+		/**
+		 * Já respondida, sem como regravar: o microfone e o "Entendemos" saem (o
+		 * veredito embaixo já diz o que se ouviu). No Player, toda questão de
+		 * fala respondida; no celular da home, a corrigida.
 		 */
 		corrigida?: boolean;
 	} = $props();
@@ -46,6 +56,30 @@
 		indisponivel: 'Este navegador não grava áudio. Pule esta questão e siga em frente.'
 	};
 </script>
+
+{#snippet aviso(texto: string, papel: 'status' | 'alert')}
+	<!-- Falha no caminho, não veredito: ícone e texto, sem as cores da correção. -->
+	<p
+		class="flex max-w-[40ch] items-start gap-2 text-start text-[13px] leading-snug text-base-content/70"
+		role={papel}
+	>
+		<svg
+			class="mt-px size-4 shrink-0 text-base-content/65"
+			viewBox="0 0 24 24"
+			fill="none"
+			aria-hidden="true"
+		>
+			<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
+			<path
+				d="M12 7.5v5.5M12 16.5h.01"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+			/>
+		</svg>
+		{texto}
+	</p>
+{/snippet}
 
 <p dir={item.dir} class="mb-1.5 font-content text-[22px] leading-normal">{item.target}</p>
 {#if item.ipa}
@@ -61,13 +95,16 @@
 <div class="mt-auto mb-6 flex flex-col items-center gap-3" class:hidden={corrigida}>
 	<Recorder
 		{recording}
+		abrindo={estado === 'abrindo'}
 		size="lg"
 		{ontoggle}
-		hint={estado === 'gravando'
-			? 'Fale a frase — vamos parar sozinhos quando você terminar'
-			: estado === 'pronto'
-				? 'Toque para gravar de novo'
-				: 'Toque para gravar'}
+		hint={estado === 'abrindo'
+			? 'Abrindo o microfone…'
+			: estado === 'gravando'
+				? 'Fale a frase — vamos parar sozinhos quando você terminar'
+				: estado === 'pronto'
+					? 'Toque para gravar de novo'
+					: 'Toque para gravar'}
 	/>
 
 	{#if estado === 'gravando'}
@@ -77,11 +114,21 @@
 		<p class="font-mono text-[13px] text-base-content/65" role="status">
 			{segundos}s <span class="opacity-60">/ {maxSegundos}s</span>
 		</p>
+	{:else if erro}
+		{@render aviso(erro, 'alert')}
 	{:else if estado === 'pronto' && ouvindo}
 		<p class="flex items-center gap-2 text-[13px] font-semibold text-base-content/65" role="status">
 			<Loading variant="fila" size={11} label="Ouvindo a gravação" />
 			Ouvindo…
 		</p>
+	{:else if estado === 'pronto' && ouvido === ''}
+		<!-- O serviço ouviu e não reconheceu palavra nenhuma: quase sempre o
+		     microfone longe ou coberto. Dá para enviar assim mesmo, mas o aluno
+		     merece saber antes de gastar a questão. -->
+		{@render aviso(
+			'Não entendemos nenhuma palavra. Fale mais perto do microfone e grave de novo.',
+			'status'
+		)}
 	{:else if estado === 'pronto' && ouvido}
 		<!-- O que foi ENTENDIDO, antes de enviar. É a fala dele mesmo, não
 		     gabarito — e é o que deixa o aluno decidir entre enviar e regravar,

@@ -150,9 +150,10 @@ export async function painelDoInicio(teacher: Professor, agora: Date = new Date(
 			take: 60,
 			select: { name: true, account: { select: { avatar: true } } }
 		}),
+		// Os da biblioteca: o arquivado saiu dela e do limite do plano.
 		prisma.contentUnit.groupBy({
 			by: ['kind'],
-			where: { teacherId: teacher.id },
+			where: { teacherId: teacher.id, archivedAt: null },
 			_count: { _all: true }
 		}),
 		listaDeResultados(teacher.id)

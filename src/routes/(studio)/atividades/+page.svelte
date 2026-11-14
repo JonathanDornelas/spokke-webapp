@@ -2,9 +2,13 @@
 	// Lista de atividades. Com zero atividades, esta rota renderiza o ONBOARDING —
 	// é a primeira impressão do Studio, não uma lista vazia (paginas.md "Mapa").
 	//
-	// Duas formas para a mesma lista: TABELA no desktop (densa, o Studio pode
-	// ser rico) e CARTÕES no celular, onde uma tabela de 5 colunas não cabe.
+	// No desenho comum das listas do Studio (components.md "Listas do Studio"):
+	// cabeçalho com "Nova atividade", busca e filtros, chips de situação, a barra
+	// do que está marcado, a tabela (cartões no celular) e a paginação. Marcar
+	// linhas arquiva, desarquiva ou apaga várias de uma vez; o "⋯" de cada linha
+	// faz o mesmo com uma.
 	import { resolve } from '$app/paths';
+	import { invalidateAll } from '$app/navigation';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import ScoreBar from '$lib/components/ScoreBar.svelte';
@@ -13,6 +17,31 @@
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
 	import FiltroIdioma from '$lib/components/FiltroIdioma.svelte';
 	import { casaComFiltro } from '$lib/idiomas';
+	import { casaComBusca } from '$lib/busca';
+	import CabecalhoDaLista from '$lib/components/lista/CabecalhoDaLista.svelte';
+	import FerramentasDaLista from '$lib/components/lista/FerramentasDaLista.svelte';
+	import ChipsDaLista from '$lib/components/lista/ChipsDaLista.svelte';
+	import BarraDeSelecao from '$lib/components/lista/BarraDeSelecao.svelte';
+	import MenuDeAcoes from '$lib/components/lista/MenuDeAcoes.svelte';
+	import VazioDaLista from '$lib/components/lista/VazioDaLista.svelte';
+	import ConfirmarAcao from '$lib/components/lista/ConfirmarAcao.svelte';
+	import {
+		BOTAO_NOVO,
+		CABECALHO_DA_TABELA,
+		CARTAO_DA_LISTA,
+		ICONE_MAIS,
+		LINHA_DA_TABELA,
+		LINK_DA_LINHA,
+		POR_CIMA_DO_LINK,
+		POR_PAGINA,
+		SELECT_DA_LISTA,
+		TABELA,
+		alternar,
+		alternarPagina,
+		estadoDaPagina,
+		indeterminado
+	} from '$lib/components/lista/lista';
+	import { apagarAtividades, arquivarAtividades, desarquivarAtividades } from './atividades.remote';
 
 	interface Score {
 		correct: number;
@@ -62,7 +91,7 @@
 		activities: [
 			{
 				id: 'atv_01',
-				title: 'Present perfect — turma B',
+				title: 'Present perfect · turma B',
 				itemCount: 8,
 				skills: ['listening', 'reading', 'writing'],
 				language: 'Inglês',
@@ -74,113 +103,222 @@
 				attempts: 18,
 				invited: 24,
 				score: { correct: 12, partial: 4, incorrect: 2 }
-			},
-			{
-				id: 'atv_02',
-				title: 'Saudações e apresentação',
-				itemCount: 6,
-				skills: ['speaking', 'listening'],
-				language: 'Árabe',
-				idioma: 'ar-SA',
-				noAr: false,
-				arquivada: false,
-				level: null,
-				modulos: [],
-				attempts: null,
-				invited: null,
-				score: { correct: 0, partial: 0, incorrect: 0 }
-			},
-			{
-				id: 'atv_03',
-				title: 'Números e horas',
-				itemCount: 10,
-				skills: ['listening'],
-				language: 'Japonês',
-				idioma: 'ja-JP',
-				noAr: true,
-				arquivada: false,
-				level: null,
-				modulos: [],
-				attempts: 31,
-				invited: 31,
-				score: { correct: 28, partial: 2, incorrect: 1 }
 			}
 		] as ActivityRow[],
-		totalCount: 3,
-		activeCount: 3,
+		totalCount: 1,
+		activeCount: 1,
 		archivedCount: 0,
-		publishedCount: 2,
-		draftCount: 1,
-		resume: {
-			id: 'atv_04',
-			title: 'Comida e restaurante',
-			materiais: 7,
-			itens: 0,
-			editadoEm: 'há 2 dias',
-			etapa: 2,
-			etapaLabel: 'Materiais'
-		} as Resume | null,
-		aCorrigir: 3,
+		publishedCount: 1,
+		draftCount: 0,
+		resume: null,
+		aCorrigir: 0,
 		mes: { nome: 'Setembro', tentativas: 49, acertoMedio: 74, respostas: 140 }
 	};
 
 	let { data: dataProp }: { data?: Partial<PageData> } = $props();
 	const data = $derived(withMock(dataProp, MOCK));
 
-	// Os chips eram DECORATIVOS: nenhum `onclick`, e o primeiro sempre pintado
-	// como ativo. Agora eles filtram de verdade — a lista inteira chega no
-	// loader, então a troca é instantânea e não custa ida ao servidor.
-	// "Arquivadas" só aparece quando existe alguma: arquivar é como o professor
-	// libera vaga no plano (docs/adr-002-billing.md), e "Todas" não as mistura —
-	// elas estão fora do ar para quem não começou.
-	type Filtro = 'todas' | 'publicadas' | 'rascunhos' | 'arquivadas';
-	let filtro = $state<Filtro>('todas');
-	// Nível e módulo são filtros a MAIS, combinados com o de estado: "as B1 do
-	// módulo Frutas que estão no ar". Vazio = todos.
+	// ── busca, filtros e ordem: de TELA ─────────────────────────────────────
+	// A lista inteira chega no loader (é dado do próprio professor), então nada
+	// aqui custa ida ao servidor. "Arquivadas" é uma situação à parte: "Todas"
+	// não as mistura, porque elas estão fora do ar para quem não começou.
+	type Situacao = 'todas' | 'publicadas' | 'rascunhos' | 'arquivadas';
+	type Ordem = 'recentes' | 'nome' | 'tentativas';
+	let busca = $state('');
+	let situacao = $state<Situacao>('todas');
 	let filtroNivel = $state<NivelId | ''>('');
 	let filtroModulo = $state('');
 	let filtroIdioma = $state('');
+	let ordem = $state<Ordem>('recentes');
+	let pagina = $state(1);
+
 	const modulosNaLista = $derived(
 		[...new Map(data.activities.flatMap((a) => a.modulos).map((m) => [m.id, m])).values()].sort(
 			(x, y) => x.name.localeCompare(y.name, 'pt-BR')
 		)
 	);
-	let pagina = $state(1);
 
-	const filtros: { id: Filtro; label: string; n: number }[] = $derived([
+	const situacoes = $derived<{ id: Situacao; label: string; n: number }[]>([
 		{ id: 'todas', label: 'Todas', n: data.activeCount },
-		{ id: 'publicadas', label: 'Publicadas', n: data.publishedCount },
+		{ id: 'publicadas', label: 'No ar', n: data.publishedCount },
 		{ id: 'rascunhos', label: 'Rascunhos', n: data.draftCount },
-		...(data.archivedCount > 0
-			? [{ id: 'arquivadas' as const, label: 'Arquivadas', n: data.archivedCount }]
-			: [])
+		{ id: 'arquivadas', label: 'Arquivadas', n: data.archivedCount }
 	]);
 
 	const visiveis = $derived(
-		data.activities.filter(
-			(a) =>
-				(filtro === 'arquivadas'
-					? a.arquivada
-					: !a.arquivada &&
-						(filtro === 'todas' ? true : filtro === 'publicadas' ? a.noAr : !a.noAr)) &&
-				(!filtroNivel || a.level === filtroNivel) &&
-				(!filtroModulo || a.modulos.some((m) => m.id === filtroModulo)) &&
-				casaComFiltro(a.idioma, filtroIdioma)
-		)
+		data.activities
+			.filter(
+				(a) =>
+					(situacao === 'arquivadas'
+						? a.arquivada
+						: !a.arquivada &&
+							(situacao === 'todas' ? true : situacao === 'publicadas' ? a.noAr : !a.noAr)) &&
+					(!filtroNivel || a.level === filtroNivel) &&
+					(!filtroModulo || a.modulos.some((m) => m.id === filtroModulo)) &&
+					casaComFiltro(a.idioma, filtroIdioma) &&
+					casaComBusca(a.title, busca)
+			)
+			.sort((x, y) =>
+				ordem === 'nome'
+					? x.title.localeCompare(y.title, 'pt-BR')
+					: ordem === 'tentativas'
+						? (y.attempts ?? -1) - (x.attempts ?? -1)
+						: 0
+			)
 	);
-
-	const POR_PAGINA = 8;
 	const naPagina = $derived(visiveis.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA));
 
-	// Trocar de filtro volta para a primeira página: manter a 3ª ao filtrar de
-	// 20 para 4 atividades deixava a tabela vazia sem explicação.
-	function escolher(id: Filtro) {
-		filtro = id;
-		pagina = 1;
+	const filtrando = $derived(
+		!!busca.trim() || !!filtroNivel || !!filtroModulo || !!filtroIdioma || situacao !== 'todas'
+	);
+	function limparFiltros() {
+		busca = '';
+		filtroNivel = '';
+		filtroModulo = '';
+		filtroIdioma = '';
+		situacao = 'todas';
 	}
+
+	// ── a seleção ───────────────────────────────────────────────────────────
+	// Filtrar, buscar ou trocar de situação volta para a página 1 E desmarca: a
+	// ação em massa vale para o que está na tela, e uma linha que sumiu no filtro
+	// não pode ser arquivada sem o professor vê-la.
+	let marcados = $state<string[]>([]);
+	$effect(() => {
+		void busca;
+		void situacao;
+		void filtroNivel;
+		void filtroModulo;
+		void filtroIdioma;
+		pagina = 1;
+		marcados = [];
+	});
+	const idsDaPagina = $derived(naPagina.map((a) => a.id));
+	const daPagina = $derived(estadoDaPagina(marcados, idsDaPagina));
+
+	// ── arquivar, desarquivar, apagar ───────────────────────────────────────
+	type Acao = 'arquivar' | 'apagar';
+	let confirmando = $state<{ acao: Acao; ids: string[] } | null>(null);
+	let dialogoAberto = $state(false);
+	let ocupado = $state<string | null>(null);
+	let erro = $state<string | null>(null);
+	let aviso = $state<string | null>(null);
+	const alvo = $derived(
+		confirmando ? data.activities.filter((a) => confirmando?.ids.includes(a.id)) : []
+	);
+	const tentativasDoAlvo = $derived(alvo.reduce((n, a) => n + (a.attempts ?? 0), 0));
+
+	function pedir(acao: Acao, ids: string[]) {
+		erro = null;
+		aviso = null;
+		confirmando = { acao, ids };
+		dialogoAberto = true;
+	}
+
+	function palavra(n: number, um: string, varios: string) {
+		return `${n} ${n === 1 ? um : varios}`;
+	}
+
+	async function confirmar() {
+		if (!confirmando) return;
+		const { acao, ids } = confirmando;
+		ocupado = ids.length === 1 ? ids[0] : 'varias';
+		erro = null;
+		try {
+			if (acao === 'arquivar') {
+				const r = await arquivarAtividades({ activityIds: ids });
+				aviso = `${palavra(r.quantas, 'atividade arquivada', 'atividades arquivadas')}. Estão em "Arquivadas".`;
+			} else {
+				const r = await apagarAtividades({ activityIds: ids, confirmacao: 'apagar' });
+				if (!r.ok) {
+					erro = r.error;
+					return;
+				}
+				aviso = `${palavra(r.quantas, 'atividade apagada', 'atividades apagadas')}.`;
+			}
+			marcados = marcados.filter((id) => !ids.includes(id));
+			dialogoAberto = false;
+			await invalidateAll();
+		} catch {
+			erro = 'Não deu para concluir agora. Tente de novo em instantes.';
+		} finally {
+			ocupado = null;
+		}
+	}
+
+	/** Desarquivar não pede confirmação: nada se perde, e a vaga é conferida no servidor. */
+	async function desarquivar(ids: string[]) {
+		ocupado = ids.length === 1 ? ids[0] : 'varias';
+		erro = null;
+		aviso = null;
+		try {
+			const r = await desarquivarAtividades({ activityIds: ids });
+			if (!r.ok) {
+				erro = r.error;
+				return;
+			}
+			aviso = `${palavra(r.quantas, 'atividade voltou', 'atividades voltaram')} para a lista.`;
+			marcados = marcados.filter((id) => !ids.includes(id));
+			await invalidateAll();
+		} catch {
+			erro = 'Não deu para concluir agora. Tente de novo em instantes.';
+		} finally {
+			ocupado = null;
+		}
+	}
+
+	const ICONE = {
+		arquivar: 'M4 7.5h16v3H4zM5.5 10.5v8h13v-8M10 14h4',
+		desarquivar: 'M4 7.5h16v3H4zM5.5 10.5v8h13v-8M12 18v-5M9.5 15.5L12 13l2.5 2.5',
+		apagar: 'M6 7h12M9.5 7V5h5v2M8 7l.8 12h6.4L16 7'
+	};
 </script>
 
 <svelte:head><title>Atividades · Spokke</title></svelte:head>
+
+{#snippet estado(a: ActivityRow, tamanho: 'linha' | 'cartao')}
+	{@const base =
+		tamanho === 'linha'
+			? 'inline-block rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap'
+			: 'shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold whitespace-nowrap'}
+	{#if a.arquivada}
+		<span class="{base} border border-dashed border-line text-base-content/65">arquivada</span>
+	{:else if a.noAr}
+		<span class="{base} bg-primary text-primary-content">No ar</span>
+	{:else}
+		<span class="{base} border border-line text-base-content/65">rascunho</span>
+	{/if}
+{/snippet}
+
+{#snippet tentativas(a: ActivityRow)}
+	{#if a.attempts !== null}
+		<span class="font-mono text-[13px] whitespace-nowrap text-base-content">
+			{a.attempts}{#if a.invited !== null}<span class="text-base-content/65">
+					/ {a.invited}</span
+				>{/if}
+		</span>
+	{:else}
+		<span class="text-base-content/65">—</span>
+	{/if}
+{/snippet}
+
+{#snippet menu(a: ActivityRow)}
+	<MenuDeAcoes
+		rotulo="Mais ações de {a.title}"
+		ocupado={ocupado === a.id}
+		acoes={[
+			a.arquivada
+				? { rotulo: 'Desarquivar', icone: ICONE.desarquivar, onclick: () => desarquivar([a.id]) }
+				: { rotulo: 'Arquivar', icone: ICONE.arquivar, onclick: () => pedir('arquivar', [a.id]) },
+			{
+				rotulo: 'Apagar',
+				icone: ICONE.apagar,
+				perigo: true,
+				onclick: () => pedir('apagar', [a.id])
+			}
+		]}
+	/>
+{/snippet}
 
 {#if data.totalCount === 0}
 	<div class="relative flex min-h-[70vh] items-center overflow-hidden px-4 py-12 lg:px-7 lg:py-14">
@@ -226,79 +364,26 @@
 	</div>
 {:else}
 	<div class="pagina-studio">
-		<div class="mb-4 flex flex-wrap items-end gap-4 lg:mb-[18px]">
-			<div>
-				<h1 class="mb-1 font-display text-[26px] font-semibold tracking-[-0.02em] lg:text-[27px]">
-					Atividades
-				</h1>
-				<p class="text-[13.5px] text-base-content/65">
-					{data.totalCount}
-					{data.totalCount === 1 ? 'atividade' : 'atividades'} · {data.publishedCount} publicadas
-					<span class="hidden lg:inline">· {data.mes.tentativas} tentativas neste mês</span>
-				</p>
-			</div>
-			<div class="flex-1"></div>
-			<!-- Nível e módulo: selects ao lado dos chips de estado. Só aparecem quando
-			     há o que escolher — um filtro de uma opção só é ruído. -->
-			<div class="flex flex-wrap gap-2">
-				<label class="sr-only" for="filtro-nivel">Filtrar por nível</label>
-				<select
-					id="filtro-nivel"
-					bind:value={filtroNivel}
-					onchange={() => (pagina = 1)}
-					class="select h-[38px] min-h-[38px] w-auto py-0 text-[13px]"
-				>
-					<option value="">Todos os níveis</option>
-					{#each NIVEIS as n (n.id)}
-						<option value={n.id}>{rotuloDoNivel(n.id)}</option>
-					{/each}
-				</select>
-				<FiltroIdioma
-					tags={data.activities.map((a) => a.idioma)}
-					bind:valor={filtroIdioma}
-					onmudou={() => (pagina = 1)}
-				/>
-				{#if modulosNaLista.length > 0}
-					<label class="sr-only" for="filtro-modulo">Filtrar por módulo</label>
-					<select
-						id="filtro-modulo"
-						bind:value={filtroModulo}
-						onchange={() => (pagina = 1)}
-						class="select h-[38px] min-h-[38px] w-auto py-0 text-[13px]"
-					>
-						<option value="">Todos os módulos</option>
-						{#each modulosNaLista as m (m.id)}
-							<option value={m.id}>{m.name}</option>
-						{/each}
-					</select>
-				{/if}
-			</div>
-			<!-- No celular os filtros rolam na horizontal. -->
-			<div class="-mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:flex-wrap lg:px-0">
-				{#each filtros as opcao (opcao.id)}
-					<button
-						type="button"
-						onclick={() => escolher(opcao.id)}
-						aria-pressed={filtro === opcao.id}
-						class="flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] transition-colors
-						       {filtro === opcao.id
-							? 'bg-base-300 font-bold text-primary'
-							: 'border border-line bg-base-200 text-base-content/65 hover:bg-base-300'}"
-					>
-						{opcao.label}
-						<span class="font-mono text-[12px] opacity-70">{opcao.n}</span>
-					</button>
-				{/each}
-			</div>
-		</div>
+		<CabecalhoDaLista titulo="Atividades">
+			{palavra(data.totalCount, 'atividade', 'atividades')} · {data.publishedCount} no ar
+			<span class="hidden lg:inline">· {data.mes.tentativas} tentativas neste mês</span>
+			{#snippet acao()}
+				<a href={resolve('/(studio)/atividades/nova')} class={BOTAO_NOVO}>
+					<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<path d={ICONE_MAIS} stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+					</svg>
+					Nova atividade
+				</a>
+			{/snippet}
+		</CabecalhoDaLista>
 
 		{#if data.resume}
 			<!-- A tarefa começada vem ANTES da lista: é a retomada, não mais um
 			     item qualquer. -->
 			<a
 				href={resolve('/(studio)/atividades/[id]/materiais', { id: data.resume.id })}
-				class="mb-4 flex flex-col gap-4 rounded-box bg-base-300 px-[22px] py-[22px] no-underline
-				       lg:mb-[18px] lg:flex-row lg:items-center lg:gap-[26px] lg:px-[26px]"
+				class="mb-[18px] flex flex-col gap-4 rounded-box bg-base-300 px-[22px] py-[22px] no-underline
+				       lg:flex-row lg:items-center lg:gap-[26px] lg:px-[26px]"
 			>
 				<div class="min-w-0 flex-1">
 					<p
@@ -321,12 +406,11 @@
 						{data.resume.title}
 					</p>
 					<p class="mb-3.5 text-[13.5px] text-base-content/65">
-						{data.resume.materiais}
-						{data.resume.materiais === 1 ? 'material colado' : 'materiais colados'}, {data.resume
+						{palavra(data.resume.materiais, 'material colado', 'materiais colados')}, {data.resume
 							.itens === 0
-							? 'itens ainda não gerados'
-							: `${data.resume.itens} ${data.resume.itens === 1 ? 'item gerado' : 'itens gerados'}`}.
-						Editada {data.resume.editadoEm}.
+							? 'questões ainda não geradas'
+							: palavra(data.resume.itens, 'questão gerada', 'questões geradas')}. Editada {data
+							.resume.editadoEm}.
 					</p>
 					<div class="flex items-center gap-3.5">
 						<div class="h-[7px] w-full max-w-[300px] overflow-hidden rounded-full bg-base-100">
@@ -357,54 +441,134 @@
 			</a>
 		{/if}
 
-		<!-- Tabela: desktop. -->
-		<div class="hidden overflow-hidden rounded-box border border-line lg:block">
-			<div
-				class="grid grid-cols-[2.4fr_1fr_1fr_1.4fr_86px] gap-4 border-b border-line bg-base-200 px-[18px] py-[11px] text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase"
+		<FerramentasDaLista bind:busca rotulo="Buscar atividade">
+			<label class="sr-only" for="filtro-nivel">Filtrar por nível</label>
+			<select id="filtro-nivel" bind:value={filtroNivel} class={SELECT_DA_LISTA}>
+				<option value="">Todos os níveis</option>
+				{#each NIVEIS as n (n.id)}
+					<option value={n.id}>{rotuloDoNivel(n.id)}</option>
+				{/each}
+			</select>
+			<FiltroIdioma tags={data.activities.map((a) => a.idioma)} bind:valor={filtroIdioma} />
+			{#if modulosNaLista.length > 0}
+				<label class="sr-only" for="filtro-modulo">Filtrar por módulo</label>
+				<select id="filtro-modulo" bind:value={filtroModulo} class={SELECT_DA_LISTA}>
+					<option value="">Todos os módulos</option>
+					{#each modulosNaLista as m (m.id)}
+						<option value={m.id}>{m.name}</option>
+					{/each}
+				</select>
+			{/if}
+			<label class="sr-only" for="ordem-atividades">Ordenar atividades</label>
+			<select id="ordem-atividades" bind:value={ordem} class={SELECT_DA_LISTA}>
+				<option value="recentes">Mais recentes</option>
+				<option value="nome">Nome (A–Z)</option>
+				<option value="tentativas">Mais tentativas</option>
+			</select>
+		</FerramentasDaLista>
+
+		<ChipsDaLista opcoes={situacoes} bind:valor={situacao} rotulo="Filtrar atividades" />
+
+		{#if aviso}
+			<p class="mb-3 text-[13.5px] font-semibold text-base-content/75" role="status">{aviso}</p>
+		{/if}
+		{#if erro && !dialogoAberto}
+			<p class="mb-3 text-[13.5px] font-semibold text-error" role="alert">{erro}</p>
+		{/if}
+
+		{#if marcados.length > 0}
+			<BarraDeSelecao
+				quantos={marcados.length}
+				singular="atividade marcada"
+				plural="atividades marcadas"
+				onlimpar={() => (marcados = [])}
 			>
-				<span>Atividade</span><span>Idioma</span><span>Status</span><span>Tentativas</span><span
-				></span>
-			</div>
-			{#each naPagina as a (a.id)}
-				<a
-					href={resolve('/(studio)/atividades/[id]', { id: a.id })}
-					class="grid grid-cols-[2.4fr_1fr_1fr_1.4fr_86px] items-center gap-4 border-b border-line px-[18px] py-[15px] text-sm no-underline transition-colors last:border-0 hover:bg-base-200"
+				{#if situacao === 'arquivadas'}
+					<button
+						type="button"
+						onclick={() => desarquivar(marcados)}
+						disabled={ocupado !== null}
+						class="btn btn-sm motion-tap gap-2 btn-plain font-semibold"
+					>
+						Desarquivar
+					</button>
+				{:else}
+					<button
+						type="button"
+						onclick={() => pedir('arquivar', marcados)}
+						disabled={ocupado !== null}
+						class="btn btn-sm motion-tap gap-2 btn-plain font-semibold"
+					>
+						Arquivar
+					</button>
+				{/if}
+				<button
+					type="button"
+					onclick={() => pedir('apagar', marcados)}
+					disabled={ocupado !== null}
+					class="btn btn-sm motion-tap btn-outline-error font-semibold"
 				>
-					<div class="min-w-0">
-						<div class="truncate font-semibold text-base-content">{a.title}</div>
-						<div class="mt-0.5 truncate text-xs text-base-content/65">
-							{a.itemCount} itens · {a.skills.join(', ')}{a.level ? ` · ${a.level}` : ''}
+					Apagar
+				</button>
+			</BarraDeSelecao>
+		{/if}
+
+		{#if visiveis.length === 0}
+			<VazioDaLista
+				texto={situacao === 'arquivadas' && !busca.trim()
+					? 'Nenhuma atividade arquivada.'
+					: busca.trim()
+						? `Nenhuma atividade com “${busca.trim()}”.`
+						: situacao === 'todas' && data.activeCount === 0
+							? 'Todas as suas atividades estão arquivadas.'
+							: 'Nenhuma atividade com esse filtro.'}
+				onlimpar={filtrando ? limparFiltros : undefined}
+			/>
+		{:else}
+			<!-- Tabela: desktop. -->
+			<div class="hidden lg:block {TABELA}">
+				<div
+					class="grid grid-cols-[28px_2.4fr_1fr_1fr_1.4fr_44px] items-center {CABECALHO_DA_TABELA}"
+				>
+					<input
+						type="checkbox"
+						class="checkbox checkbox-primary"
+						checked={daPagina.todos}
+						use:indeterminado={daPagina.alguns}
+						onchange={() => (marcados = alternarPagina(marcados, idsDaPagina))}
+						aria-label="Marcar as atividades desta página"
+					/>
+					<span>Atividade</span><span>Idioma</span><span>Situação</span><span>Tentativas</span><span
+					></span>
+				</div>
+				{#each naPagina as a (a.id)}
+					<div
+						class="grid grid-cols-[28px_2.4fr_1fr_1fr_1.4fr_44px] {LINHA_DA_TABELA}
+						       {marcados.includes(a.id) ? 'bg-primary/6' : ''}"
+					>
+						<input
+							type="checkbox"
+							class="checkbox checkbox-primary {POR_CIMA_DO_LINK}"
+							checked={marcados.includes(a.id)}
+							onchange={() => (marcados = alternar(marcados, a.id))}
+							aria-label="Marcar {a.title}"
+						/>
+						<div class="min-w-0">
+							<a
+								href={resolve('/(studio)/atividades/[id]', { id: a.id })}
+								class="block truncate font-semibold text-base-content {LINK_DA_LINHA}">{a.title}</a
+							>
+							<div class="mt-0.5 truncate text-xs text-base-content/65">
+								{a.itemCount}
+								{a.itemCount === 1 ? 'questão' : 'questões'}{a.skills.length
+									? ` · ${a.skills.join(', ')}`
+									: ''}{a.level ? ` · ${a.level}` : ''}
+							</div>
 						</div>
-					</div>
-					<span class="min-w-0"><IdiomaTag tag={a.idioma} /></span>
-					<span>
-						{#if a.arquivada}
-							<span
-								class="inline-block rounded-full border border-dashed border-line px-2.5 py-1 text-xs font-bold whitespace-nowrap text-base-content/65"
-							>
-								arquivada
-							</span>
-						{:else if a.noAr}
-							<span
-								class="inline-block rounded-full bg-primary px-[11px] py-[5px] text-xs font-bold whitespace-nowrap text-primary-content"
-							>
-								No ar
-							</span>
-						{:else}
-							<span
-								class="inline-block rounded-full border border-line px-2.5 py-1 text-xs font-bold whitespace-nowrap text-base-content/65"
-							>
-								rascunho
-							</span>
-						{/if}
-					</span>
-					<span class="flex items-center gap-2.5">
-						{#if a.attempts !== null}
-							<span class="font-mono text-[13px] whitespace-nowrap text-base-content">
-								{a.attempts}{#if a.invited !== null}<span class="text-base-content/65">
-										/ {a.invited}</span
-									>{/if}
-							</span>
+						<span class="min-w-0"><IdiomaTag tag={a.idioma} /></span>
+						<span>{@render estado(a, 'linha')}</span>
+						<span class="flex items-center gap-2.5">
+							{@render tentativas(a)}
 							{#if a.score.correct + a.score.partial + a.score.incorrect > 0}
 								<span class="w-[92px]">
 									<ScoreBar
@@ -415,99 +579,65 @@
 									/>
 								</span>
 							{/if}
-						{:else}
-							<span class="text-base-content/65">—</span>
-						{/if}
-					</span>
-					<span class="text-end text-[13px] font-bold text-primary">Abrir</span>
-				</a>
-			{/each}
-		</div>
-
-		<!-- Cartões: celular. -->
-		<div class="grid gap-2.5 lg:hidden">
-			{#each naPagina as a (a.id)}
-				<a
-					href={resolve('/(studio)/atividades/[id]', { id: a.id })}
-					class="block rounded-box border border-line px-4 py-3.5 no-underline"
-				>
-					<div class="mb-1 flex items-start gap-3">
-						<span class="min-w-0 flex-1 font-semibold text-base-content">{a.title}</span>
-						{#if a.arquivada}
-							<span
-								class="shrink-0 rounded-full border border-dashed border-line px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-base-content/65"
-							>
-								arquivada
-							</span>
-						{:else if a.noAr}
-							<span
-								class="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-primary-content"
-							>
-								No ar
-							</span>
-						{:else}
-							<span
-								class="shrink-0 rounded-full border border-line px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-base-content/65"
-							>
-								rascunho
-							</span>
-						{/if}
-					</div>
-					<p class="mb-2.5 text-xs text-base-content/65">
-						{a.itemCount} itens · {a.skills.join(', ')}
-					</p>
-					{#if a.score.correct + a.score.partial + a.score.incorrect > 0}
-						<div class="mb-2.5">
-							<ScoreBar
-								correct={a.score.correct}
-								partial={a.score.partial}
-								incorrect={a.score.incorrect}
-								height="h-[5px]"
-							/>
-						</div>
-					{/if}
-					<div class="flex items-center gap-3 text-[13px]">
-						<IdiomaTag tag={a.idioma} />
-						<span class="font-mono text-base-content">
-							{#if a.attempts !== null}{a.attempts}{#if a.invited !== null}<span
-										class="text-base-content/65"
-									>
-										/ {a.invited}</span
-									>{/if}{:else}<span class="text-base-content/65">—</span>{/if}
 						</span>
-						<div class="flex-1"></div>
-						<span class="font-bold text-primary">Abrir</span>
+						{@render menu(a)}
 					</div>
-				</a>
-			{/each}
-		</div>
+				{/each}
+			</div>
 
-		{#if visiveis.length === 0}
-			<p
-				class="mt-3.5 rounded-box border border-line px-[18px] py-5 text-[13.5px] text-base-content/65"
-			>
-				{filtro === 'publicadas'
-					? 'Nenhuma atividade no ar ainda.'
-					: filtro === 'arquivadas'
-						? 'Nenhuma atividade arquivada.'
-						: filtro === 'todas'
-							? 'Todas as suas atividades estão arquivadas.'
-							: 'Nenhum rascunho — está tudo publicado.'}
-			</p>
+			<!-- Cartões: celular. -->
+			<ul class="grid list-none gap-2.5 p-0 lg:hidden">
+				{#each naPagina as a (a.id)}
+					<li
+						class="{CARTAO_DA_LISTA} {marcados.includes(a.id) ? 'border-primary bg-primary/6' : ''}"
+					>
+						<div class="mb-1 flex items-start gap-3">
+							<input
+								type="checkbox"
+								class="mt-0.5 checkbox checkbox-primary {POR_CIMA_DO_LINK}"
+								checked={marcados.includes(a.id)}
+								onchange={() => (marcados = alternar(marcados, a.id))}
+								aria-label="Marcar {a.title}"
+							/>
+							<a
+								href={resolve('/(studio)/atividades/[id]', { id: a.id })}
+								class="min-w-0 flex-1 font-semibold text-base-content {LINK_DA_LINHA}">{a.title}</a
+							>
+							{@render estado(a, 'cartao')}
+							{@render menu(a)}
+						</div>
+						<p class="mb-2.5 ps-8 text-xs text-base-content/65">
+							{a.itemCount}
+							{a.itemCount === 1 ? 'questão' : 'questões'}{a.skills.length
+								? ` · ${a.skills.join(', ')}`
+								: ''}
+						</p>
+						{#if a.score.correct + a.score.partial + a.score.incorrect > 0}
+							<div class="mb-2.5 ps-8">
+								<ScoreBar
+									correct={a.score.correct}
+									partial={a.score.partial}
+									incorrect={a.score.incorrect}
+									height="h-[5px]"
+								/>
+							</div>
+						{/if}
+						<div class="flex items-center gap-3 ps-8 text-[13px]">
+							<IdiomaTag tag={a.idioma} />
+							{@render tentativas(a)}
+						</div>
+					</li>
+				{/each}
+			</ul>
+
+			<Pagination bind:pagina porPagina={POR_PAGINA} total={visiveis.length} rotulo="atividades" />
 		{/if}
 
-		<!-- Era um "Ver todas" que não fazia nada, ao lado de uma contagem que
-		     descrevia o corte de 6 do loader. -->
-		<Pagination bind:pagina porPagina={POR_PAGINA} total={visiveis.length} rotulo="atividades" />
-
-		<!-- O que espera por você — e só quando existe. Os dois cartões que ficavam
-		     aqui sempre (um "nenhuma resposta esperando", outro repetindo o "Nova
-		     atividade") e a faixa com os números do mês (já no cabeçalho e em
-		     Resultados) saíram: eram a mesma informação pela segunda vez. -->
+		<!-- O que espera por você — e só quando existe. -->
 		{#if data.aCorrigir > 0}
 			<a
 				href={resolve('/(studio)/resultados')}
-				class="mt-3.5 flex items-center gap-3 rounded-box border border-line px-[18px] py-3.5 text-base-content no-underline transition-colors hover:border-primary hover:bg-base-200"
+				class="mt-3.5 flex items-center gap-3 rounded-[14px] border border-line px-[18px] py-3.5 text-base-content no-underline transition-colors hover:border-primary hover:bg-base-200"
 			>
 				<svg
 					class="size-[17px] shrink-0 text-primary"
@@ -535,4 +665,39 @@
 			</a>
 		{/if}
 	</div>
+
+	<ConfirmarAcao
+		bind:aberto={dialogoAberto}
+		titulo={confirmando?.acao === 'apagar'
+			? `Apagar ${palavra(alvo.length, 'atividade', 'atividades')} de vez?`
+			: `Arquivar ${palavra(alvo.length, 'atividade', 'atividades')}?`}
+		rotuloDoBotao={confirmando?.acao === 'apagar' ? 'Apagar de vez' : 'Arquivar'}
+		perigo={confirmando?.acao === 'apagar'}
+		digitar={confirmando?.acao === 'apagar' ? 'apagar' : undefined}
+		ocupado={ocupado !== null}
+		{erro}
+		onconfirmar={confirmar}
+	>
+		{#if confirmando?.acao === 'apagar'}
+			<p class="mb-3">
+				Some a atividade, as questões e o link{tentativasDoAlvo > 0
+					? `, e ${palavra(tentativasDoAlvo, 'tentativa', 'tentativas')} dos alunos`
+					: ''}. Não tem volta. Os materiais continuam na sua biblioteca.
+			</p>
+		{:else}
+			<p class="mb-3">
+				O link fecha para quem ainda não começou, e elas saem do limite do seu plano. Quem já está
+				respondendo termina, e os resultados ficam guardados. Dá para desarquivar depois, se couber
+				no plano.
+			</p>
+		{/if}
+		<ul class="grid list-none gap-1 p-0 text-[13px] text-base-content">
+			{#each alvo.slice(0, 5) as a (a.id)}
+				<li class="truncate">· {a.title}</li>
+			{/each}
+			{#if alvo.length > 5}
+				<li class="text-base-content/65">e mais {alvo.length - 5}</li>
+			{/if}
+		</ul>
+	</ConfirmarAcao>
 {/if}

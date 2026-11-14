@@ -236,7 +236,7 @@
 			</div>
 
 			<h2 class="mb-1 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
-				Itens ordenados por dificuldade
+				Questões ordenadas por dificuldade
 			</h2>
 			<p class="mb-4 text-[12.5px] leading-normal text-base-content/65">
 				O de cima é o que a turma mais errou — é ele que decide a próxima aula.
@@ -253,7 +253,7 @@
 					{#each data.items as item, i (item.id)}
 						<div>
 							<div class="mb-1.75 flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-								<span class="text-[13.5px] font-semibold">Item {item.index}</span>
+								<span class="text-[13.5px] font-semibold">Questão {item.index}</span>
 								<span class="text-[12.5px] text-base-content/65">{item.interactionLabel}</span>
 								<span class="min-w-1 flex-1"></span>
 								<span class="font-mono text-[12.5px] text-base-content/65"

@@ -335,7 +335,11 @@
 <div class="overflow-x-clip">
 	<div class="mx-auto max-w-[1200px] px-7">
 		<!-- 1 · Hero -->
-		<section class="grid items-center gap-14 py-[84px] pb-[72px] lg:grid-cols-[1.08fr_0.92fr]">
+		<!-- No celular o respiro de cima encolhe: os 84px do desktop eram uma faixa
+		     em branco antes da primeira palavra. -->
+		<section
+			class="grid items-center gap-12 pt-9 pb-12 lg:grid-cols-[1.08fr_0.92fr] lg:gap-14 lg:pt-[84px] lg:pb-[72px]"
+		>
 			<div class="relative z-2">
 				<p
 					class="mb-6 inline-flex animate-entrada rounded-full
@@ -354,18 +358,24 @@
 				</h1>
 				<p
 					style="--i: 2"
-					class="mb-[30px] max-w-[50ch] animate-entrada text-lg
-				       leading-relaxed text-pretty text-base-content/65 em-sequencia"
+					class="mb-7 max-w-[50ch] animate-entrada text-[17px] leading-relaxed
+				       text-pretty text-base-content/65 em-sequencia lg:mb-[30px] lg:text-lg"
 				>
 					Cole as frases, o vocabulário ou o texto que você já usa em aula. As questões de escuta,
 					fala, leitura e escrita saem dele, e você revisa antes de publicar. Quem recebe o link
 					abre no celular e responde ali mesmo.
 				</p>
-				<div style="--i: 3" class="mb-6 flex animate-entrada flex-wrap gap-3 em-sequencia">
+				<!-- No celular os dois botões ocupam a largura e têm o mesmo tamanho: lado a
+				     lado eles não cabem, e um embaixo do outro com larguras diferentes a
+				     coluna ficava torta. -->
+				<div
+					style="--i: 3"
+					class="mb-6 grid animate-entrada gap-3 em-sequencia sm:flex sm:flex-wrap"
+				>
 					<Button
 						href={resolve('/(studio)/atividades/nova')}
 						size="lg"
-						class="text-[17px] no-underline shadow-[0_12px_30px_-16px_color-mix(in_oklab,var(--color-primary)_65%,transparent)]"
+						class="w-full justify-center text-[17px] no-underline shadow-[0_12px_30px_-16px_color-mix(in_oklab,var(--color-primary)_65%,transparent)] sm:w-auto"
 					>
 						Criar uma atividade
 					</Button>
@@ -373,7 +383,7 @@
 						href={resolve('/exemplo')}
 						variant="outline"
 						size="lg"
-						class="gap-2.5 text-[17px] no-underline"
+						class="w-full justify-center gap-2.5 text-[17px] no-underline sm:w-auto"
 					>
 						<svg class="size-[18px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 							<path
@@ -598,13 +608,13 @@
 
 	<div class="mx-auto max-w-[1200px] px-7">
 		<!-- 2 · Quatro habilidades -->
-		<section id="habilidades" class="pt-[72px]">
-			<div class="mb-9 max-w-[62ch] reveal-row" use:reveal>
+		<section id="habilidades" class="pt-14 lg:pt-[72px]">
+			<div class="mb-7 max-w-[62ch] reveal-row lg:mb-9" use:reveal>
 				<p class="mb-4 text-xs font-bold tracking-[0.14em] text-primary uppercase">
 					Quatro habilidades
 				</p>
 				<h2
-					class="mb-3.5 font-display text-[40px] leading-[1.08] font-semibold tracking-[-0.025em] text-pretty"
+					class="mb-3.5 font-display text-chamada leading-[1.08] font-semibold tracking-[-0.025em] text-pretty"
 				>
 					Ninguém aprende a falar marcando alternativa.
 				</h2>
@@ -614,14 +624,17 @@
 				</p>
 			</div>
 
-			<div class="grid gap-3.5 md:grid-cols-2 lg:grid-cols-4">
+			<!-- No celular o ícone senta ao lado do título, e o texto ocupa a largura do
+			     cartão embaixo: com o ícone numa linha só dele, cada cartão tinha meia
+			     tela de altura. -->
+			<div class="grid gap-3 md:grid-cols-2 md:gap-3.5 lg:grid-cols-4">
 				{#each skills as skill, i (skill.name)}
 					<article
-						class="cartao-interativo reveal-row rounded-box border border-line bg-base-100 p-6"
+						class="grid cartao-interativo reveal-row grid-cols-[auto_1fr] items-center gap-x-3.5 gap-y-2.5 rounded-box border border-line bg-base-100 p-5 md:block md:p-6"
 						use:reveal={{ ordem: i }}
 					>
 						<span
-							class="mb-[18px] grid size-[46px] place-items-center rounded-box bg-base-300 {skill.tone}"
+							class="grid size-11 place-items-center rounded-box bg-base-300 md:mb-[18px] md:size-[46px] {skill.tone}"
 						>
 							{#if skill.icon === 'headphones'}
 								<svg class="size-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -688,8 +701,10 @@
 								</svg>
 							{/if}
 						</span>
-						<h3 class="mb-2 font-display text-[21px] font-semibold">{skill.name}</h3>
-						<p class="text-sm leading-relaxed text-base-content/65">{skill.body}</p>
+						<h3 class="font-display text-[21px] font-semibold md:mb-2">{skill.name}</h3>
+						<p class="col-span-2 text-[14.5px] leading-relaxed text-base-content/65 md:text-sm">
+							{skill.body}
+						</p>
 					</article>
 				{/each}
 			</div>
@@ -698,14 +713,20 @@
 		<!-- 3 · Tudo que vem junto (o desenho "Home Funcionalidades"). As cores do
 		     desenho eram verde e âmbar nos ícones e nos checks; aqui ficam no
 		     azul, porque verde e âmbar são só da correção (home.md). -->
-		<section id="funcionalidades" class="pt-[72px]">
-			<div class="reveal-row rounded-[20px] border border-line bg-card p-7 lg:p-11" use:reveal>
-				<div class="mb-[34px] max-w-[58ch]">
+		<section id="funcionalidades" class="pt-14 lg:pt-[72px]">
+			<!-- A moldura só a partir de `sm`: no celular ela comia 28px de cada lado de
+			     um bloco que já tem cartões por dentro, e o título quebrava em seis
+			     linhas numa coluna de 280px. -->
+			<div
+				class="reveal-row sm:rounded-[20px] sm:border sm:border-line sm:bg-card sm:p-7 lg:p-11"
+				use:reveal
+			>
+				<div class="mb-7 max-w-[58ch] sm:mb-[34px]">
 					<p class="mb-4 text-xs font-bold tracking-[0.14em] text-primary uppercase">
 						Tudo que vem junto
 					</p>
 					<h2
-						class="mb-3.5 font-display text-[40px] leading-[1.08] font-semibold tracking-[-0.025em] text-pretty"
+						class="mb-3.5 font-display text-chamada leading-[1.08] font-semibold tracking-[-0.025em] text-pretty"
 					>
 						Do material da aula ao relatório da turma, sem trocar de ferramenta.
 					</h2>
@@ -715,10 +736,24 @@
 					</p>
 				</div>
 
-				<div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+				<!-- No celular os quatro grupos são uma fileira que desliza de lado, com a
+				     ponta do próximo aparecendo: um embaixo do outro eram vinte e quatro
+				     itens em três telas e meia. A fileira recebe foco (Tab e setas rolam) e
+				     se anuncia, porque quem está com zoom no computador também cai aqui. O
+				     mesmo padrão da prévia da lista colada (MaterialForm). -->
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<div
+					role="region"
+					aria-label="O que vem junto, em quatro grupos"
+					tabindex="0"
+					class="-mx-7 flex snap-x snap-mandatory scroll-px-7 gap-3 overflow-x-auto px-7 py-1
+					       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary
+					       sm:mx-0 sm:grid sm:snap-none sm:grid-cols-2 sm:gap-3.5 sm:overflow-visible sm:px-0 sm:py-0
+					       lg:grid-cols-4"
+				>
 					{#each funcionalidades as grupo, i (grupo.titulo)}
 						<article
-							class="min-w-0 cartao-interativo reveal-row rounded-[16px] border border-line bg-base-200 p-[22px]"
+							class="w-[84%] min-w-0 shrink-0 cartao-interativo reveal-row snap-start rounded-[16px] border border-line bg-base-200 p-5 sm:w-auto sm:p-[22px]"
 							use:reveal={{ ordem: i }}
 						>
 							<div class="mb-4 flex items-center gap-3">
@@ -768,7 +803,7 @@
 				<!-- A escola tem a sua faixa, na largura inteira: é o mesmo produto com
 				     uma camada a mais, não um quinto passo da aula. -->
 				<article
-					class="mt-3.5 reveal-row rounded-[16px] border border-line bg-base-200 p-[22px] lg:flex lg:items-start lg:gap-8"
+					class="mt-3.5 reveal-row rounded-[16px] border border-line bg-base-200 p-5 sm:p-[22px] lg:flex lg:items-start lg:gap-8"
 					use:reveal={{ ordem: 4 }}
 				>
 					<div class="mb-4 flex shrink-0 items-center gap-3 lg:mb-0 lg:w-[236px]">
@@ -829,7 +864,7 @@
 					</p>
 					<Button
 						href={resolve('/(auth)/cadastro')}
-						class="min-h-12 shrink-0 px-[22px] no-underline"
+						class="min-h-12 w-full shrink-0 justify-center px-[22px] no-underline sm:w-auto"
 					>
 						Começar o teste
 					</Button>
@@ -838,10 +873,10 @@
 		</section>
 
 		<!-- 4 · Para o aluno (o Player) -->
-		<section id="player" class="pt-[72px]">
+		<section id="player" class="pt-14 lg:pt-[72px]">
 			<div
-				class="relative grid reveal-row items-center gap-8 overflow-hidden rounded-[20px]
-			       bg-panel p-11 lg:grid-cols-[1fr_260px]"
+				class="relative grid reveal-row items-center gap-6 overflow-hidden rounded-[20px]
+			       bg-panel px-6 pt-8 pb-4 sm:p-11 lg:grid-cols-[1fr_260px] lg:gap-8"
 				use:reveal
 			>
 				<div class="relative z-1">
@@ -849,8 +884,8 @@
 						Para o aluno
 					</p>
 					<h2
-						class="mb-4 max-w-[30ch] font-display text-[38px] leading-[1.1] font-semibold tracking-[-0.025em]
-					       text-pretty text-panel-content"
+						class="mb-4 max-w-[30ch] font-display text-chamada leading-[1.1] font-semibold tracking-[-0.025em] text-pretty
+					       text-panel-content lg:text-[38px]"
 					>
 						Seu aluno aprende com cada resposta, inclusive com as que errou.
 					</h2>
@@ -875,33 +910,35 @@
 						{/each}
 					</ul>
 				</div>
-				<div aria-hidden="true" class="relative h-[200px]">
+				<!-- No celular as formas viram uma faixa baixa embaixo do texto: com os
+				     200px do desktop, a faixa terminava num terço de tela vazio. -->
+				<div aria-hidden="true" class="relative h-24 lg:h-[200px]">
 					<div
-						class="absolute end-0 top-0 size-[150px] animate-[en-float-a_16s_ease-in-out_infinite]
-					       rounded-full bg-primary/45 blur-[2px]"
+						class="absolute end-0 top-0 size-[88px] animate-[en-float-a_16s_ease-in-out_infinite] rounded-full
+					       bg-primary/45 blur-[2px] lg:size-[150px]"
 					></div>
 					<div
-						class="absolute start-[6%] bottom-[4%] h-[84px] w-[96px] animate-[en-drift-spin_24s_ease-in-out_infinite]
-					       bg-accent/25 [clip-path:polygon(50%_0%,100%_100%,0%_100%)]"
+						class="absolute start-[6%] bottom-[4%] h-[52px] w-[60px] animate-[en-drift-spin_24s_ease-in-out_infinite]
+					       bg-accent/25 [clip-path:polygon(50%_0%,100%_100%,0%_100%)] lg:h-[84px] lg:w-[96px]"
 					></div>
 					<div
-						class="absolute end-[22%] bottom-[12%] size-[58px] animate-[en-spin_13s_linear_infinite]
-					       rounded-full border-2 border-accent/50 border-e-transparent border-t-transparent"
+						class="absolute end-[30%] bottom-[12%] size-[40px] animate-[en-spin_13s_linear_infinite] rounded-full border-2
+					       border-accent/50 border-e-transparent border-t-transparent lg:end-[22%] lg:size-[58px]"
 					></div>
 					<div
-						class="absolute start-[44%] top-[8%] size-10 animate-[en-breathe_7s_ease-in-out_infinite] rounded-full bg-warning/40"
+						class="absolute start-[44%] top-[8%] size-7 animate-[en-breathe_7s_ease-in-out_infinite] rounded-full bg-warning/40 lg:size-10"
 					></div>
 				</div>
 			</div>
 		</section>
 
 		<!-- 4 · Correção -->
-		<section id="correcao" class="pt-[72px]">
-			<div class="grid items-center gap-11 lg:grid-cols-[0.92fr_1.08fr]">
+		<section id="correcao" class="pt-14 lg:pt-[72px]">
+			<div class="grid items-center gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:gap-11">
 				<div class="reveal-row" use:reveal>
 					<p class="mb-4 text-xs font-bold tracking-[0.14em] text-primary uppercase">Correção</p>
 					<h2
-						class="mb-4 font-display text-[40px] leading-[1.08] font-semibold tracking-[-0.025em] text-pretty"
+						class="mb-4 font-display text-chamada leading-[1.08] font-semibold tracking-[-0.025em] text-pretty"
 					>
 						Entre o certo e o errado existe o quase.
 					</h2>
@@ -977,43 +1014,45 @@
 		</section>
 
 		<!-- 5 · Do rascunho ao link -->
-		<section class="pt-[72px]">
-			<div class="mb-9 max-w-[62ch] reveal-row" use:reveal>
+		<section class="pt-14 lg:pt-[72px]">
+			<div class="mb-7 max-w-[62ch] reveal-row lg:mb-9" use:reveal>
 				<p class="mb-4 text-xs font-bold tracking-[0.14em] text-primary uppercase">
 					Do rascunho ao link
 				</p>
-				<h2 class="font-display text-[40px] leading-[1.08] font-semibold tracking-[-0.025em]">
+				<h2 class="font-display text-chamada leading-[1.08] font-semibold tracking-[-0.025em]">
 					Da sua aula ao celular da turma em três passos.
 				</h2>
 			</div>
-			<div class="grid gap-3.5 md:grid-cols-3">
+			<!-- No celular o número senta ao lado do título, como nos cartões de
+			     habilidade: numa linha só dele, cada passo tinha meia tela. -->
+			<div class="grid gap-3 md:grid-cols-3 md:gap-3.5">
 				{#each steps as step, i (step.n)}
 					<article
-						class="cartao-interativo reveal-row rounded-box border border-line bg-base-100 p-[26px]"
+						class="grid cartao-interativo reveal-row grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2.5 rounded-box border border-line bg-base-100 p-5 md:block md:p-[26px]"
 						use:reveal={{ ordem: i }}
 					>
 						<p
-							class="mb-4 font-display text-[44px] leading-none font-extrabold tracking-[-0.03em] text-primary"
+							class="font-display text-[36px] leading-none font-extrabold tracking-[-0.03em] text-primary md:mb-4 md:text-[44px]"
 						>
 							{step.n}
 						</p>
-						<h3 class="mb-2 font-display text-[21px] font-semibold">{step.title}</h3>
-						<p class="text-[14.5px] leading-relaxed text-base-content/65">{step.body}</p>
+						<h3 class="font-display text-[21px] font-semibold md:mb-2">{step.title}</h3>
+						<p class="col-span-2 text-[14.5px] leading-relaxed text-base-content/65">{step.body}</p>
 					</article>
 				{/each}
 			</div>
 		</section>
 
 		<!-- 6 · Idiomas -->
-		<section id="idiomas" class="pt-[72px]">
+		<section id="idiomas" class="pt-14 lg:pt-[72px]">
 			<div
 				class="reveal-row overflow-hidden rounded-[20px] border border-line bg-base-100"
 				use:reveal
 			>
-				<div class="max-w-[66ch] px-11 pt-10 pb-7">
+				<div class="max-w-[66ch] px-5 pt-7 pb-5 sm:px-11 sm:pt-10 sm:pb-7">
 					<p class="mb-4 text-xs font-bold tracking-[0.14em] text-primary uppercase">Idiomas</p>
 					<h2
-						class="mb-3.5 font-display text-[38px] leading-[1.1] font-semibold tracking-[-0.025em] text-pretty"
+						class="mb-3.5 font-display text-chamada leading-[1.1] font-semibold tracking-[-0.025em] text-pretty lg:text-[38px]"
 					>
 						Cada idioma é corrigido com as regras dele.
 					</h2>
@@ -1050,7 +1089,7 @@
 	     mesmos preços de `$lib/content/planos.ts`. Duas cópias divergiriam no
 	     primeiro ajuste de preço, e a home é onde a divergência aparece primeiro.
 	     O valor de cada plano sai de `$lib/billing/precos.ts`. -->
-		<section id="planos" class="pt-[72px]">
+		<section id="planos" class="pt-14 lg:pt-[72px]">
 			<div class="reveal-row" use:reveal>
 				<PlanosTabela titulo="Um preço por professor. Para a escola, um contrato." />
 			</div>
@@ -1060,16 +1099,16 @@
 		</section>
 
 		<!-- 8 · CTA -->
-		<section class="pt-[72px] pb-24">
+		<section class="pt-14 pb-16 lg:pt-[72px] lg:pb-24">
 			<div
-				class="relative grid reveal-row items-center gap-8 overflow-hidden rounded-[20px] bg-primary
-			       px-11 py-13 lg:grid-cols-[1fr_220px]"
+				class="relative grid reveal-row items-center gap-6 overflow-hidden rounded-[20px] bg-primary
+			       px-6 pt-9 pb-4 sm:px-11 sm:py-13 lg:grid-cols-[1fr_220px] lg:gap-8"
 				use:reveal
 			>
 				<div class="relative z-1">
 					<h2
-						class="mb-3.5 max-w-[28ch] font-display text-[42px] leading-[1.04] font-extrabold tracking-[-0.03em]
-					       text-pretty text-primary-content"
+						class="mb-3.5 max-w-[28ch] font-display text-chamada leading-[1.04] font-extrabold tracking-[-0.03em] text-pretty
+					       text-primary-content lg:text-[42px]"
 					>
 						Monte hoje a atividade da próxima aula.
 					</h2>
@@ -1079,11 +1118,11 @@
 						Você precisa de uma conta. Seus alunos, não. Teste grátis por 14 dias ou fale com a
 						gente para levar à escola inteira.
 					</p>
-					<div class="flex flex-wrap gap-3">
+					<div class="grid gap-3 sm:flex sm:flex-wrap">
 						<Button
 							href={resolve('/(auth)/cadastro')}
 							size="lg"
-							class="border-none bg-primary-content text-[17px] text-primary no-underline"
+							class="w-full justify-center border-none bg-primary-content text-[17px] text-primary no-underline sm:w-auto"
 						>
 							Criar minha conta
 						</Button>
@@ -1092,24 +1131,26 @@
 							href={resolve('/(site)/contato') + '?assunto=escolas'}
 							variant="outline"
 							size="lg"
-							class="border-[1.5px] border-primary-content/60 text-[17px] text-primary-content no-underline hover:bg-primary-content/15"
+							class="w-full justify-center border-[1.5px] border-primary-content/60 text-[17px] text-primary-content no-underline hover:bg-primary-content/15 sm:w-auto"
 						>
 							Levar para a minha escola
 						</Button>
 					</div>
 				</div>
-				<div aria-hidden="true" class="relative h-[180px]">
+				<!-- No celular, uma faixa baixa: com os 180px do desktop, o cartão terminava
+				     num bloco azul vazio maior que o próprio texto. -->
+				<div aria-hidden="true" class="relative h-24 lg:h-[180px]">
 					<div
-						class="absolute end-[4%] top-0 size-[130px] animate-[en-spin_30s_linear_infinite]
-					       rounded-full border-2 border-dashed border-primary-content/45"
+						class="absolute end-[4%] top-0 size-[84px] animate-[en-spin_30s_linear_infinite] rounded-full
+					       border-2 border-dashed border-primary-content/45 lg:size-[130px]"
 					></div>
 					<div
-						class="absolute start-0 bottom-[6%] h-[82px] w-[92px] animate-[en-drift-spin_22s_ease-in-out_infinite]
-					       bg-primary-content/25 [clip-path:polygon(50%_0%,100%_100%,0%_100%)]"
+						class="absolute start-0 bottom-[6%] h-[52px] w-[58px] animate-[en-drift-spin_22s_ease-in-out_infinite]
+					       bg-primary-content/25 [clip-path:polygon(50%_0%,100%_100%,0%_100%)] lg:h-[82px] lg:w-[92px]"
 					></div>
 					<div
-						class="absolute end-[34%] bottom-[14%] size-[46px] animate-[en-breathe_7s_ease-in-out_infinite]
-					       bg-primary-content/30 [clip-path:polygon(25%_3%,75%_3%,100%_50%,75%_97%,25%_97%,0%_50%)]"
+						class="absolute end-[38%] bottom-[14%] size-[32px] animate-[en-breathe_7s_ease-in-out_infinite]
+					       bg-primary-content/30 [clip-path:polygon(25%_3%,75%_3%,100%_50%,75%_97%,25%_97%,0%_50%)] lg:end-[34%] lg:size-[46px]"
 					></div>
 				</div>
 			</div>

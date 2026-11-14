@@ -8,8 +8,7 @@
 	// lote ou editar, conforme `modo` e `editando`) e o que fazer no sucesso.
 	// Este componente só desenha os campos com os `name` que
 	// `camposMaterial` espera, mais tudo que se calcula no cliente: a prévia
-	// do lote, o rendimento do conjunto, o aviso de repetido e "o que o aluno
-	// vai ver".
+	// do lote, o aviso do que falta para o tipo render questão e o de repetido.
 	import { untrack } from 'svelte';
 	import Alternador from './Alternador.svelte';
 	import Loading from './Loading.svelte';
@@ -32,10 +31,9 @@
 		type FalaDecodificada
 	} from '$lib/client/arquivo-ia';
 	import { formatarDuracao, problemaDoTrecho, segundosDoTrecho } from '$lib/ia/arquivo';
-	import { tokenize } from '$lib/kernel/language/tokenize';
-	import { shuffleWithSeed } from '$lib/kernel/random';
+	import { MAX_VARIACOES, limparVariacoes } from '$lib/atividades/variacoes';
 	import { previewRawLines, RAW_SEPARATORS } from '$lib/kernel/content/parse-raw';
-	import { estimarRendimento, MINIMO_PARA_DISTRATOR } from '$lib/kernel/content/rendimento';
+	import { MINIMO_PARA_DISTRATOR } from '$lib/kernel/content/rendimento';
 	import {
 		FALAS_INICIAIS,
 		KIND_TO_KERNEL,
@@ -50,8 +48,13 @@
 	/** O bastante para dizer "você já tem esta frase" — os campos que o servidor compara. */
 	export type MaterialRef = Pick<
 		MaterialRow,
-		'id' | 'kind' | 'target' | 'source' | 'note' | 'example'
+		'id' | 'kind' | 'target' | 'source' | 'note' | 'example' | 'variants'
 	>;
+	/** O que a sugestão de tradução devolve: a tradução e as outras formas certas. */
+	export interface SugestaoDeTraducao {
+		traducao: string;
+		alternativas: string[];
+	}
 	/**
 	 * O que as remote functions devolvem, nas três formas: erro, um material
 	 * (com `reused` dizendo se já existia) e o lote (com as contagens).
@@ -153,7 +156,11 @@
 		/** Para onde a tradução vai: a língua do aluno (da atividade, ou a da biblioteca). */
 		linguaDoAluno?: string | null;
 		/** Pede a sugestão — a PÁGINA chama a remote function. `null` é "não deu agora". */
-		onsugerirTraducao?: (texto: string, de: string, para: string) => Promise<string | null>;
+		onsugerirTraducao?: (
+			texto: string,
+			de: string,
+			para: string
+		) => Promise<SugestaoDeTraducao | null>;
 	} = $props();
 
 	const wiz = $derived(contexto === 'wizard');
@@ -180,7 +187,6 @@
 	let alvo = $state('');
 	let traducao = $state('');
 	let raw = $state('');
-	let nota = $state('');
 	let exemplo = $state('');
 	let perguntas = $state<Pergunta[]>([{ question: '', answer: '' }]);
 	let falas = $state<Fala[]>(FALAS_INICIAIS.map((f) => ({ ...f })));
@@ -224,9 +230,58 @@
 		// O professor pode ter começado a escrever a tradução enquanto esperava.
 		const doProfessor = traducao.trim() !== '' && traducao !== traducaoAuto;
 		if (doProfessor && !forcar) return;
-		traducao = sugestao;
-		traducaoAuto = sugestao;
+		traducao = sugestao.traducao;
+		traducaoAuto = sugestao.traducao;
+		if (kind === 'pair') trocarVariacoesAutomaticas(sugestao.alternativas);
 	}
+
+	// ── variações da tradução (par de frases) ───────────────────────────────
+	// Outras formas certas de traduzir: as que o tradutor sugeriu junto com a
+	// tradução ("automática") e as que o professor escreve. Todas viram resposta
+	// aceita na questão de tradução. As automáticas acompanham a frase: uma
+	// sugestão nova troca as automáticas de antes e nunca toca nas do professor —
+	// e a automática que ele editou passa a ser dele.
+	interface Variacao {
+		id: number;
+		texto: string;
+		auto: boolean;
+	}
+	let variacoes = $state<Variacao[]>([]);
+	let proximaVariacao = 0;
+	const novaVariacao = (texto: string, auto: boolean): Variacao => ({
+		id: proximaVariacao++,
+		texto,
+		auto
+	});
+
+	function trocarVariacoesAutomaticas(alternativas: string[]) {
+		const dele = variacoes.filter((v) => !v.auto);
+		const ja = new Set(
+			[traducao, ...dele.map((v) => v.texto)].map((t) => t.trim().normalize('NFC'))
+		);
+		const novas = alternativas
+			.filter((a) => a.trim() && !ja.has(a.trim().normalize('NFC')))
+			.slice(0, Math.max(0, MAX_VARIACOES - dele.length))
+			.map((a) => novaVariacao(a, true));
+		variacoes = [...novas, ...dele];
+	}
+	function adicionarVariacao() {
+		if (variacoes.length >= MAX_VARIACOES) return;
+		variacoes = [...variacoes, novaVariacao('', false)];
+	}
+	function editarVariacao(id: number, texto: string) {
+		variacoes = variacoes.map((v) => (v.id === id ? { ...v, texto, auto: false } : v));
+	}
+	function removerVariacao(id: number) {
+		variacoes = variacoes.filter((v) => v.id !== id);
+	}
+	/** Como o servidor vai gravar — e é isso que o aviso de repetido compara. */
+	const variacoesGravadas = $derived(
+		limparVariacoes(
+			variacoes.map((v) => v.texto),
+			traducao
+		)
+	);
 
 	/** "Traduzir de novo": troca a tradução atual pela do tradutor, a pedido. */
 	function traduzirDeNovo() {
@@ -243,11 +298,13 @@
 			const doProfessor = traducao.trim() !== '' && traducao !== traducaoAuto;
 			if (doProfessor) return;
 			if (!texto) {
-				// Apagou a frase: a tradução automática dela sai junto.
+				// Apagou a frase: a tradução automática dela sai junto, e as
+				// variações automáticas também.
 				pedidoDaTraducao++;
 				traduzindo = false;
 				if (traducaoEhAutomatica) traducao = '';
 				traducaoAuto = null;
+				variacoes = variacoes.filter((v) => !v.auto);
 				return;
 			}
 			// Uma pausa na digitação, não uma tecla: cada pedido é CPU do serviço
@@ -266,8 +323,8 @@
 		pedidoDaTraducao++;
 		traduzindo = false;
 		raw = '';
-		nota = '';
 		exemplo = '';
+		variacoes = [];
 		perguntas = [{ question: '', answer: '' }];
 		falas = FALAS_INICIAIS.map((f) => ({ ...f }));
 		lote = '';
@@ -293,8 +350,9 @@
 		traducaoAuto = null;
 		semTradutor = false;
 		raw = m.raw;
-		nota = m.note;
 		exemplo = m.example;
+		// As gravadas são do professor: ele as manteve ou escreveu.
+		variacoes = (m.variants ?? []).map((v) => novaVariacao(v, false));
 		perguntas =
 			m.questions.length > 0 ? m.questions.map((q) => ({ ...q })) : [{ question: '', answer: '' }];
 		falas =
@@ -345,66 +403,67 @@
 		const a = alvo.trim();
 		const b = traducao.trim();
 		if (!a || !b) return null;
-		const extra = (kind === 'pair' ? nota : exemplo).trim();
+		// A nota do professor saiu do formulário: material novo nunca tem uma.
+		const extra = kind === 'pair' ? '' : exemplo.trim();
+		const mesmasVariacoes = (m: MaterialRef) => {
+			if (kind !== 'pair') return true;
+			const gravadas = m.variants ?? [];
+			return (
+				gravadas.length === variacoesGravadas.length &&
+				gravadas.every((v, i) => v === variacoesGravadas[i])
+			);
+		};
 		const igual = biblioteca.find(
 			(m) =>
 				m.kind === kind &&
 				m.target === a &&
 				m.source === b &&
-				(kind === 'pair' ? m.note : m.example) === extra
+				(kind === 'pair' ? m.note : m.example) === extra &&
+				mesmasVariacoes(m)
 		);
 		if (!igual) return null;
 		return { row: igual, noConjunto: conjunto.some((m) => m.id === igual.id) };
 	});
 
-	// ── rendimento do conjunto ──────────────────────────────────────────────
-	const rendimento = $derived(
-		estimarRendimento(
-			conjunto.map((m) => ({ kind: KIND_TO_KERNEL[m.kind], questions: m.questions.length }))
-		)
-	);
-	const onde = $derived(wiz ? 'nesta atividade' : 'na sua biblioteca');
+	// ── o que falta para o tipo render questão ──────────────────────────────
+	// Vocabulário e texto viram questão de ESCOLHA, e a alternativa errada sai de
+	// outro termo (ou da resposta de outra pergunta) do professor: com um só, nada
+	// é gerado. Só na atividade, e contando o que já está no formulário — senão o
+	// aviso pedia "mais um termo" com o segundo termo digitado na tela.
 	const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
-	const yieldInfo = $derived.by(() => {
-		const r = rendimento;
-		switch (kind) {
-			case 'pair':
-				return {
-					warn: false,
-					title: `${plural(r.frases, 'frase', 'frases')} ${onde}`,
-					body: 'Cada frase rende 3 exercícios — montar, traduzir e completar a lacuna —, e mais ouvir e falar quando há áudio.'
-				};
-			case 'vocab': {
-				const falta = wiz && r.termos < MINIMO_PARA_DISTRATOR;
-				return {
-					warn: falta,
-					title: falta
-						? `${r.termos} de ${MINIMO_PARA_DISTRATOR} termos`
-						: `${plural(r.termos, 'termo', 'termos')} ${onde}`,
-					body: falta
-						? 'A alternativa errada sai de OUTRO termo seu. Com um só, nada é gerado — adicione ao menos um segundo termo.'
-						: 'A alternativa errada sai de outro termo do mesmo conjunto, e um item de associação fecha a atividade.'
-				};
-			}
-			case 'text': {
-				const falta = wiz && r.perguntas < MINIMO_PARA_DISTRATOR;
-				return {
-					warn: falta,
-					title: falta
-						? `${r.perguntas} de ${MINIMO_PARA_DISTRATOR} perguntas no conjunto`
-						: `${plural(r.textos, 'texto', 'textos')} ${onde}`,
-					body: falta
-						? 'A alternativa errada de uma pergunta sai da resposta de outra pergunta sua. Com uma só, nada é gerado.'
-						: 'Cada pergunta vira uma questão de escolha. Texto sem pergunta não gera nada.'
-				};
-			}
-			case 'dialogue':
-				return {
-					warn: false,
-					title: `${plural(r.dialogos, 'diálogo', 'diálogos')} ${onde}`,
-					body: 'Cada diálogo vira um exercício de colocar as falas na ordem. Não precisa de par: ele se resolve sozinho.'
-				};
+	const yieldInfo = $derived.by((): { title: string; body: string } | null => {
+		if (!wiz || editing) return null;
+		const outros = conjunto.filter((m) => m.id !== editando?.id);
+		if (kind === 'vocab') {
+			const termos = outros.filter((m) => m.kind === 'vocab').length + (alvo.trim() ? 1 : 0);
+			if (termos >= MINIMO_PARA_DISTRATOR) return null;
+			return termos === 0
+				? {
+						title: 'Adicione pelo menos dois termos',
+						body: 'Na questão, as alternativas erradas são os seus outros termos.'
+					}
+				: {
+						title: 'Falta mais um termo',
+						body: 'As alternativas erradas são os seus outros termos. Com um só, nenhuma questão sai.'
+					};
 		}
+		if (kind === 'text') {
+			const perguntasAqui = perguntas.filter((p) => p.question.trim() && p.answer.trim()).length;
+			const total =
+				outros.filter((m) => m.kind === 'text').reduce((n, m) => n + m.questions.length, 0) +
+				perguntasAqui;
+			if (total >= MINIMO_PARA_DISTRATOR) return null;
+			return total === 0
+				? {
+						title: 'Escreva pelo menos duas perguntas',
+						body: 'Cada pergunta vira uma questão, e as respostas das outras viram as alternativas erradas.'
+					}
+				: {
+						title: 'Falta mais uma pergunta',
+						body: 'As alternativas erradas vêm das respostas das outras perguntas. Com uma só, nenhuma questão sai.'
+					};
+		}
+		return null;
 	});
 
 	// ── colar uma lista ─────────────────────────────────────────────────────
@@ -678,104 +737,11 @@
 		propostas = propostas.map((p) => ({ ...p, on: !todas }));
 	}
 
-	// ── o que o aluno vai ver ───────────────────────────────────────────────
+	// ── exemplos dos campos vazios ──────────────────────────────────────────
 	const EXEMPLO = {
 		pair: { alvo: 'She leaves home at eight.', trad: 'Ela sai de casa às oito.' },
-		vocab: { alvo: 'breakfast', trad: 'café da manhã' },
-		text: { pergunta: 'What time does Ana leave home?', resposta: 'At eight.' },
-		dialogue: ['What do you have for breakfast?', 'I have coffee and bread.', 'And you?']
+		vocab: { alvo: 'breakfast', trad: 'café da manhã' }
 	};
-	const previa = $derived.by(() => {
-		const outros = conjunto.filter((m) => m.id !== editando?.id);
-		switch (kind) {
-			case 'pair': {
-				const frase = alvo.trim() || EXEMPLO.pair.alvo;
-				// Regra inviolável nº 5: nunca `split(' ')`. O segmentador do idioma
-				// alvo é o que separa palavra em japonês e em tailandês.
-				const tokens = tokenize(frase, { tag: tagConteudo });
-				return {
-					kind: 'Montar a frase',
-					note: '1 dos 3 exercícios desta frase',
-					prompt: traducao.trim() || EXEMPLO.pair.trad,
-					chips: shuffleWithSeed(tokens, frase),
-					opts: [] as { label: string; right: boolean }[],
-					falas: [] as string[],
-					foot: ''
-				};
-			}
-			case 'vocab': {
-				const certa = traducao.trim() || EXEMPLO.vocab.trad;
-				const erradas = outros
-					.filter((m) => m.kind === 'vocab' && m.source && m.source !== certa)
-					.map((m) => m.source)
-					.slice(0, 2);
-				const opts = shuffleWithSeed(
-					[{ label: certa, right: true }, ...erradas.map((label) => ({ label, right: false }))],
-					certa
-				);
-				return {
-					kind: 'Escolher a tradução',
-					note: 'a errada vem de outro termo seu',
-					prompt: alvo.trim() || EXEMPLO.vocab.alvo,
-					chips: [] as string[],
-					opts,
-					falas: [] as string[],
-					foot:
-						erradas.length === 0
-							? 'As alternativas erradas seriam sentidos de outros termos seus — por isso um termo sozinho não gera nada.'
-							: 'As erradas são sentidos de outros termos da sua lista.'
-				};
-			}
-			case 'text': {
-				const feitas = perguntas.filter((p) => p.question.trim() && p.answer.trim());
-				const primeira = feitas[0] ?? {
-					question: EXEMPLO.text.pergunta,
-					answer: EXEMPLO.text.resposta
-				};
-				const outrasRespostas = [
-					...feitas.slice(1).map((p) => p.answer.trim()),
-					...outros
-						.filter((m) => m.kind === 'text')
-						.flatMap((m) => m.questions.map((q) => q.answer))
-				]
-					.filter((r) => r && r !== primeira.answer)
-					.slice(0, 2);
-				const opts = shuffleWithSeed(
-					[
-						{ label: primeira.answer, right: true },
-						...outrasRespostas.map((label) => ({ label, right: false }))
-					],
-					primeira.question
-				);
-				return {
-					kind: 'Responder sobre o texto',
-					note: 'uma questão por pergunta sua',
-					prompt: primeira.question,
-					chips: [] as string[],
-					opts,
-					falas: [] as string[],
-					foot:
-						outrasRespostas.length === 0
-							? 'A alternativa errada seria a resposta de outra pergunta — com uma só, nada é gerado.'
-							: 'A alternativa errada é a resposta de outra pergunta sua.'
-				};
-			}
-			case 'dialogue': {
-				const ditas = falas.map((f) => f.text.trim()).filter(Boolean);
-				const linhas = ditas.length >= 2 ? ditas : EXEMPLO.dialogue;
-				return {
-					kind: 'Colocar na ordem',
-					note: 'as falas chegam embaralhadas',
-					prompt: 'Arraste as falas para a ordem certa.',
-					chips: [] as string[],
-					opts: [] as { label: string; right: boolean }[],
-					falas: shuffleWithSeed(linhas, linhas.join('\n')),
-					foot: ''
-				};
-			}
-		}
-	});
-
 	// ── salvar ──────────────────────────────────────────────────────────────
 	const podeSalvar = $derived.by(() => {
 		if (salvando) return false;
@@ -814,22 +780,24 @@
 				: 'Material igual ao que você já tem é reaproveitado, nunca duplicado.'
 	);
 
+	/** "Inglês (EUA)" no meio da frase: só a primeira letra baixa, a sigla fica ("inglês (EUA)"). */
+	const noMeio = (rotulo: string) => rotulo.charAt(0).toLocaleLowerCase('pt-BR') + rotulo.slice(1);
 	const rotuloAlvo = $derived(
 		kind === 'pair'
 			? rotuloDoIdioma
-				? `Frase em ${rotuloDoIdioma.toLocaleLowerCase('pt-BR')}`
+				? `Frase em ${noMeio(rotuloDoIdioma)}`
 				: 'Frase no idioma alvo'
 			: rotuloDoIdioma
-				? `Termo em ${rotuloDoIdioma.toLocaleLowerCase('pt-BR')}`
+				? `Termo em ${noMeio(rotuloDoIdioma)}`
 				: 'Termo no idioma alvo'
 	);
 	const rotuloTraducao = $derived(
 		kind === 'pair'
 			? sourceLabel
-				? `Tradução em ${sourceLabel.toLocaleLowerCase('pt-BR')}`
+				? `Tradução em ${noMeio(sourceLabel)}`
 				: 'Tradução'
 			: sourceLabel
-				? `Sentido em ${sourceLabel.toLocaleLowerCase('pt-BR')}`
+				? `Sentido em ${noMeio(sourceLabel)}`
 				: 'Sentido'
 	);
 
@@ -846,15 +814,6 @@
 				class="mb-1 font-display text-[20px] leading-tight font-semibold tracking-[-0.02em] lg:text-[22px]"
 			>
 				{editing ? 'Editar material' : wiz ? 'Adicionar material' : 'Novo material'}
-			</p>
-			<p class="text-[12.5px] leading-normal text-pretty text-base-content/65">
-				{#if editing}
-					O tipo não muda — ele define a forma do dado que os exercícios já gerados apontam.
-				{:else if wiz}
-					Cole o que você usa em aula. Tudo que entra aqui também vai para a sua biblioteca.
-				{:else}
-					Você cadastra o conteúdo; os exercícios são gerados a partir dele.
-				{/if}
 			</p>
 		</div>
 		{#if onfechar}
@@ -881,9 +840,9 @@
 
 	<!-- corpo -->
 	<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 lg:px-6 lg:py-6">
-		<!-- tipo: cartões que dizem o que o aluno faz -->
+		<!-- o tipo do material, em cartões -->
 		<h3 class="mb-2.5 text-[15px] font-bold">
-			{editing ? 'O que o aluno faz' : 'O que o aluno vai fazer'}
+			Tipo do Material
 			{#if editing}<span class="text-[12.5px] font-normal text-base-content/60">· travado</span
 				>{/if}
 		</h3>
@@ -923,10 +882,7 @@
 							/>
 						</svg>
 					</span>
-					<span class="min-w-0">
-						<span class="mb-0.5 block text-[13.5px] font-bold">{t.label}</span>
-						<span class="block text-[12px] leading-snug text-base-content/65">{t.does}</span>
-					</span>
+					<span class="min-w-0 self-center text-[13.5px] font-bold">{t.label}</span>
 				</button>
 			{/each}
 		</div>
@@ -938,10 +894,10 @@
 			</p>
 		{/if}
 
-		<!-- rendimento: o que o conjunto já dá para gerar. Uma linha neutra quando
-		     está tudo certo; caixa de aviso só quando falta algo — é aí que ele pede
-		     ação. (O verde do ícone antigo é a cor da correção.) -->
-		{#if yieldInfo.warn}
+		<!-- O aviso só aparece quando FALTA algo para o tipo render questão — e diz
+		     o que fazer, numa frase. Quando está tudo certo, nada. (O verde do ícone
+		     antigo é a cor da correção.) -->
+		{#if yieldInfo}
 			<div class="mb-[18px] flex gap-2.5 rounded-box border border-warning/35 bg-warning/6 p-3.5">
 				<svg
 					class="mt-px size-[17px] shrink-0 text-warning"
@@ -963,17 +919,12 @@
 					/>
 				</svg>
 				<div class="min-w-0">
-					<p class="mb-0.5 text-[13px] font-bold text-warning">{yieldInfo.title}</p>
+					<p class="mb-0.5 text-[13px] font-bold">{yieldInfo.title}</p>
 					<p class="text-[12.5px] leading-normal text-pretty text-base-content/65">
 						{yieldInfo.body}
 					</p>
 				</div>
 			</div>
-		{:else}
-			<p class="mb-[18px] text-[12.5px] leading-normal text-pretty text-base-content/65">
-				<strong class="font-semibold text-base-content">{yieldInfo.title}.</strong>
-				{yieldInfo.body}
-			</p>
 		{/if}
 
 		<!-- idioma e modo: os dois mudam o que os campos abaixo pedem ("Frase em
@@ -1069,7 +1020,7 @@
 						{/if}
 					</p>
 					<p class="text-[12.5px] leading-normal text-pretty text-base-content/65">
-						Salvar muda o que os rascunhos veem. O que já está no ar não muda — a atividade
+						Salvar muda o que os rascunhos veem. O que já está no ar continua igual: a atividade
 						publicada guarda uma cópia congelada.
 					</p>
 				</div>
@@ -1083,11 +1034,6 @@
 					<div>
 						<label for="mf-alvo" class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
 							{rotuloAlvo}
-							{#if kind === 'pair'}
-								<span class="text-[11.5px] font-medium text-base-content/65"
-									>o que o aluno vai treinar</span
-								>
-							{/if}
 						</label>
 						<input
 							id="mf-alvo"
@@ -1136,14 +1082,33 @@
 						{/if}
 					</div>
 					<div>
-						<label for="mf-trad" class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
-							{rotuloTraducao}
+						<!-- O estado da tradução mora na linha do rótulo, à direita, como o
+						     botão do desenho: "Traduzindo…" em TEXTO (quem usa leitor de tela
+						     ouve), e "Traduzir de novo" só quando a tradução é do professor. -->
+						<div class="mb-1.5 flex flex-wrap items-center justify-between gap-x-2.5 gap-y-1">
+							<label for="mf-trad" class="text-[12.5px] font-bold">{rotuloTraducao}</label>
 							{#if podeTraduzir}
-								<span class="text-[11.5px] font-medium text-base-content/65"
-									>sai sozinha, você confere</span
+								<div
+									id="mf-trad-status"
+									class="flex min-h-6 items-center gap-2 text-[12px] text-base-content/65"
+									role="status"
 								>
+									{#if traduzindo}
+										<Loading variant="fila" size={10} label="Traduzindo" />
+										<span>Traduzindo…</span>
+									{:else if semTradutor && !traducao.trim()}
+										<span>O tradutor não respondeu agora. Escreva a tradução.</span>
+									{:else if alvo.trim() && traducao.trim() && !traducaoEhAutomatica}
+										<button
+											type="button"
+											onclick={traduzirDeNovo}
+											class="rounded-lg px-1.5 py-[3px] text-[12.5px] font-bold text-primary transition-colors duration-200 hover:bg-base-300"
+											>Traduzir de novo</button
+										>
+									{/if}
+								</div>
 							{/if}
-						</label>
+						</div>
 						<input
 							id="mf-trad"
 							name="source"
@@ -1156,53 +1121,70 @@
 									? EXEMPLO.pair.trad
 									: EXEMPLO.vocab.trad}
 						/>
-						{#if podeTraduzir}
-							<!-- O estado da tradução em TEXTO: quem usa leitor de tela ouve
-							     "traduzindo", e o "Traduzir de novo" só aparece quando a
-							     tradução do campo é do professor, não a sugerida. -->
+						{#if kind === 'pair'}
+							<!-- As outras formas certas de traduzir, penduradas na tradução por um
+							     filete (o desenho). As que o tradutor sugeriu chegam marcadas como
+							     "automática"; o professor tira, corrige ou escreve mais. Todas
+							     viram resposta aceita na questão de tradução. -->
 							<div
-								id="mf-trad-status"
-								class="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-base-content/65"
-								role="status"
+								role="group"
+								aria-label="Variações da tradução"
+								class="mt-2 grid gap-1.5 border-s-2 border-base-300 ps-3.5"
 							>
-								{#if traduzindo}
-									<Loading variant="fila" size={10} label="Traduzindo" />
-									<span>Traduzindo…</span>
-								{:else if semTradutor && !traducao.trim()}
-									<span>O tradutor não respondeu agora. Escreva a tradução.</span>
-								{:else if traducaoEhAutomatica}
-									<span>Tradução automática. Confira e ajuste se precisar.</span>
-								{:else if !traducao.trim()}
-									<span>Ela aparece quando você terminar de escrever.</span>
-								{/if}
-								{#if alvo.trim() && !traduzindo && traducao.trim() && !traducaoEhAutomatica}
+								{#each variacoes as v, i (v.id)}
+									<div class="flex min-w-0 items-center gap-1.5">
+										<input
+											value={v.texto}
+											oninput={(e) => editarVariacao(v.id, e.currentTarget.value)}
+											aria-label="Variação {i + 1} da tradução"
+											placeholder="Outra forma certa de traduzir"
+											class="input h-10 min-w-0 flex-1 rounded-[10px] px-3 text-[13.5px]"
+										/>
+										{#if v.auto}
+											<span
+												class="shrink-0 rounded-full border border-line px-2 py-1 text-[11px] font-bold tracking-[0.04em] text-base-content/65 uppercase"
+												>automática</span
+											>
+										{/if}
+										<button
+											type="button"
+											onclick={() => removerVariacao(v.id)}
+											aria-label="Remover a variação {i + 1}"
+											class="grid size-[34px] shrink-0 place-items-center rounded-[9px] text-base-content/65 transition-colors duration-200 hover:bg-base-300 hover:text-error"
+										>
+											<svg class="size-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+												<path
+													d="M6 6l12 12M18 6L6 18"
+													stroke="currentColor"
+													stroke-width="2.6"
+													stroke-linecap="round"
+												/>
+											</svg>
+										</button>
+									</div>
+								{/each}
+								{#if variacoes.length < MAX_VARIACOES}
 									<button
 										type="button"
-										onclick={traduzirDeNovo}
-										class="font-semibold text-primary underline-offset-2 hover:underline"
-										>Traduzir de novo</button
+										onclick={adicionarVariacao}
+										class="flex min-h-10 items-center justify-center gap-[7px] rounded-[10px] border border-dashed border-primary px-3 text-[12.5px] font-bold text-primary transition-colors duration-200 hover:bg-base-300"
 									>
+										<svg class="size-[13px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+											<path
+												d="M12 5v14M5 12h14"
+												stroke="currentColor"
+												stroke-width="2.6"
+												stroke-linecap="round"
+											/>
+										</svg>
+										Adicionar variação de tradução
+									</button>
 								{/if}
 							</div>
+							<input type="hidden" name="variants" value={JSON.stringify(variacoesGravadas)} />
 						{/if}
 					</div>
-					{#if kind === 'pair'}
-						<div>
-							<label for="mf-nota" class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
-								Sua nota
-								<span class="text-[11.5px] font-medium text-base-content/65"
-									>opcional · o aluno nunca vê</span
-								>
-							</label>
-							<input
-								id="mf-nota"
-								name="note"
-								bind:value={nota}
-								class="input w-full bg-base-200 text-[14px]"
-								placeholder="Usar depois de ensinar horas"
-							/>
-						</div>
-					{:else}
+					{#if kind !== 'pair'}
 						<div>
 							<label
 								for="mf-exemplo"
@@ -2064,101 +2046,38 @@
 				Você já tinha este material — ele foi reaproveitado da sua biblioteca, não duplicado.
 			</p>
 		{/if}
-
-		<!-- o que o aluno vai ver -->
-		<div class="mt-7 border-t border-line pt-5">
-			<h3 class="mb-2.5 text-[15px] font-bold">O que o aluno vai ver</h3>
-			<div class="overflow-hidden rounded-box border border-line">
-				<div
-					class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-base-200 px-3.5 py-2.5"
-				>
-					<span class="rounded-full bg-base-300 px-2.5 py-1 text-[12px] font-bold text-primary"
-						>{previa.kind}</span
-					>
-					<span class="text-[12px] text-base-content/65">{previa.note}</span>
-				</div>
-				<div class="px-4 py-[15px]">
-					<p class="mb-2.5 text-[13px] text-base-content/65">{previa.prompt}</p>
-					{#if kind === 'pair'}
-						<div class="flex flex-wrap gap-1.5" dir={direcao} data-content-lang={tagConteudo}>
-							{#each previa.chips as c, i (i)}
-								<span
-									class="rounded-field border border-line bg-base-200 px-3 py-2 font-content text-[14px]"
-									>{c}</span
-								>
-							{/each}
-						</div>
-					{:else if kind === 'dialogue'}
-						<div class="grid gap-1.5" dir={direcao} data-content-lang={tagConteudo}>
-							{#each previa.falas as f, i (i)}
-								<span
-									class="flex items-center gap-2.5 rounded-field border border-line bg-base-200 px-3 py-2.5"
-								>
-									<svg
-										class="size-[15px] shrink-0 text-base-content/65"
-										viewBox="0 0 24 24"
-										fill="none"
-										aria-hidden="true"
-									>
-										<path
-											d="M4 8h16M4 12h16M4 16h16"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-										/>
-									</svg>
-									<span class="min-w-0 flex-1 font-content text-[13.5px]">{f}</span>
-								</span>
-							{/each}
-						</div>
-					{:else}
-						<div class="grid gap-1.5">
-							{#each previa.opts as o, i (i)}
-								<span
-									class="flex items-center gap-2.5 rounded-field border px-3 py-2.5 text-[14px] {kind ===
-									'text'
-										? 'font-content'
-										: ''} {o.right ? 'border-success/40 bg-success/10' : 'border-line bg-base-200'}"
-								>
-									<span
-										class="grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold {o.right
-											? 'bg-success text-success-content'
-											: 'bg-base-300 text-base-content/65'}">{String.fromCharCode(65 + i)}</span
-									>
-									{o.label}
-								</span>
-							{/each}
-						</div>
-						{#if previa.foot}
-							<p class="mt-2.5 text-[12px] leading-normal text-base-content/65">{previa.foot}</p>
-						{/if}
-					{/if}
-				</div>
-			</div>
-		</div>
 	</div>
 
 	<!-- rodapé -->
 	<div
-		class="flex shrink-0 flex-wrap items-center gap-2.5 border-t border-line bg-base-200 px-5 py-3.5 lg:px-6"
+		class="flex shrink-0 items-center gap-2.5 border-t border-line bg-base-200 px-5 py-3.5 lg:px-6"
 	>
-		<span
-			class="hidden min-w-[180px] flex-1 text-[12px] leading-normal text-base-content/65 lg:block"
-			>{footNote}</span
-		>
 		{#if editing}
-			<!-- Na biblioteca a bandeja FECHA; no wizard a coluna volta a "Adicionar". -->
+			<!-- Editando, as duas ações dividem UMA linha, na ponta e da mesma altura
+			     (no celular, metade cada). A nota de "entra na biblioteca" é de quem
+			     ADICIONA: junto dela, os dois botões não cabiam na coluna e o
+			     "Salvar" descia para a linha de baixo. Na biblioteca o Cancelar FECHA
+			     a bandeja; no wizard a coluna volta a "Adicionar". -->
+			<span class="hidden flex-1 sm:block"></span>
 			<button
 				type="button"
 				onclick={!wiz && onfechar ? onfechar : limpar}
-				class="btn min-h-11 motion-tap btn-plain">Cancelar</button
+				class="btn h-[46px] flex-1 motion-tap btn-plain text-[14.5px] sm:flex-none sm:px-5"
+				>Cancelar</button
+			>
+		{:else}
+			<span
+				class="hidden min-w-[180px] flex-1 text-[12px] leading-normal text-base-content/65 lg:block"
+				>{footNote}</span
 			>
 		{/if}
 		<button
 			type={modoEfetivo === 'ia' ? 'button' : 'submit'}
 			onclick={modoEfetivo === 'ia' ? aceitarPropostas : undefined}
 			disabled={!podeSalvar}
-			class="btn h-[46px] flex-1 motion-tap gap-2.5 btn-primary text-[14.5px] lg:flex-none lg:px-5"
+			class="btn h-[46px] flex-1 motion-tap gap-2.5 btn-primary text-[14.5px] {editing
+				? 'sm:flex-none sm:px-6'
+				: 'lg:flex-none lg:px-5'}"
 		>
 			{#if salvando || aceitandoIa}
 				<Loading variant="fila" size={12} tone="current" label="Salvando" />

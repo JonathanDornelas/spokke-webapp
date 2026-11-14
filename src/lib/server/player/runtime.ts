@@ -7,6 +7,7 @@ import type { LanguageProfile } from '$lib/kernel/language/profile';
 import { tecladoDe, type Teclado } from '$lib/kernel/language/teclado';
 import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import { ttsHash } from '$lib/server/tts';
+import { instructionText } from '$lib/atividades/enunciados';
 
 /**
  * A ÚNICA porta por onde um item chega no browser do aluno — regra
@@ -24,30 +25,9 @@ export interface StoredItemRow {
 	locale: unknown;
 }
 
-/**
- * O enunciado que o aluno lê. O kernel só emite a CHAVE porque é agnóstico
- * de idioma; a copy fica aqui, na camada de apresentação. Hoje só existe em
- * português — quando o produto atender aluno de outra língua materna, isto
- * vira um mapa por `locale.source` (pendência, ver paginas.md).
- */
-const INSTRUCTIONS: Record<string, string> = {
-	'assemble-from-source': 'Monte a frase.',
-	'translate-to-source': 'Traduza a frase.',
-	'listen-and-assemble': 'Ouça e monte a frase.',
-	'listen-and-type': 'Ouça e escreva o que você ouviu.',
-	'listen-and-choose': 'Ouça e escolha o que você ouviu.',
-	'fill-the-blank': 'Complete a frase.',
-	'say-in-target': 'Diga esta frase em voz alta.',
-	'choose-translation': 'Escolha a tradução.',
-	'answer-about-passage': 'Responda sobre o texto.',
-	'order-the-lines': 'Coloque as falas na ordem certa.',
-	'match-pairs': 'Ligue cada um ao seu par.'
-};
-
-/** O enunciado por extenso. O professor nunca vê a chave crua. */
-export function instructionText(key: string | undefined | null): string {
-	return key ? (INSTRUCTIONS[key] ?? '') : '';
-}
+// A copy dos enunciados mora em `$lib/atividades/enunciados.ts`: o editor de
+// questão também a usa, na tela.
+export { instructionText };
 
 /**
  * O enunciado final de um item: o que o professor escreveu ganha da copy

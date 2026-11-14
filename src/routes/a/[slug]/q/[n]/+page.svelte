@@ -188,11 +188,16 @@
 			? data.item.teclado
 			: null
 	);
-	let recording = $state(false);
 	let plays = $state(0);
 	// A captura do microfone. O `Recorder` é controlado (components.md): quem
-	// fala com o `MediaRecorder` é a tela.
-	const gravacao = new Gravacao();
+	// fala com o `MediaRecorder` é a tela. Os passos dela (abriu, começou,
+	// terminou e por quê) vão para o diário que acompanha o relato de problema.
+	//
+	// **O estado da gravação é UM, o da classe.** A tela tinha o próprio
+	// `recording`, que só voltava a falso no toque de parar: quando a gravação
+	// parava sozinha (silêncio, teto), o botão continuava pulsando "captando"
+	// com o microfone desligado, e o aluno falava para ninguém.
+	const gravacao = new Gravacao((evento) => anotar('microfone', evento));
 	let checking = $state(false);
 
 	/**
@@ -209,15 +214,55 @@
 	 */
 	let ouvido = $state<string | null>(null);
 	let ouvindo = $state(false);
+	/**
+	 * O servidor não conseguiu ouvir a gravação (fila do serviço de áudio cheia,
+	 * arquivo vazio, sem conexão). Antes isso sumia em silêncio: a prévia falhava
+	 * e a tela dizia "pronta para enviar", e o "Verificar" voltava a ser
+	 * "Verificar" sem dizer nada. O aluno precisa ler o motivo para decidir entre
+	 * gravar de novo e pular.
+	 */
+	let erroDaFala = $state<string | null>(null);
 	let ultimoBlob: Blob | null = null;
 
+	// A prévia, o "ouvindo" e o erro pertencem a UMA gravação: trocou o blob
+	// (regravou, ou trocou de questão), os três recomeçam. Sem zerar o
+	// `ouvindo` aqui, uma prévia ainda no ar da gravação anterior o deixava
+	// preso em `true`.
 	$effect(() => {
 		const blob = gravacao.blob;
 		if (blob === ultimoBlob) return;
 		ultimoBlob = blob;
 		ouvido = null;
+		ouvindo = false;
+		erroDaFala = null;
 		if (blob && !untrack(() => jaRespondida)) void ouvir(blob);
 	});
+
+	/**
+	 * O que dizer quando a gravação não passa. Pela situação, não pelo texto do
+	 * servidor (que é para o log): o aluno precisa saber se grava de novo, espera
+	 * ou pula, e o "Pular" está sempre no rodapé.
+	 */
+	function mensagemDaFala(status: number | null): string {
+		if (status === null) {
+			return 'Sem conexão para enviar a gravação. Confira a internet e grave de novo, ou pule esta questão.';
+		}
+		if (status === 503) {
+			return 'Não conseguimos ouvir sua gravação agora. Grave de novo em alguns segundos ou pule esta questão.';
+		}
+		if (status === 400) return 'A gravação chegou vazia. Toque no microfone e grave de novo.';
+		if (status === 413) return 'A gravação ficou longa demais. Grave de novo, só a frase.';
+		return 'Não conseguimos enviar sua gravação. Grave de novo ou pule esta questão.';
+	}
+
+	/** Recusa do endpoint da fala, com o status — a mensagem sai de `mensagemDaFala`. */
+	class FalhaNaFala extends Error {
+		readonly status: number | null;
+		constructor(status: number | null) {
+			super(mensagemDaFala(status));
+			this.status = status;
+		}
+	}
 
 	async function ouvir(blob: Blob) {
 		ouvindo = true;
@@ -231,14 +276,22 @@
 				method: 'POST',
 				body: corpo
 			});
-			if (!resposta.ok) return;
-			const json = (await resposta.json()) as { transcript?: string };
 			// Regravou no meio: o que voltou é da gravação anterior.
 			if (gravacao.blob !== blob) return;
-			ouvido = json.transcript ?? null;
+			if (!resposta.ok) {
+				erroDaFala = mensagemDaFala(resposta.status);
+				anotar('microfone', `a prévia da fala voltou ${resposta.status}`);
+				return;
+			}
+			const json = (await resposta.json()) as { transcript?: string };
+			if (gravacao.blob !== blob) return;
+			// Texto vazio é informação, não ausência: o serviço ouviu e não
+			// reconheceu palavra nenhuma, e a tela diz isso em vez de "pronta".
+			ouvido = typeof json.transcript === 'string' ? json.transcript.trim() : null;
 		} catch {
-			// Sem a prévia o exercício segue igual: "Verificar" transcreve na hora.
-			ouvido = null;
+			if (gravacao.blob !== blob) return;
+			erroDaFala = mensagemDaFala(null);
+			anotar('microfone', 'a prévia da fala não chegou ao servidor');
 		} finally {
 			if (gravacao.blob === blob) ouvindo = false;
 		}
@@ -257,11 +310,12 @@
 						: interaction === 'select'
 							? selectValue !== null
 							: interaction === 'speak'
-								? // Era `recording || true`, ou seja: sempre habilitado, porque
-									// não havia gravação nenhuma para esperar. Agora só vale com
-									// áudio na mão — quem não consegue gravar usa o "Pular" do
-									// rodapé, que em `speak` está sempre visível.
-									gravacao.blob !== null
+								? // Só com áudio na mão e a gravação parada — quem não
+									// consegue gravar usa o "Pular" do rodapé, que em `speak`
+									// está sempre visível. E depois da prévia: o "Verificar"
+									// reaproveita a transcrição dela, em vez de pôr o Whisper
+									// para ouvir a mesma gravação duas vezes.
+									gravacao.estado === 'pronto' && gravacao.blob !== null && !ouvindo
 								: choiceValue !== null
 	);
 
@@ -313,8 +367,8 @@
 		pairs = [];
 		text = '';
 		tecladoAberto = false;
-		recording = false;
 		gravacao.descartar();
+		erroDaFala = null;
 		plays = 0;
 		startedAt = Date.now();
 		// Um passo no diário da tela (o rastro do relato de problema): o TIPO da
@@ -331,10 +385,20 @@
 			restaurar(data.answered.answer);
 			// Sem `showResult` o `state` vem nulo: a resposta reaparece, o
 			// veredito não. Voltar não pode ser a porta dos fundos para
-			// descobrir se acertou.
-			if (data.answered.state) feedback = { state: data.answered.state };
+			// descobrir se acertou. Na fala o veredito volta com o que o serviço
+			// entendeu, que é a fala do próprio aluno, não gabarito.
+			if (data.answered.state) {
+				feedback = { state: data.answered.state, heard: transcricaoDe(data.answered.answer) };
+			}
 		}
 	});
+
+	/** A transcrição guardada de uma resposta de fala (`{ transcript }`); nas outras, nada. */
+	function transcricaoDe(resposta: unknown): string | undefined {
+		if (!resposta || typeof resposta !== 'object') return undefined;
+		const transcricao = (resposta as { transcript?: unknown }).transcript;
+		return typeof transcricao === 'string' && transcricao.trim() ? transcricao : undefined;
+	}
 
 	function answerPayload(): unknown {
 		switch (interaction) {
@@ -474,6 +538,16 @@
 			// Sem veredito (escrita por rubrica, ou feedback desligado pelo
 			// professor) não há o que ler: segue direto.
 			await avancar();
+		} catch (erro) {
+			// Na fala a recusa tem motivo para o aluno (o serviço de áudio cheio,
+			// a gravação vazia): ele lê e decide entre gravar de novo e pular. Nas
+			// outras interações o erro segue o caminho de sempre.
+			if (interaction !== 'speak') throw erro;
+			erroDaFala = erro instanceof FalhaNaFala ? erro.message : mensagemDaFala(null);
+			anotar(
+				'microfone',
+				`a resposta falada não passou (${erro instanceof FalhaNaFala ? (erro.status ?? 'sem conexão') : 'sem conexão'})`
+			);
 		} finally {
 			checking = false;
 		}
@@ -486,21 +560,14 @@
 	 */
 	async function alternarGravacao() {
 		if (jaRespondida || ocupado) return;
-		// A leitura vai para uma variável antes do `await`: comparar
-		// `gravacao.estado` de novo depois dele faz o TypeScript achar que o valor
-		// não mudou (ele não sabe que `iniciar()` escreve nesse campo) e reclamar
-		// de comparação sem sobreposição.
-		const antes = gravacao.estado;
-		if (antes === 'gravando') {
+		erroDaFala = null;
+		if (gravacao.estado === 'gravando') {
 			await gravacao.parar();
-			recording = false;
 			return;
 		}
-		recording = true;
+		// Enquanto o microfone abre, `iniciar()` ignora um segundo toque: é a
+		// trava que impede duas capturas ao mesmo tempo.
 		await gravacao.iniciar();
-		// Microfone negado ou aparelho sem entrada: a onda não pode continuar
-		// animando como se estivesse captando.
-		if (gravacao.estado !== 'gravando') recording = false;
 	}
 
 	/**
@@ -528,10 +595,7 @@
 			method: 'POST',
 			body: corpo
 		});
-		if (!resposta.ok) {
-			const detalhe = (await resposta.json().catch(() => ({}))) as { message?: string };
-			throw new Error(detalhe.message || 'não conseguimos enviar sua gravação');
-		}
+		if (!resposta.ok) throw new FalhaNaFala(resposta.status);
 		return resposta.json();
 	}
 
@@ -912,15 +976,20 @@
 				{:else if data.item.interaction === 'order'}
 					<OrderInteraction item={data.item} bind:order={orderSequence} />
 				{:else if data.item.interaction === 'speak'}
+					<!-- Respondida, o microfone sai: a tela dizia "toque para regravar"
+					     e o toque era recusado. O veredito embaixo já diz o que se
+					     ouviu. -->
 					<SpeakInteraction
 						item={data.item}
-						{recording}
+						recording={gravacao.estado === 'gravando'}
 						ontoggle={alternarGravacao}
 						estado={gravacao.estado}
 						segundos={gravacao.segundos}
 						maxSegundos={gravacao.maxSegundos}
 						{ouvido}
 						{ouvindo}
+						erro={erroDaFala}
+						corrigida={jaRespondida}
 					/>
 				{/if}
 

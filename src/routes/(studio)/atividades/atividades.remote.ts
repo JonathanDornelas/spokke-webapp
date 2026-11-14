@@ -17,17 +17,22 @@ import { atividades } from '$lib/server/db/repos/activities';
 import { materiais } from '$lib/server/db/repos/content-units';
 import { isTtsConfigured } from '$lib/server/tts';
 import { playerRepo } from '$lib/server/db/repos/player';
-import { buildRuntimeItem, itemAudioHashes } from '$lib/server/player/runtime';
-import { edicaoDoItemSchema, montarItemEditado } from '$lib/server/atividades/item-editado';
+import { buildRuntimeItem, itemAudioHashes, type StoredItemRow } from '$lib/server/player/runtime';
+import { montarQuestao, questaoDoItem } from '$lib/server/atividades/item-editado';
+import { iniciarGeracao, progressoDaGeracao as andamentoDe } from '$lib/server/atividades/geracao';
+import { resumirQuestao } from '$lib/server/atividades/questao-resumida';
+import { umaPorHabilidade } from '$lib/atividades/questao-resumida';
+import { corrigirSemGravar } from '$lib/server/player/veredito';
 import { enfileirarAudioFaltante } from '$lib/server/tts/enfileirar';
 import { limparAudioSemUso } from '$lib/server/tts/limpeza';
 import { isAsrConfigured } from '$lib/server/asr';
 import { gerarCodigoAcesso, normalizarCodigoAcesso } from '$lib/server/player/access-code';
 import { linkDaAtividade } from '$lib/server/player/slug';
 import { runGenerators } from '$lib/kernel/generators';
-import { MAX_ITENS, selectItems } from '$lib/kernel/generators/select';
+import { MAX_ITENS, entraComOsTipos } from '$lib/kernel/generators/select';
 import { skillSchema } from '$lib/kernel/interactions/skill-schema';
 import { parseContentUnit } from '$lib/kernel/content/parse';
+import type { ContentUnitKind } from '$lib/kernel/content/types';
 import { parseRawMaterial } from '$lib/kernel/content/parse-raw';
 import {
 	camposMaterial,
@@ -36,14 +41,13 @@ import {
 	traduzirLote
 } from '$lib/server/atividades/material-form';
 import { getTradutor } from '$lib/server/traducao';
-import { paresDasFrases } from '$lib/server/atividades/pares-de-palavras';
-import { comVariantesDaTraducao } from '$lib/server/atividades/variantes-aceitas';
 import { getProfile, tagForLabel } from '$lib/kernel/language/profiles';
-import { interactionSchema } from '$lib/kernel/item';
-import type { Skill } from '$lib/kernel/interactions/types';
+import { interactionSchema, promptSchema, gradingSchema } from '$lib/kernel/item';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { transcritorPara } from '$lib/server/escrita';
 import { liberarEnviosQueEsperavamPublicacao } from '$lib/server/modulos/programacao';
+import { montarPlano, tiposPorMaterialSchema } from '$lib/atividades/tipos-por-material';
+import { questaoSchema, tipoDaQuestao } from '$lib/atividades/questao';
 import type { Prisma } from '../../../../generated/prisma/client.ts';
 
 /**
@@ -73,6 +77,22 @@ async function activityOr404(activityId: string) {
  */
 function recusarArquivada(activity: { archivedAt: Date | null }) {
 	if (activity.archivedAt) error(409, 'Esta atividade está arquivada. Desarquive para mexer nela.');
+}
+
+/**
+ * A questão "criada do zero" de antes nascia com um texto de exemplo, e um
+ * rascunho antigo ainda pode tê-la. Ela valida no schema, então só o texto a
+ * denuncia: publicada, o aluno receberia "Escreva a frase e marque a lacuna".
+ */
+function ehMarcadorAntigo(interaction: { type: string; payload: unknown }): boolean {
+	const p = interaction.payload;
+	return (
+		interaction.type === 'cloze' &&
+		typeof p === 'object' &&
+		p !== null &&
+		'masked' in p &&
+		p.masked === 'Escreva a frase e marque a lacuna com ___'
+	);
 }
 
 /**
@@ -125,6 +145,66 @@ export const apagarAtividade = command(
 		// Falhar aqui não desfaz o apagar — o que sobrar sai na próxima limpeza.
 		if (apagada) await limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
 		return { ok: apagada };
+	}
+);
+
+// ── em massa, na lista de atividades ────────────────────────────────────
+// Os ids vêm da tela, mas o escopo vem da sessão: o repositório só toca o que é
+// deste professor, e o id de outro passa em silêncio (auth.md). O teto da lista
+// é do tamanho de uma biblioteca grande, não do que a tela mostra numa página.
+const idsDaLista = z.array(z.string()).min(1).max(500);
+
+/** A palavra que confirma apagar em massa — a tela pede, e o servidor confere de novo. */
+const CONFIRMA_APAGAR = 'apagar';
+
+export const arquivarAtividades = command(
+	z.object({ activityIds: idsDaLista }),
+	async ({ activityIds }) => {
+		const teacher = teacherOf();
+		return { ok: true as const, quantas: await atividades(teacher).arquivarVarias(activityIds) };
+	}
+);
+
+/** Desarquivar em massa volta a ocupar vaga: todas cabem, ou nenhuma muda. */
+export const desarquivarAtividades = command(
+	z.object({ activityIds: idsDaLista }),
+	async ({ activityIds }) => {
+		const teacher = teacherOf();
+		return comCota(teacher, 'atividades', activityIds.length, async (tx, cabem, estado) => {
+			const repo = atividades(teacher, tx);
+			const pedem = await repo.contarArquivadas(activityIds);
+			if (cabem < pedem) {
+				return {
+					ok: false as const,
+					motivo: motivoDeCriar(estado, 'atividades'),
+					error:
+						cabem === 0
+							? 'Não cabe nenhuma no seu plano: arquive outra atividade antes, ou escolha um plano maior.'
+							: `Cabem só ${cabem} no seu plano. Desmarque algumas, arquive outras antes ou escolha um plano maior.`
+				};
+			}
+			return { ok: true as const, quantas: await repo.desarquivarVarias(activityIds) };
+		});
+	}
+);
+
+/**
+ * Apagar DE VEZ em massa, com tentativas e resultados. A tela pede para digitar
+ * "apagar" antes — conferido aqui também, porque um POST direto não passa pela
+ * tela (regra nº 3). Uma atividade só, pela página dela, continua pedindo o título.
+ */
+export const apagarAtividades = command(
+	z.object({ activityIds: idsDaLista, confirmacao: z.string() }),
+	async ({ activityIds, confirmacao }) => {
+		const teacher = teacherOf();
+		if (confirmacao.trim().toLocaleLowerCase('pt-BR') !== CONFIRMA_APAGAR) {
+			return { ok: false as const, error: 'Digite "apagar" para confirmar.' };
+		}
+		const quantas = await atividades(teacher).apagarVariasDeVez(activityIds);
+		// Como em `apagarAtividade`: o áudio que só elas usavam sai agora, e falhar
+		// aqui não desfaz o apagar.
+		if (quantas > 0) await limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
+		return { ok: true as const, quantas };
 	}
 );
 
@@ -349,14 +429,53 @@ export const usarDaBiblioteca = command(
 	async ({ activityId, contentIds }) => {
 		const { teacher } = await activityOr404(activityId);
 		const repo = materiais(teacher);
+		// O MESMO material que já está na atividade (outro registro, o mesmo
+		// conteúdo) não entra de novo: a tela já o mostra travado, e isto é a guarda
+		// de quem chega por um POST direto.
+		const [todos, naAtividade] = await Promise.all([repo.list(), repo.byActivity(activityId)]);
+		const repetidos = new Set(naAtividade.map(chaveDoMaterial));
+		const pedidos = new Map(todos.map((m) => [m.id, m]));
 
 		let vinculados = 0;
 		for (const contentId of contentIds) {
-			if (await repo.link(activityId, contentId)) vinculados++;
+			const material = pedidos.get(contentId);
+			if (!material) continue;
+			const chave = chaveDoMaterial(material);
+			if (repetidos.has(chave)) continue;
+			if (await repo.link(activityId, contentId)) {
+				vinculados++;
+				repetidos.add(chave);
+			}
 		}
 		return { ok: vinculados > 0, linked: vinculados };
 	}
 );
+
+/**
+ * O texto principal de um material: a frase, o termo, o título do texto ou a
+ * primeira fala do diálogo — o que a lista mostra em destaque.
+ */
+function principalESecundario(kind: ContentUnitKind, data: unknown): [string, string] {
+	const dados = parseContentUnit(kind, data);
+	return 'target' in dados
+		? [dados.target, dados.source]
+		: 'term' in dados
+			? [dados.term, dados.translation]
+			: 'title' in dados
+				? [dados.title, dados.text.slice(0, 60)]
+				: [dados.lines[0]?.text ?? '', `${dados.lines.length} falas`];
+}
+
+/**
+ * "O mesmo material", para a biblioteca: o mesmo tipo com o mesmo texto
+ * principal, sem diferença de espaço nas pontas, de caixa ou de forma Unicode
+ * (regra nº 6). Uma frase cadastrada duas vezes com traduções diferentes é a
+ * mesma frase na atividade — e duas vezes nela renderia as mesmas questões.
+ */
+function chaveDoMaterial(material: { kind: ContentUnitKind; data: unknown }): string {
+	const [principal] = principalESecundario(material.kind, material.data);
+	return `${material.kind}:${principal.trim().normalize('NFC').toLocaleLowerCase('pt-BR')}`;
+}
 
 /** O que está na biblioteca e ainda NÃO está nesta atividade. */
 export const materiaisDisponiveis = query(
@@ -368,18 +487,12 @@ export const materiaisDisponiveis = query(
 			materiais(teacher).byActivity(activityId)
 		]);
 		const usados = new Set(jaNaAtividade.map((m) => m.id));
+		const repetidos = new Set(jaNaAtividade.map(chaveDoMaterial));
 		return todos
 			.filter((m) => !usados.has(m.id))
 			.map((m) => {
 				const dados = parseContentUnit(m.kind, m.data);
-				const [primary, secondary] =
-					'target' in dados
-						? [dados.target, dados.source]
-						: 'term' in dados
-							? [dados.term, dados.translation]
-							: 'title' in dados
-								? [dados.title, dados.text.slice(0, 60)]
-								: [dados.lines[0]?.text ?? '', `${dados.lines.length} falas`];
+				const [primary, secondary] = principalESecundario(m.kind, m.data);
 				const kind = (
 					{
 						SentencePair: 'pair',
@@ -400,8 +513,11 @@ export const materiaisDisponiveis = query(
 					secondary,
 					/** A tag de idioma — o painel filtra pelo idioma da atividade. */
 					idioma: m.targetLang,
+					/** O mesmo conteúdo já está na atividade (outro registro): a tela trava a linha. */
+					jaNaAtividade: repetidos.has(chaveDoMaterial(m)),
 					note: 'note' in dados ? (dados.note ?? '') : '',
-					example: 'example' in dados ? (dados.example ?? '') : ''
+					example: 'example' in dados ? (dados.example ?? '') : '',
+					variants: 'variants' in dados ? (dados.variants ?? []) : []
 				};
 			});
 	}
@@ -418,98 +534,221 @@ export const removerMaterial = command(
 );
 
 /**
- * Nível 2: roda os geradores sobre o material do professor e grava o
- * resultado como RASCUNHO. Rascunho é uma `ActivityVersion` sem
- * `Publication` — publicar congela essa mesma versão (regra nº 7), então
- * nada aqui toca em versão já publicada.
+ * O plano da etapa de materiais: quantas questões entram e os tipos de cada
+ * material. O bloco de cima (`skills`) é recalculado aqui como a UNIÃO dos
+ * materiais — o servidor não confia no que a tela diz que é a união.
  */
-export const gerarItens = command(z.object({ activityId: z.string() }), async ({ activityId }) => {
-	const { teacher, activity } = await activityOr404(activityId);
-	recusarArquivada(activity);
-
-	// Só o material DESTA atividade — a biblioteca inteira geraria itens de
-	// conteúdo que não pertence a ela.
-	const units = await materiais(teacher).byActivity(activityId);
-	if (units.length === 0) error(400, 'Adicione ao menos um material antes de gerar itens.');
-
-	const targetProfile = getProfile(activity.targetLang);
-	const sourceProfile = getProfile(activity.sourceLang);
-	const { groups, closing } = runGenerators(units, {
-		targetProfile,
-		sourceProfile,
-		seed: activity.id,
-		capabilities: { asr: isAsrConfigured(), tts: isTtsConfigured() },
-		// A leitura da frase (kana, pinyin) entra no gabarito das questões de
-		// digitar — e fica visível e editável no editor de item.
-		transcrever: await transcritorPara(targetProfile),
-		// Palavras das frases, traduzidas, para o "ligue os pares" do fecho quando
-		// o vocabulário cadastrado não o enche (vazio sem tradutor).
-		palavrasTraduzidas: await paresDasFrases(
-			units,
-			{ alvo: targetProfile, origem: sourceProfile },
-			getTradutor()
-		)
-	});
-
-	// O que os geradores produziram é a matéria-prima; o que vira rascunho é o
-	// que o professor pediu na etapa 1 — quantas questões e quais habilidades.
-	// Sem este corte, 20 frases viravam cem exercícios e ele descartava 88 na
-	// mão.
-	const disponiveis = groups.reduce((total, group) => total + group.items.length, 0);
-	const selecionados = selectItems(
-		groups,
-		{
-			target: activity.itemTarget,
-			skills: activity.skills.filter(
-				(skill): skill is Skill => skillSchema.safeParse(skill).success
-			)
-		},
-		closing
-	);
-	// As outras traduções certas de cada "traduza para o português", propostas
-	// pelo tradutor e conferidas por ida e volta — só nos itens que ENTRARAM, que
-	// são poucos. Viram "Também aceitas" no editor de item, onde o professor
-	// remove a que não quiser. Sem tradutor, nada muda.
-	const items = await comVariantesDaTraducao(
-		selecionados,
-		{ alvo: targetProfile, origem: sourceProfile },
-		getTradutor()
-	);
-	await atividades(teacher).replaceDraftItems(activityId, items);
-
-	// **O áudio começa a ser sintetizado AQUI, não na publicação.** A etapa 4
-	// libera o botão só quando todos os arquivos existem, e enfileirar apenas
-	// dentro de `publicarAtividade` era um impasse: o professor não conseguia
-	// publicar porque faltava áudio, e o áudio não era pedido porque ele não
-	// conseguia publicar. Gerando agora, a espera acontece enquanto ele revisa.
-	await enfileirarAudioFaltante({
-		teacherId: teacher.id,
-		targetTag: activity.targetLang,
-		items
-	});
-
-	return { generated: items.length, groups: groups.length, available: disponiveis };
+const planoSchema = z.object({
+	itemTarget: z.number().int().min(1).max(MAX_ITENS),
+	geral: z.array(skillSchema).max(4),
+	tiposPorMaterial: tiposPorMaterialSchema
 });
 
+async function gravarPlano(
+	teacher: { id: string },
+	activityId: string,
+	plano: z.infer<typeof planoSchema>
+) {
+	const ids = (await materiais(teacher).byActivity(activityId)).map((m) => m.id);
+	const montado = montarPlano(plano.geral, plano.tiposPorMaterial, ids);
+	await atividades(teacher).atualizarPlano(activityId, {
+		itemTarget: plano.itemTarget,
+		skills: montado.geral,
+		tiposPorMaterial: montado.porMaterial
+	});
+	return montado;
+}
+
+/** Guarda o plano enquanto o professor mexe — voltar à etapa encontra o que ele deixou. */
+export const salvarPlanoDeGeracao = command(
+	z.object({ activityId: z.string(), plano: planoSchema }),
+	async ({ activityId, plano }) => {
+		const { teacher } = await activityOr404(activityId);
+		await gravarPlano(teacher, activityId, plano);
+		return { ok: true as const };
+	}
+);
+
 /**
- * Descartar não apaga: marca. O item continua no rascunho para o professor
- * poder restaurar na mesma tela — só não entra na versão publicada.
+ * Nível 2: COMEÇA a geração das questões e devolve na hora. O trabalho roda em
+ * segundo plano (`$lib/server/atividades/geracao.ts`), passo a passo, e a tela
+ * "Gerando" acompanha por `progressoDaGeracao`. Gera para todos os materiais: o
+ * que passa da quantidade vai para o rascunho como "fora" (pedido do dono do
+ * repositório). Rascunho é uma `ActivityVersion` sem `Publication` — nada aqui
+ * toca em versão já publicada (regra nº 7).
+ */
+export const gerarItens = command(
+	z.object({ activityId: z.string(), plano: planoSchema.optional() }),
+	async ({ activityId, plano }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		recusarArquivada(activity);
+
+		const tipos = plano ? (await gravarPlano(teacher, activityId, plano)).geral : activity.skills;
+		if (tipos.length === 0) {
+			return { ok: false as const, error: 'Ligue ao menos um tipo de questão para gerar.' };
+		}
+		const atual = plano ? await atividades(teacher).byId(activityId) : activity;
+		if (!atual) error(404, 'Atividade não encontrada');
+
+		return iniciarGeracao<StoredItemRow>(teacher.id, {
+			activity: {
+				id: atual.id,
+				targetLang: atual.targetLang,
+				sourceLang: atual.sourceLang,
+				itemTarget: atual.itemTarget,
+				skills: atual.skills,
+				tiposPorMaterial: atual.tiposPorMaterial
+			},
+			// Só o material DESTA atividade — a biblioteca inteira geraria itens
+			// de conteúdo que não pertence a ela.
+			materiais: () => materiais(teacher).byActivity(activityId),
+			capacidades: { asr: isAsrConfigured(), tts: isTtsConfigured() },
+			tradutor: getTradutor(),
+			// A leitura da frase (kana, pinyin) entra no gabarito das questões de
+			// digitar — e fica visível e editável no editor de questão.
+			transcritorPara,
+			gravar: async (dentro, fora) => {
+				const versao = await atividades(teacher).replaceDraftItems(activityId, dentro, fora);
+				// As questões do rascunho anterior saíram: o áudio que só elas usavam
+				// sai junto (o que outra atividade usa fica — a conta é por conteúdo).
+				await limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
+				return (versao?.items ?? []).filter((item) => !item.discarded);
+			},
+			// **O áudio começa a ser sintetizado AQUI, não na publicação.** A etapa
+			// 4 só libera o botão com todos os arquivos prontos; gerando agora, a
+			// espera acontece enquanto o professor revisa. Só do que ENTROU: o que
+			// ficou de fora pede o seu quando entrar (`descartarItem`).
+			pedirAudio: (gravados) =>
+				enfileirarAudioFaltante({
+					teacherId: teacher.id,
+					targetTag: atual.targetLang,
+					items: gravados
+				})
+		});
+	}
+);
+
+/** O andamento da geração — a tela "Gerando" pergunta até ela terminar. */
+export const progressoDaGeracao = query(
+	z.object({ activityId: z.string() }),
+	async ({ activityId }) => {
+		const { teacher } = await activityOr404(activityId);
+		return andamentoDe(teacher.id, activityId);
+	}
+);
+
+/**
+ * O que UM material daria com estes tipos — a "Prévia" de cada linha na etapa
+ * de materiais. Roda os geradores sem tradutor nem transcritor (é rápido e não
+ * gasta o serviço de áudio): o associar que fecha a atividade e as outras
+ * traduções certas só aparecem ao gerar de verdade.
+ */
+export const previaDoMaterial = query(
+	z.object({
+		activityId: z.string(),
+		contentId: z.string(),
+		tipos: z.array(skillSchema).max(4)
+	}),
+	async ({ activityId, contentId, tipos }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		const units = await materiais(teacher).byActivity(activityId);
+		if (!units.some((u) => u.id === contentId)) error(404, 'Material não encontrado');
+		const { groups } = runGenerators(units, {
+			targetProfile: getProfile(activity.targetLang),
+			sourceProfile: getProfile(activity.sourceLang),
+			seed: activity.id,
+			capabilities: { asr: isAsrConfigured(), tts: isTtsConfigured() }
+		});
+		// Um exemplo de CADA TIPO, como QUESTÃO RESUMIDA — o cartão do desenho, com a
+		// resposta certa marcada (tela do professor). O tipo desligado vai junto,
+		// apagado.
+		const grupo = groups.find((g) => g.contentId === contentId);
+		return umaPorHabilidade(
+			(grupo?.items ?? []).map((item) => resumirQuestao(item, entraComOsTipos(item, tipos)))
+		);
+	}
+);
+
+/** O que está DENTRO do rascunho agora (o que vai para a publicação). */
+async function quantasDentro(teacher: { id: string }, activityId: string) {
+	const draft = await atividades(teacher).draft(activityId);
+	return draft?.items.filter((i) => !i.discarded).length ?? 0;
+}
+
+/**
+ * Tirar ou pôr de volta. Não apaga: marca — o item continua no rascunho para o
+ * professor trocar na mesma tela; só não entra na versão publicada. Pôr de volta
+ * respeita o teto de questões por atividade e pede o áudio dela, se for de escuta.
  */
 export const descartarItem = command(
 	z.object({ activityId: z.string(), itemId: z.string(), descartado: z.boolean().default(true) }),
 	async ({ activityId, itemId, descartado }) => {
-		const { teacher } = await activityOr404(activityId);
-		return {
-			ok: await atividades(teacher).setDraftItemDiscarded(activityId, itemId, descartado)
-		};
+		const { teacher, activity } = await activityOr404(activityId);
+		const repo = atividades(teacher);
+		if (!descartado && (await quantasDentro(teacher, activityId)) >= MAX_ITENS) {
+			return {
+				ok: false as const,
+				error: `Uma atividade tem no máximo ${MAX_ITENS} questões. Tire uma antes de pôr esta.`
+			};
+		}
+		const ok = await repo.setDraftItemDiscarded(activityId, itemId, descartado);
+		if (ok && !descartado) {
+			const item = await repo.draftItem(activityId, itemId);
+			if (item) {
+				await enfileirarAudioFaltante({
+					teacherId: teacher.id,
+					targetTag: activity.targetLang,
+					items: [item]
+				});
+			}
+		}
+		// Tirada da atividade, a questão não vai para o aluno: o áudio dela, se
+		// nenhuma outra o usa, sai. Pôr de volta pede a síntese de novo (acima).
+		if (ok && descartado) void limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
+		return { ok };
 	}
 );
 
+/**
+ * A ordem do roteiro do aluno, arrastada na revisão. Só as questões de DENTRO;
+ * a lista tem de ser exatamente elas (o repositório recusa a que não bate).
+ */
+export const reordenarQuestoes = command(
+	z.object({ activityId: z.string(), ordem: z.array(z.string()).min(1).max(MAX_ITENS) }),
+	async ({ activityId, ordem }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		recusarArquivada(activity);
+		const ok = await atividades(teacher).reordenarRascunho(activityId, ordem);
+		return ok
+			? { ok: true as const }
+			: {
+					ok: false as const,
+					error: 'A lista mudou enquanto você arrastava. Recarregue a página.'
+				};
+	}
+);
+
+/** "Pôr todas" — só quando todas cabem no teto de questões. */
 export const aceitarTodosItens = command(
 	z.object({ activityId: z.string() }),
 	async ({ activityId }) => {
-		const { teacher } = await activityOr404(activityId);
-		return { restaurados: await atividades(teacher).acceptAllDraftItems(activityId) };
+		const { teacher, activity } = await activityOr404(activityId);
+		const draft = await atividades(teacher).draft(activityId);
+		if ((draft?.items.length ?? 0) > MAX_ITENS) {
+			return {
+				ok: false as const,
+				error: `Não cabem todas: uma atividade tem no máximo ${MAX_ITENS} questões.`
+			};
+		}
+		const restaurados = await atividades(teacher).acceptAllDraftItems(activityId);
+		if (draft) {
+			await enfileirarAudioFaltante({
+				teacherId: teacher.id,
+				targetTag: activity.targetLang,
+				items: draft.items
+			});
+		}
+		return { ok: true as const, restaurados };
 	}
 );
 
@@ -557,83 +796,181 @@ export const regerarAudio = command(
 	}
 );
 
-/** Autoria manual (nível 3): cria o item vazio e devolve o id para abrir o editor. */
-export const criarItemManual = command(
-	z.object({ activityId: z.string() }),
-	async ({ activityId }) => {
-		const { teacher, activity } = await activityOr404(activityId);
-		const item = await atividades(teacher).createManualDraftItem(activityId, {
-			source: activity.sourceLang,
-			target: activity.targetLang
-		});
-		if (!item) error(400, 'Gere os itens antes de criar um item do zero.');
-		return { itemId: item.id };
+/** O que o servidor consegue entregar para a questão: voz no idioma, transcrição. */
+function capacidadesDe(targetLang: string) {
+	return { tts: isTtsConfigured(), asr: isAsrConfigured(), alvo: getProfile(targetLang) };
+}
+
+/** A frase no idioma alvo do material de origem — o "monte" gerado guarda só as peças. */
+async function fraseDoMaterial(
+	teacher: { id: string },
+	activityId: string,
+	contentId: string | null
+): Promise<string | undefined> {
+	if (!contentId) return undefined;
+	const unit = (await materiais(teacher).byActivity(activityId)).find((u) => u.id === contentId);
+	if (!unit) return undefined;
+	const dados = parseContentUnit(unit.kind, unit.data);
+	return 'target' in dados ? dados.target : 'term' in dados ? dados.term : undefined;
+}
+
+/**
+ * Nível 3: a questão como o EDITOR a abre (o modal da revisão). É a tela do
+ * professor, atrás do guard: o gabarito vem junto, para a moldura âmbar.
+ */
+export const questaoParaEditar = query(
+	z.object({ activityId: z.string(), itemId: z.string() }),
+	async ({ activityId, itemId }) => {
+		const { teacher } = await activityOr404(activityId);
+		const item = await atividades(teacher).draftItem(activityId, itemId);
+		if (!item) error(404, 'Questão não encontrada neste rascunho');
+		const prompt = promptSchema.parse(item.prompt);
+		const interaction = interactionSchema.parse(item.interaction);
+		const grading = gradingSchema.parse(item.grading);
+		return {
+			questao: questaoDoItem(
+				{ prompt, interaction, grading },
+				{ fraseDoMaterial: await fraseDoMaterial(teacher, activityId, item.sourceContentId) }
+			),
+			// O que a tela precisa para o enunciado padrão acompanhar o gravado.
+			gravada: {
+				tipo: tipoDaQuestao(prompt.kind, interaction.type),
+				interacao: interaction.type,
+				chave: prompt.instructionKey,
+				answerLang: grading.answerLang
+			},
+			descartada: item.discarded
+		};
 	}
 );
 
 /**
- * Nível 3: edição manual de um item — o editor de questão. Quem decide o que
- * vale é `montarItemEditado` (`$lib/server/atividades/item-editado.ts`), o
- * MESMO que a prévia usa: a tela não oferece o que o servidor recusaria, e o
- * que o formulário não edita (a língua da resposta, por exemplo) é mantido.
+ * Salvar a questão do editor — editar uma que existe (`itemId`) ou criar uma do
+ * zero. Quem decide o que vale é `montarQuestao`, o MESMO que a prévia usa: a
+ * tela não oferece o que o servidor recusaria, e o que o formulário não edita
+ * (a língua da resposta, as ordens aceitas de um "monte") é mantido.
  *
- * Mudou o texto de um prompt de áudio, o arquivo antigo não serve mais: o TTS
- * novo é pedido AQUI, para a síntese acontecer enquanto o professor revisa (a
- * etapa 4 também repõe, mas aí ele já está esperando).
+ * A questão nova só passa a existir aqui, já validada — ela nascia no clique,
+ * com texto de exemplo, e fechar o editor sem mexer deixava essa questão na
+ * atividade. Áudio novo (questão nova de escuta, ou a frase mudou) é pedido
+ * AQUI, para a síntese acontecer enquanto o professor revisa.
  */
-export const salvarItem = form(
-	edicaoDoItemSchema.extend({ activityId: z.string(), itemId: z.string() }),
-	async ({ activityId, itemId, ...edicao }) => {
+export const salvarQuestao = command(
+	z.object({ activityId: z.string(), itemId: z.string().optional(), questao: questaoSchema }),
+	async ({ activityId, itemId, questao }) => {
 		const { teacher, activity } = await activityOr404(activityId);
+		recusarArquivada(activity);
+		const repo = atividades(teacher);
+		const { alvo, ...capacidades } = capacidadesDe(activity.targetLang);
 
-		const atual = await atividades(teacher).draftItem(activityId, itemId);
-		if (!atual) error(404, 'Item não encontrado neste rascunho');
+		const atual = itemId ? await repo.draftItem(activityId, itemId) : null;
+		if (itemId && !atual) error(404, 'Questão não encontrada neste rascunho');
 
-		const editado = montarItemEditado(atual, edicao);
-		if (!editado.ok) return { ok: false as const, error: editado.error };
-
-		const updated = await atividades(teacher).updateDraftItem(activityId, itemId, {
-			// Os três já passaram pelos schemas do kernel em `montarItemEditado`; o
-			// `unknown` só atravessa o tipo de JSON do Prisma, que não aceita interface.
-			prompt: editado.prompt as unknown as Prisma.InputJsonValue,
-			interaction: editado.interaction as unknown as Prisma.InputJsonValue,
-			grading: editado.grading as unknown as Prisma.InputJsonValue
+		const montada = montarQuestao(questao, {
+			alvo,
+			capacidades,
+			atual: atual ?? undefined
 		});
-		if (!updated) error(404, 'Item não encontrado neste rascunho');
+		if (!montada.ok) return { ok: false as const, error: montada.error };
 
-		if (editado.audioMudou) {
+		// Os três já passaram pelos schemas do kernel em `montarQuestao`; o
+		// `unknown` só atravessa o tipo de JSON do Prisma, que não aceita interface.
+		const conteudo = {
+			prompt: montada.prompt as unknown as Prisma.InputJsonValue,
+			interaction: montada.interaction as unknown as Prisma.InputJsonValue,
+			grading: montada.grading as unknown as Prisma.InputJsonValue
+		};
+
+		let gravado: StoredItemRow | null;
+		let descartada = false;
+		if (atual && itemId) {
+			gravado = await repo.updateDraftItem(activityId, itemId, conteudo);
+			descartada = atual.discarded;
+		} else {
+			if ((await quantasDentro(teacher, activityId)) >= MAX_ITENS) {
+				return {
+					ok: false as const,
+					error: `Uma atividade tem no máximo ${MAX_ITENS} questões. Tire uma antes de criar outra.`
+				};
+			}
+			// Sem rascunho ainda (nada gerado nem publicado), abre um vazio.
+			if (!(await repo.draftFromPublished(activityId)))
+				await repo.replaceDraftItems(activityId, []);
+			gravado = await repo.criarQuestaoManual(activityId, {
+				...conteudo,
+				locale: { source: activity.sourceLang, target: activity.targetLang }
+			});
+		}
+		if (!gravado) error(404, 'Questão não encontrada neste rascunho');
+
+		if (montada.audioMudou && !descartada) {
 			await enfileirarAudioFaltante({
 				teacherId: teacher.id,
 				targetTag: activity.targetLang,
-				items: [updated]
+				items: [gravado]
 			});
 		}
-		return { ok: true as const };
+		// A questão era de escuta e mudou a frase ou deixou de ser escuta: o
+		// arquivo antigo, se nenhuma outra questão o usa, sai do bucket.
+		const eraEscuta = atual ? promptSchema.parse(atual.prompt).kind === 'audio' : false;
+		if (eraEscuta && (montada.audioMudou || montada.prompt.kind !== 'audio')) {
+			void limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
+		}
+		return { ok: true as const, itemId: gravado.id };
 	}
 );
 
 /**
- * A prévia do editor de questão: o item COMO FICARIA com o que está no
- * formulário, passado pela mesma porta do Player (`buildRuntimeItem` →
- * `toRuntime()`). Nada é gravado. O gabarito chega aqui (é a tela do
- * professor, atrás do guard) e não volta: o que sai é o payload do aluno.
+ * A questão RESPONDÍVEL na revisão: o professor responde no celular do palco e
+ * recebe o veredito que o aluno receberia — o mesmo kernel e a MESMA seed do
+ * runtime que o palco mostra (`revisar/+page.server.ts`; sem ela os ids das
+ * alternativas e das peças não batem). Nada é gravado. Fala e escrita livre
+ * ficam de fora: uma precisa do microfone e do serviço de transcrição, a outra é
+ * o professor quem corrige.
  */
-export const previaDoItem = query(
-	edicaoDoItemSchema.extend({ activityId: z.string(), itemId: z.string() }),
-	async ({ activityId, itemId, ...edicao }) => {
-		const { teacher, activity } = await activityOr404(activityId);
-		const atual = await atividades(teacher).draftItem(activityId, itemId);
-		if (!atual) error(404, 'Item não encontrado neste rascunho');
+export const corrigirNaRevisao = command(
+	z.object({ activityId: z.string(), itemId: z.string(), resposta: z.unknown() }),
+	async ({ activityId, itemId, resposta }) => {
+		const { teacher } = await activityOr404(activityId);
+		const draft = await atividades(teacher).draft(activityId);
+		const item = draft?.items.find((i) => i.id === itemId);
+		if (!draft || !item) error(404, 'Questão não encontrada neste rascunho');
+		if (interactionSchema.parse(item.interaction).type === 'speak') {
+			return { ok: false as const, erro: 'A fala se confere no Player, com o microfone.' };
+		}
+		if (gradingSchema.parse(item.grading).mode === 'rubric') {
+			return {
+				ok: false as const,
+				erro: 'Esta resposta você corrige depois, na tela da tentativa.'
+			};
+		}
+		return corrigirSemGravar(item, resposta, `revisao:${draft.id}:${item.id}`);
+	}
+);
 
-		const editado = montarItemEditado(atual, edicao);
-		if (!editado.ok) return { ok: false as const, error: editado.error };
+/**
+ * A prévia do editor: a questão COMO FICARIA com o que está no formulário,
+ * passada pela mesma porta do Player (`buildRuntimeItem` → `toRuntime()`). Nada
+ * é gravado. O gabarito chega aqui (é a tela do professor, atrás do guard) e não
+ * volta: o que sai é o payload do aluno.
+ */
+export const previaDaQuestao = query(
+	z.object({ activityId: z.string(), itemId: z.string().optional(), questao: questaoSchema }),
+	async ({ activityId, itemId, questao }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		const atual = itemId ? await atividades(teacher).draftItem(activityId, itemId) : null;
+		if (itemId && !atual) error(404, 'Questão não encontrada neste rascunho');
+		const { alvo, ...capacidades } = capacidadesDe(activity.targetLang);
+
+		const montada = montarQuestao(questao, { alvo, capacidades, atual: atual ?? undefined });
+		if (!montada.ok) return { ok: false as const, error: montada.error };
 
 		const row = {
-			id: atual.id,
-			prompt: editado.prompt,
-			interaction: editado.interaction,
-			grading: editado.grading,
-			locale: atual.locale
+			id: atual?.id ?? 'nova',
+			prompt: montada.prompt,
+			interaction: montada.interaction,
+			grading: montada.grading,
+			locale: atual?.locale ?? { source: activity.sourceLang, target: activity.targetLang }
 		};
 		const hashes = itemAudioHashes(row, activity.targetLang);
 		const assets = await playerRepo.mediaUrls(teacher.id, hashes);
@@ -641,9 +978,9 @@ export const previaDoItem = query(
 		try {
 			return {
 				ok: true as const,
-				runtime: buildRuntimeItem(row, `previa:${itemId}`, urlByHash),
-				// Texto de áudio novo ainda não tem arquivo: a tela diz isso em vez
-				// de mostrar um player que não toca.
+				runtime: buildRuntimeItem(row, `previa:${itemId ?? 'nova'}`, urlByHash),
+				// Frase de áudio nova ainda não tem arquivo: a tela diz isso em vez de
+				// mostrar um player que não toca.
 				audioPendente: hashes.length > 0 && assets.length < hashes.length
 			};
 		} catch {
@@ -652,6 +989,41 @@ export const previaDoItem = query(
 				error: 'Os campos desta questão não formam um exercício ainda.'
 			};
 		}
+	}
+);
+
+/**
+ * A etapa 1 de uma atividade que já existe — o "voltar" da etapa de materiais
+ * não cria outra atividade. Os idiomas só mudam enquanto nada depende deles:
+ * sem material, sem questão e nunca publicada (o material tem a tag do idioma da
+ * atividade, e a tokenização das questões é a dele).
+ */
+export const editarDetalhes = form(
+	z.object({
+		activityId: z.string(),
+		title: z.string().min(1, 'Dê um título para a atividade'),
+		targetLang: z.string().optional(),
+		sourceLang: z.string().optional(),
+		level: z.string().optional()
+	}),
+	async ({ activityId, title, targetLang, sourceLang, level }) => {
+		const { teacher } = await activityOr404(activityId);
+		const repo = atividades(teacher);
+		const [units, draft, published] = await Promise.all([
+			materiais(teacher).byActivity(activityId),
+			repo.draft(activityId),
+			repo.published(activityId)
+		]);
+		const idiomasLivres = units.length === 0 && !draft && !published;
+		await repo.atualizarDetalhes(activityId, {
+			title: title.trim(),
+			level: nivelOuNulo(level),
+			idiomas:
+				idiomasLivres && targetLang && sourceLang
+					? { targetLang: tagForLabel(targetLang), sourceLang: tagForLabel(sourceLang) }
+					: undefined
+		});
+		redirect(303, resolve('/(studio)/atividades/[id]/materiais', { id: activityId }));
 	}
 );
 
@@ -709,28 +1081,35 @@ export const publicarAtividade = form(
 		// ser corrigido depois. Barrar aqui é a única chance.
 		const aPublicar = draft.items.filter((item) => !item.discarded);
 		if (aPublicar.length === 0) {
-			return { ok: false, error: 'Todos os itens estão descartados.' };
+			return { ok: false, error: 'Nenhuma questão está dentro da atividade.' };
+		}
+		if (aPublicar.length > MAX_ITENS) {
+			return {
+				ok: false,
+				error: `Uma atividade tem no máximo ${MAX_ITENS} questões. Deixe ${aPublicar.length - MAX_ITENS} de fora.`
+			};
 		}
 		for (const [posicao, item] of aPublicar.entries()) {
 			const interaction = interactionSchema.parse(item.interaction);
 			const valido = getInteraction(interaction.type).authoringSchema.safeParse(
 				interaction.payload
 			);
-			if (!valido.success) {
+			if (!valido.success || ehMarcadorAntigo(interaction)) {
 				return {
 					ok: false,
-					error: `O item ${posicao + 1} está incompleto. Abra-o no editor ou descarte-o.`
+					error: `A questão ${posicao + 1} está incompleta. Abra-a no editor ou deixe-a de fora.`
 				};
 			}
 		}
 
-		// Repõe o que falta antes de olhar o placar: o áudio pertence ao MATERIAL
-		// (db.md), então reusar a frase de outra atividade já vem pronto, e só o
-		// que mudou desde a geração precisa de síntese.
+		// Repõe o que falta antes de olhar o placar: o áudio é identificado pelo
+		// conteúdo (db.md), então reusar a frase de outra atividade já vem pronto,
+		// e só o que mudou desde a geração precisa de síntese. Só do que ENTRA: o
+		// que ficou de fora não vai para o aluno e não pede áudio.
 		const faltando = await enfileirarAudioFaltante({
 			teacherId: teacher.id,
 			targetTag: activity.targetLang,
-			items: draft.items
+			items: aPublicar
 		});
 
 		// **Publicar com áudio faltando é barrado AQUI, não só no botão.** A tela
@@ -767,6 +1146,10 @@ export const publicarAtividade = form(
 		// rascunho sai agora, na próxima volta do worker — sem o professor ter de
 		// achar o "tentar de novo" (docs/telas-modulos-professor.md 2.4).
 		await liberarEnviosQueEsperavamPublicacao(teacher.id, activityId);
+
+		// As questões de fora sumiram de vez na publicação: o áudio que só elas
+		// usavam sai também.
+		void limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
 
 		// "pendente" é o que FALTA, não o total: republicar uma atividade cujo
 		// áudio já está pronto não pode dizer ao professor que ele vai esperar.
