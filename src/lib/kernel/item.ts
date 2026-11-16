@@ -23,11 +23,25 @@ export interface Item {
  * Toda leitura passa por estes schemas.
  */
 
+export const mostraDoDialogoSchema = z.enum(['ambos', 'audio', 'texto']);
+
+/** O contexto do `composite` (`ContextoDoPrompt`): o trecho, ou as falas do diálogo. */
+export const contextoDoPromptSchema = z.discriminatedUnion('tipo', [
+	z.object({ tipo: z.literal('texto'), texto: z.string().min(1) }),
+	z.object({
+		tipo: z.literal('dialogo'),
+		falas: z.array(z.object({ falante: z.string().min(1), texto: z.string().min(1) })).min(2),
+		ate: z.number().int().min(1).optional(),
+		mostra: mostraDoDialogoSchema.default('ambos')
+	})
+]);
+
 export const promptSchema = z.object({
 	kind: z.enum(['text', 'audio', 'image', 'composite']),
 	text: z.string().optional(),
 	mediaId: z.string().optional(),
 	instructionKey: z.string().optional(),
+	contexto: contextoDoPromptSchema.optional(),
 	/**
 	 * Enunciado escrito pelo professor no editor de item, quando ele não
 	 * quer o texto padrão da `instructionKey`. Fica aqui e não no kernel de

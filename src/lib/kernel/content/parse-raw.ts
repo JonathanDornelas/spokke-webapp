@@ -1,4 +1,5 @@
 import type { ContentUnitKind } from './types';
+import { problemaDoVocabulario } from './vocabulario';
 
 /**
  * Converte o texto que o professor COLA na etapa 2 do wizard em unidades de
@@ -53,6 +54,8 @@ export interface RawLinePreview {
 	 * automático. Só acontece com `traduzirSemSeparador`.
 	 */
 	automatica?: boolean;
+	/** Por que a linha fica de fora, quando não é a falta de separador (a frase no vocabulário). */
+	motivo?: string;
 }
 
 /**
@@ -60,9 +63,13 @@ export interface RawLinePreview {
  * há tradução, e a do aluno é obrigatória). Com tradutor ela entra só com o
  * lado do idioma alvo, e a tradução vem dele — é o caminho padrão: o professor
  * cola a lista no idioma que ensina e confere a tradução depois.
+ *
+ * `vocabulario` são as tags dos dois idiomas, e liga a regra do vocabulário
+ * (`problemaDoVocabulario`): a linha que é frase fica de fora, com o motivo.
  */
 export interface OpcoesDoLote {
 	traduzirSemSeparador?: boolean;
+	vocabulario?: { alvo: string; origem: string };
 }
 
 /**
@@ -75,12 +82,19 @@ export interface OpcoesDoLote {
  * é exatamente o que o servidor grava.
  */
 export function previewRawLines(raw: string, opcoes: OpcoesDoLote = {}): RawLinePreview[] {
-	return linesOf(raw).map((text) => {
+	return linesOf(raw).map((text): RawLinePreview => {
 		const pair = splitPair(text);
-		if (pair) return { text, left: pair[0], right: pair[1], ok: true };
-		return opcoes.traduzirSemSeparador
-			? { text, left: text, right: '', ok: true, automatica: true }
-			: { text, left: text, right: '', ok: false };
+		const linha: RawLinePreview = pair
+			? { text, left: pair[0], right: pair[1], ok: true }
+			: opcoes.traduzirSemSeparador
+				? { text, left: text, right: '', ok: true, automatica: true }
+				: { text, left: text, right: '', ok: false };
+		if (!linha.ok || !opcoes.vocabulario) return linha;
+		const motivo = problemaDoVocabulario(
+			{ term: linha.left, translation: linha.right },
+			opcoes.vocabulario
+		);
+		return motivo ? { ...linha, ok: false, automatica: undefined, motivo } : linha;
 	});
 }
 
@@ -111,7 +125,12 @@ export function parseRawMaterial(
 		case 'VocabItem':
 			return lines.flatMap((line) => {
 				const pair = splitPair(line) ?? semSeparador(line);
-				return pair ? [{ term: pair[0], translation: pair[1] }] : [];
+				if (!pair) return [];
+				const item = { term: pair[0], translation: pair[1] };
+				// A frase colada como vocabulário fica de fora, como a linha sem
+				// separador: a prévia já a mostrou riscada, com o motivo.
+				if (opcoes.vocabulario && problemaDoVocabulario(item, opcoes.vocabulario)) return [];
+				return [item];
 			});
 
 		// Texto e diálogo são UMA unidade só: o bloco inteiro.

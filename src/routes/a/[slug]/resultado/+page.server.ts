@@ -107,8 +107,9 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 					.slice(0, 2)
 					.map((parte) => parte[0]?.toUpperCase())
 					.join('') || '?',
-			// Logado numa conta: o nome no cabeçalho leva ao painel dele. Sem
-			// conta não há para onde ir — e a tela não pede que crie uma.
+			// Logado numa conta: o nome no cabeçalho e o botão do rodapé levam ao
+			// painel dele. Sem conta, o rodapé oferece criar uma (oferta, nunca
+			// exigência: o resultado já está com o professor).
 			temConta: !!locals.aluno,
 			avatar: locals.aluno?.avatar ?? null
 		},

@@ -1,6 +1,7 @@
 import type { ContentUnitKind, Dialogue, Passage, SentencePair, VocabItem } from '../content/types';
 import { parseContentUnit } from '../content/parse';
 import type { Item } from '../item';
+import type { Skill } from '../interactions/types';
 import type { LanguageProfile } from '../language/profile';
 import { z } from 'zod';
 import { exigeIme } from '../language/teclado';
@@ -11,7 +12,7 @@ import { vocabItemGenerators } from './vocab-item';
 import { passageGenerators } from './passage';
 import { dialogueGenerators } from './dialogue';
 import { closingMatch, type PalavraTraduzida } from './closing-match';
-import type { ContentRef, Generator } from './types';
+import type { ContentRef, Generator, NivelCefr } from './types';
 
 /**
  * Roda todos os geradores aplicáveis sobre um lote de conteúdo e devolve o
@@ -47,6 +48,12 @@ export interface GenerationOptions {
 	 * `palavrasParaAssociar` (puro); quem traduz é o servidor. Sem tradutor, vazio.
 	 */
 	palavrasTraduzidas?: PalavraTraduzida[];
+	/** O nível CEFR da atividade: no diálogo, decide se o aluno lê as falas (`mostraDoDialogo`). */
+	nivel?: NivelCefr | null;
+	/** A pronúncia de uma palavra, do dicionário do servidor (`LanguageProfile.pronuncia`). */
+	foneticaDe?: (palavra: string) => string[] | null;
+	/** Os tipos pedidos para cada material (`GeneratorContext.pedidas`); sem isto, todos. */
+	pedidasPara?: (contentId: string) => readonly Skill[] | undefined;
 }
 
 export interface GenerationGroup {
@@ -80,7 +87,10 @@ function runSet<D>(
 				sourceProfile: options.sourceProfile,
 				siblings: siblings.filter((s) => s.id !== ref.id),
 				seed: options.seed,
-				capabilities: options.capabilities
+				capabilities: options.capabilities,
+				nivel: options.nivel,
+				foneticaDe: options.foneticaDe,
+				pedidas: options.pedidasPara?.(ref.id)
 			})
 		)
 		.map((item) => comLeitura(item, options))

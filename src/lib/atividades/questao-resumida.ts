@@ -12,7 +12,22 @@
  * aparece marcada, como no design.
  */
 
+import { habilidadePrincipal } from '$lib/kernel/interactions/skills';
+import type { Skill } from '$lib/kernel/interactions/types';
+
 export type HabilidadeDaResumida = 'escuta' | 'fala' | 'leitura' | 'escrita';
+
+const HABILIDADE_DA_SKILL: Record<Skill, HabilidadeDaResumida> = {
+	listening: 'escuta',
+	speaking: 'fala',
+	reading: 'leitura',
+	writing: 'escrita'
+};
+
+/** A habilidade que nomeia a questão, em português (`habilidadePrincipal`, do kernel). */
+export function habilidadeDaQuestao(skills: readonly Skill[]): HabilidadeDaResumida {
+	return HABILIDADE_DA_SKILL[habilidadePrincipal(skills)];
+}
 
 export type CorpoDaResumida =
 	| { forma: 'ouvir-escolher'; certa: string; outra?: string }
@@ -25,7 +40,22 @@ export type CorpoDaResumida =
 	| { forma: 'digitar'; texto: string; resposta: string }
 	| { forma: 'ordenar'; falas: string[] }
 	| { forma: 'associar'; pares: { esquerda: string; direita: string }[] }
-	| { forma: 'tocar'; antes: string; palavra: string; depois: string };
+	| { forma: 'tocar'; antes: string; palavra: string; depois: string }
+	/**
+	 * O diálogo: as últimas falas em balões e, na próxima fala, o balão
+	 * tracejado de quem tem a vez com a resposta (tela do professor); na pergunta
+	 * de compreensão, a pergunta e a resposta certa. `ouve` é o diálogo tocado.
+	 */
+	| {
+			forma: 'conversa';
+			falas: { falante: string; texto: string; lado: 'inicio' | 'fim' }[];
+			vez?: { falante: string; lado: 'inicio' | 'fim'; resposta: string };
+			pergunta?: string;
+			certa?: string;
+			ouve: boolean;
+	  }
+	/** A Pronúncia: a boca, a palavra e as sílabas, a tônica marcada. */
+	| { forma: 'pronuncia'; palavra: string; silabas: { leitura: string; tonica: boolean }[] };
 
 export interface QuestaoResumida {
 	id: string;

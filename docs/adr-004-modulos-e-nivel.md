@@ -13,7 +13,13 @@ frutas)". Havia quatro leituras possíveis de dificuldade; o dono escolheu a mai
   `src/lib/atividades/nivel.ts`: a escala **CEFR A1–C2** com nome amigável.
 - CEFR vale para qualquer idioma, então o sistema continua agnóstico. Uma escala de um idioma só
   (JLPT, HSK) seria regra de língua fora do `LanguageProfile`.
-- **Não muda os exercícios gerados.** Organiza, filtra e aparece para o aluno.
+- **Não muda os exercícios gerados, com DUAS exceções.** Organiza, filtra e aparece para o aluno. As
+  exceções (pedidos do dono, 2026-11-15) são o diálogo e a Pronúncia. No diálogo, até B1, e sem
+  nível, o aluno lê as falas enquanto ouve; do B2 em diante, só ouve (`mostraDoDialogo`, kernel.md
+  "O diálogo"). Na Pronúncia, o nível escolhe o rigor da correção: A1 e A2 leve, B1 e B2 normal, C1 e
+  C2 rigoroso, sem nível normal (`rigorDaPronuncia`, kernel.md "Pronúncia"). Nenhuma das duas é
+  outro exercício: é a forma de receber o diálogo e o quanto a correção exige, e o professor troca
+  questão a questão no editor.
 - Mora na ATIVIDADE (como o título), não na versão: trocar o nível não exige republicar.
 - Onde aparece: etapa 1 do wizard (opcional), cabeçalho do detalhe (editável), lista (coluna e
   filtro), entrada do Player, histórico do aluno, seletor de atividades da turma.

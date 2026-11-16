@@ -33,6 +33,7 @@
 	import { formatarDuracao, problemaDoTrecho, segundosDoTrecho } from '$lib/ia/arquivo';
 	import { MAX_VARIACOES, limparVariacoes } from '$lib/atividades/variacoes';
 	import { previewRawLines, RAW_SEPARATORS } from '$lib/kernel/content/parse-raw';
+	import { MAX_PALAVRAS_DO_TERMO, problemaDoVocabulario } from '$lib/kernel/content/vocabulario';
 	import { MINIMO_PARA_DISTRATOR } from '$lib/kernel/content/rendimento';
 	import {
 		FALAS_INICIAIS,
@@ -486,12 +487,28 @@
 	// ── colar uma lista ─────────────────────────────────────────────────────
 	// Com o tradutor ligado a linha sem separador ENTRA — o mesmo parser do
 	// servidor, com a mesma opção, então a prévia continua sendo o que é gravado.
+	// No vocabulário, a linha que é FRASE fica de fora também (`problemaDoVocabulario`),
+	// pela mesma regra que o servidor aplica.
+	const tagsDoVocabulario = $derived({ alvo: tagConteudo, origem: linguaDoAluno ?? 'und' });
 	const linhasLote = $derived(
-		modoEfetivo === 'lista' ? previewRawLines(lote, { traduzirSemSeparador: podeTraduzir }) : []
+		modoEfetivo === 'lista'
+			? previewRawLines(lote, {
+					traduzirSemSeparador: podeTraduzir,
+					vocabulario: kind === 'vocab' ? tagsDoVocabulario : undefined
+				})
+			: []
 	);
 	const loteOk = $derived(linhasLote.filter((l) => l.ok).length);
 	const loteAutomatico = $derived(linhasLote.filter((l) => l.automatica).length);
-	const loteRuim = $derived(linhasLote.length - loteOk);
+	const loteFrase = $derived(linhasLote.filter((l) => !l.ok && l.motivo).length);
+	const loteRuim = $derived(linhasLote.length - loteOk - loteFrase);
+
+	/** Vocabulário é palavra ou expressão curta: dito enquanto o professor digita. */
+	const problemaDoTermo = $derived(
+		kind === 'vocab' && modoEfetivo === 'um'
+			? problemaDoVocabulario({ term: alvo, translation: traducao }, tagsDoVocabulario)
+			: null
+	);
 
 	/** Leva o cursor até a linha sem separador — é onde o conserto acontece. */
 	function corrigirLinha(n: number) {
@@ -773,7 +790,9 @@
 					: kind === 'dialogue'
 						? falas.filter((f) => f.text.trim()).length >= 2
 						: // Com o tradutor ligado, a tradução em branco é feita ao salvar.
-							alvo.trim().length > 0 && (traducao.trim().length > 0 || podeTraduzir);
+							alvo.trim().length > 0 &&
+							(traducao.trim().length > 0 || podeTraduzir) &&
+							!problemaDoTermo;
 		}
 	});
 	const saveLabel = $derived(
@@ -822,6 +841,74 @@
 	const segmentoOn = 'bg-primary text-primary-content';
 	const segmentoOff = 'text-base-content/65 hover:text-base-content';
 </script>
+
+{#snippet blocoDePerguntas(legenda: string)}
+	<input type="hidden" name="questions" value={JSON.stringify(perguntas)} />
+	<div>
+		<div class="mb-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+			<span class="text-[12.5px] font-bold">Perguntas de compreensão</span>
+			<span class="text-[11.5px] text-base-content/65">{legenda}</span>
+		</div>
+		<div class="grid gap-2">
+			{#each perguntas as pergunta, i (i)}
+				<div class="flex items-center gap-2">
+					<span
+						class="grid size-6 shrink-0 place-items-center rounded-field bg-base-300 font-mono text-[11.5px] text-primary"
+						aria-hidden="true">{i + 1}</span
+					>
+					<div class="grid min-w-0 flex-1 gap-1.5 sm:grid-cols-2">
+						<input
+							bind:value={pergunta.question}
+							dir={direcao}
+							data-content-lang={tagConteudo}
+							class="input min-w-0 font-content text-[13.5px]"
+							placeholder="Pergunta"
+							aria-label="Pergunta {i + 1}"
+						/>
+						<input
+							bind:value={pergunta.answer}
+							dir={direcao}
+							data-content-lang={tagConteudo}
+							class="input min-w-0 font-content text-[13.5px]"
+							placeholder="Resposta certa"
+							aria-label="Resposta da pergunta {i + 1}"
+						/>
+					</div>
+					<button
+						type="button"
+						onclick={() => removerPergunta(i)}
+						class="grid size-[34px] shrink-0 place-items-center rounded-field border border-line text-base-content/65 transition-colors hover:border-error hover:text-error"
+						aria-label="Remover pergunta {i + 1}"
+					>
+						<svg class="size-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path
+								d="M6 6l12 12M18 6L6 18"
+								stroke="currentColor"
+								stroke-width="2.2"
+								stroke-linecap="round"
+							/>
+						</svg>
+					</button>
+				</div>
+			{/each}
+		</div>
+		<button
+			type="button"
+			onclick={adicionarPergunta}
+			class="mt-2 flex min-h-[44px] items-center gap-2 rounded-field border border-dashed border-line px-3.5 text-[13px] font-bold text-primary transition-colors hover:border-primary hover:bg-base-200"
+		>
+			<svg class="size-[15px] shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<path
+					d="M12 5v14M5 12h14"
+					stroke="currentColor"
+					stroke-width="2.2"
+					stroke-linecap="round"
+				/>
+			</svg>
+			Adicionar pergunta
+		</button>
+	</div>
+{/snippet}
 
 <div class="flex h-full min-h-0 flex-col bg-base-100">
 	<!-- cabeçalho -->
@@ -1061,8 +1148,32 @@
 							data-content-lang={tagConteudo}
 							class="input w-full font-content text-[15px]"
 							placeholder={kind === 'pair' ? EXEMPLO.pair.alvo : EXEMPLO.vocab.alvo}
+							aria-invalid={problemaDoTermo ? true : undefined}
+							aria-describedby={problemaDoTermo ? 'mf-alvo-problema' : undefined}
 						/>
-						{#if repetido}
+						{#if problemaDoTermo}
+							<p
+								id="mf-alvo-problema"
+								class="mt-2 flex items-start gap-2 text-[12.5px] leading-snug font-semibold text-error"
+								role="status"
+							>
+								<svg
+									class="mt-px size-[15px] shrink-0"
+									viewBox="0 0 24 24"
+									fill="none"
+									aria-hidden="true"
+								>
+									<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
+									<path
+										d="M12 7.5v6M12 16.5h.01"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+									/>
+								</svg>
+								{problemaDoTermo}
+							</p>
+						{:else if repetido}
 							<div
 								class="mt-2 flex feedback-in flex-wrap items-center gap-x-3 gap-y-1.5 rounded-field border border-line bg-base-200 px-3 py-2.5"
 								role="status"
@@ -1251,73 +1362,7 @@
 					</div>
 					<!-- Sem pergunta, `passage-comprehension` devolve zero itens: o texto
 					     entra na lista e não gera nada. -->
-					<input type="hidden" name="questions" value={JSON.stringify(perguntas)} />
-					<div>
-						<div class="mb-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-							<span class="text-[12.5px] font-bold">Perguntas de compreensão</span>
-							<span class="text-[11.5px] text-base-content/65"
-								>cada pergunta vira uma questão de escolha</span
-							>
-						</div>
-						<div class="grid gap-2">
-							{#each perguntas as pergunta, i (i)}
-								<div class="flex items-center gap-2">
-									<span
-										class="grid size-6 shrink-0 place-items-center rounded-field bg-base-300 font-mono text-[11.5px] text-primary"
-										aria-hidden="true">{i + 1}</span
-									>
-									<div class="grid min-w-0 flex-1 gap-1.5 sm:grid-cols-2">
-										<input
-											bind:value={pergunta.question}
-											dir={direcao}
-											data-content-lang={tagConteudo}
-											class="input min-w-0 font-content text-[13.5px]"
-											placeholder="Pergunta"
-											aria-label="Pergunta {i + 1}"
-										/>
-										<input
-											bind:value={pergunta.answer}
-											dir={direcao}
-											data-content-lang={tagConteudo}
-											class="input min-w-0 font-content text-[13.5px]"
-											placeholder="Resposta certa"
-											aria-label="Resposta da pergunta {i + 1}"
-										/>
-									</div>
-									<button
-										type="button"
-										onclick={() => removerPergunta(i)}
-										class="grid size-[34px] shrink-0 place-items-center rounded-field border border-line text-base-content/65 transition-colors hover:border-error hover:text-error"
-										aria-label="Remover pergunta {i + 1}"
-									>
-										<svg class="size-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-											<path
-												d="M6 6l12 12M18 6L6 18"
-												stroke="currentColor"
-												stroke-width="2.2"
-												stroke-linecap="round"
-											/>
-										</svg>
-									</button>
-								</div>
-							{/each}
-						</div>
-						<button
-							type="button"
-							onclick={adicionarPergunta}
-							class="mt-2 flex min-h-[44px] items-center gap-2 rounded-field border border-dashed border-line px-3.5 text-[13px] font-bold text-primary transition-colors hover:border-primary hover:bg-base-200"
-						>
-							<svg class="size-[15px] shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-								<path
-									d="M12 5v14M5 12h14"
-									stroke="currentColor"
-									stroke-width="2.2"
-									stroke-linecap="round"
-								/>
-							</svg>
-							Adicionar pergunta
-						</button>
-					</div>
+					{@render blocoDePerguntas('cada pergunta vira uma questão de escolha')}
 				{:else}
 					<!-- Falante e fala em campos separados. Colado num bloco só, uma linha
 					     sem "Nome:" caía em A/B alternado sem o professor saber. -->
@@ -1326,7 +1371,7 @@
 						<div class="mb-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
 							<span class="text-[12.5px] font-bold">As falas, na ordem certa</span>
 							<span class="text-[11.5px] text-base-content/65"
-								>o aluno vai receber embaralhadas</span
+								>o aluno ouve a conversa e continua de onde ela parar</span
 							>
 						</div>
 						<div class="grid gap-2">
@@ -1417,6 +1462,8 @@
 							Adicionar fala de {proximoFalante}
 						</button>
 					</div>
+					<!-- As perguntas sobre o diálogo, como as do texto: opcionais. -->
+					{@render blocoDePerguntas('opcional · o aluno ouve o diálogo e responde')}
 				{/if}
 			</div>
 
@@ -1496,6 +1543,15 @@
 									{loteRuim} sem separador
 								</span>
 							{/if}
+							{#if loteFrase > 0}
+								<!-- A regra por extenso, uma vez: cada linha riscada só diz "frase, não palavra". -->
+								<p class="w-full text-[12px] leading-snug text-warning">
+									{loteFrase === 1 ? 'Uma linha é frase' : `${loteFrase} linhas são frase`} e
+									{loteFrase === 1 ? 'fica' : 'ficam'} de fora: vocabulário é palavra ou expressão curta,
+									de até {MAX_PALAVRAS_DO_TERMO} palavras, sem pontuação de frase. Frases inteiras entram
+									como Sentença.
+								</p>
+							{/if}
 						</div>
 						<!-- As linhas rolam DENTRO da prévia, com o resumo parado em cima: uma
 						     lista de cinquenta frases empurrava "O que o aluno vai ver" e o
@@ -1552,7 +1608,9 @@
 											<span class="font-content text-[13.5px] text-base-content/65 line-through"
 												>{l.left}</span
 											>
-											<span class="text-[12px] font-bold text-warning">sem separador</span>
+											<span class="text-[12px] font-bold text-warning" title={l.motivo}
+												>{l.motivo ? 'frase, não palavra' : 'sem separador'}</span
+											>
 										</span>
 										<button
 											type="button"
@@ -2020,7 +2078,7 @@
 						/>
 					</svg>
 					{resultado.added} adicionados{resultado.ignored
-						? `, ${resultado.ignored} sem separador ${resultado.ignored === 1 ? 'ignorada' : 'ignoradas'}`
+						? `, ${resultado.ignored} ${resultado.ignored === 1 ? 'linha ficou' : 'linhas ficaram'} de fora`
 						: ''}{resultado.reused ? `, ${resultado.reused} você já tinha` : ''}.
 					{#if resultado.traduzidas}
 						{resultado.traduzidas === 1

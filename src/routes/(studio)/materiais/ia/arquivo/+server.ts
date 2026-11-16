@@ -120,6 +120,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			quantos,
 			idiomaAlvo: labelForTag(idiomas.alvo),
 			idiomaOrigem: labelForTag(idiomas.origem),
+			tags: idiomas,
 			anexo
 		})
 	);

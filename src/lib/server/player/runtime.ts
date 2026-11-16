@@ -1,8 +1,17 @@
-import { vozDoTexto } from '$lib/kernel/language/voice';
+import { vozDoFalante, vozDoTexto } from '$lib/kernel/language/voice';
 import { getProfile, labelForTag } from '$lib/kernel/language/profiles';
 import { gradingSchema, interactionSchema, localeSchema, promptSchema } from '$lib/kernel/item';
 import { getInteraction } from '$lib/kernel/interactions/registry';
-import type { GradingMode, InteractionKind, Skill } from '$lib/kernel/interactions/types';
+import { habilidadePrincipal } from '$lib/kernel/interactions/skills';
+import { speakAuthoringSchema } from '$lib/kernel/interactions/speak';
+import { passosDaBoca, pronunciaDe, type RigorDaPronuncia } from '$lib/kernel/language/pronuncia';
+import type {
+	ContextoDoPrompt,
+	GradingMode,
+	InteractionKind,
+	Skill
+} from '$lib/kernel/interactions/types';
+import type { ContextoNoRuntime, PronunciaNoRuntime } from '$lib/components/interactions/types';
 import type { LanguageProfile } from '$lib/kernel/language/profile';
 import { tecladoDe, type Teclado } from '$lib/kernel/language/teclado';
 import { skillLabels } from '$lib/kernel/interactions/skill-schema';
@@ -72,6 +81,12 @@ export interface RuntimeItem {
 	hint?: string;
 	/** O texto com que o aluno trabalha — só quando ele PODE ver (nunca em áudio). */
 	passage?: string;
+	/** O trecho ou o diálogo antes da pergunta (`composite` com contexto). */
+	contexto?: ContextoNoRuntime;
+	/** A pergunta sobre o trecho ou o diálogo, quando há contexto. */
+	pergunta?: string;
+	/** Só na Pronúncia: a boca passo a passo e o áudio da palavra. */
+	pronuncia?: PronunciaNoRuntime;
 	skill: Skill;
 	skillLabel: string;
 	/** Nomes dos idiomas do par — cabeçalho das colunas de `match`. */
@@ -97,6 +112,27 @@ const GRADING_LABEL: Partial<Record<GradingMode, string>> = {
 	asr: 'reconhecimento de voz',
 	rubric: 'corrigida pelo professor'
 };
+
+/** O modo de correção da Pronúncia, no cabeçalho da questão: o rigor que vale ali. */
+const ROTULO_DO_RIGOR: Record<RigorDaPronuncia, string> = {
+	leve: 'pronúncia leve',
+	normal: 'pronúncia',
+	rigoroso: 'pronúncia rigorosa'
+};
+
+/** A regra da Pronúncia em uma linha, no rigor da questão (`TOLERANCIA`). */
+const DICA_DA_PRONUNCIA: Record<RigorDaPronuncia, string> = {
+	leve: 'Aqui o som conta, com correção leve: som parecido passa. O retorno diz qual sílaba saiu diferente.',
+	normal:
+		'Aqui o som conta: cada som precisa sair certo. O retorno diz qual sílaba saiu diferente.',
+	rigoroso:
+		'Aqui o som conta, com correção rigorosa: até a vogal fraca precisa sair certa. O retorno diz qual sílaba saiu diferente.'
+};
+
+function rigorDoRuntime(runtime: object): RigorDaPronuncia {
+	const rigor = 'rigor' in runtime ? runtime.rigor : undefined;
+	return rigor === 'leve' || rigor === 'rigoroso' ? rigor : 'normal';
+}
 
 /**
  * A regra da questão em uma linha. Sai do item e do LanguageProfile — nunca
@@ -145,26 +181,133 @@ export function itemSkills(row: Pick<StoredItemRow, 'prompt' | 'interaction'>): 
 }
 
 /**
- * Os hashes de áudio de um item, quando ele tem prompt de áudio.
- *
- * É função pura de (texto, voz, velocidade) — e a voz também sai do texto —,
- * então nada precisa ser guardado: a geração enfileira o TTS que falta e o
- * Player recalcula a chave (server.md "TTS"). Nem o material nem a atividade
- * entram na conta, o que é o ponto: material é facilitador de montagem, e
- * apagar um não pode mexer numa atividade no ar.
- *
- * Devolve vazio em dois casos, e nenhum é erro: o item não é de áudio, ou o
- * idioma alvo não tem voz no provedor (árabe hoje).
+ * Um áudio que a questão usa: o texto, a voz e os arquivos (um por velocidade,
+ * na ordem de `profile.tts.speeds`: o normal e o reduzido).
  */
-export function itemAudioHashes(row: StoredItemRow, targetTag: string): string[] {
+export interface AudioDoItem {
+	/** `prompt`: a frase de uma escuta; `fala`: uma fala do diálogo; `palavra`: a da Pronúncia. */
+	papel: 'prompt' | 'fala' | 'palavra';
+	/** Na fala do diálogo, o índice dela. */
+	fala?: number;
+	texto: string;
+	voz: string;
+	arquivos: { hash: string; velocidade: number }[];
+}
+
+/**
+ * Os áudios de uma questão. Três tipos, e todos são função pura de (texto, voz,
+ * velocidade) — e a voz também sai do conteúdo —, então nada precisa ser
+ * guardado: a geração enfileira o TTS que falta e o Player recalcula a chave
+ * (server.md "TTS"). Nem o material nem a atividade entram na conta, o que é o
+ * ponto: material é facilitador de montagem, e apagar um não pode mexer numa
+ * atividade no ar.
+ *
+ * - **A frase da escuta** (`prompt` de áudio), na voz do texto.
+ * - **As falas do diálogo** que o aluno OUVE (as anteriores à parada; todas na
+ *   pergunta de compreensão), cada uma na voz da pessoa que fala
+ *   (`vozDoFalante`). O diálogo só em texto não tem áudio.
+ * - **A palavra da Pronúncia**, na voz do texto: o modelo que o aluno ouve antes
+ *   de falar, e o que move a boca.
+ *
+ * Vazio quando a questão não tem áudio, ou o idioma alvo não tem voz no
+ * provedor (árabe hoje) — nenhum dos dois é erro.
+ */
+export function audiosDoItem(
+	row: Pick<StoredItemRow, 'prompt' | 'interaction'>,
+	targetTag: string
+): AudioDoItem[] {
 	const prompt = promptSchema.parse(row.prompt);
-	if (prompt.kind !== 'audio' || !prompt.text) return [];
-
 	const profile = getProfile(targetTag);
-	const voz = vozDoTexto(profile, prompt.text);
-	if (!voz) return [];
+	const arquivos = (texto: string, voz: string) =>
+		profile.tts.speeds.map((velocidade) => ({ hash: ttsHash(texto, voz, velocidade), velocidade }));
+	const audios: AudioDoItem[] = [];
 
-	return profile.tts.speeds.map((speed) => ttsHash(prompt.text!, voz, speed));
+	if (prompt.kind === 'audio' && prompt.text) {
+		const voz = vozDoTexto(profile, prompt.text);
+		if (voz)
+			audios.push({
+				papel: 'prompt',
+				texto: prompt.text,
+				voz,
+				arquivos: arquivos(prompt.text, voz)
+			});
+	}
+
+	const contexto = prompt.contexto;
+	if (prompt.kind === 'composite' && contexto?.tipo === 'dialogo' && contexto.mostra !== 'texto') {
+		const falantes = contexto.falas.map((f) => f.falante);
+		contexto.falas.slice(0, contexto.ate ?? contexto.falas.length).forEach((fala, i) => {
+			const voz = vozDoFalante(profile, falantes, fala.falante);
+			if (voz)
+				audios.push({
+					papel: 'fala',
+					fala: i,
+					texto: fala.texto,
+					voz,
+					arquivos: arquivos(fala.texto, voz)
+				});
+		});
+	}
+
+	const interaction = interactionSchema.parse(row.interaction);
+	if (interaction.type === 'speak') {
+		const fala = speakAuthoringSchema.safeParse(interaction.payload);
+		if (fala.success && fala.data.pronuncia) {
+			const voz = vozDoTexto(profile, fala.data.target);
+			if (voz) {
+				audios.push({
+					papel: 'palavra',
+					texto: fala.data.target,
+					voz,
+					arquivos: arquivos(fala.data.target, voz)
+				});
+			}
+		}
+	}
+	return audios;
+}
+
+/** Todos os hashes de áudio de uma questão — o que a prontidão, a limpeza e o Player contam. */
+export function itemAudioHashes(row: StoredItemRow, targetTag: string): string[] {
+	return audiosDoItem(row, targetTag).flatMap((a) => a.arquivos.map((f) => f.hash));
+}
+
+/** O lado de cada pessoa na conversa: a primeira que fala à esquerda, a segunda à direita. */
+function ladoDe(falantes: string[], falante: string): 'inicio' | 'fim' {
+	const elenco = [...new Set(falantes)];
+	return elenco.indexOf(falante) % 2 === 0 ? 'inicio' : 'fim';
+}
+
+/** O contexto como chega ao browser (o tipo mora com os do Player: `ContextoNoRuntime`). */
+function contextoNoRuntime(
+	contexto: ContextoDoPrompt,
+	audios: AudioDoItem[],
+	audioUrlByHash: Map<string, string>
+): ContextoNoRuntime {
+	if (contexto.tipo === 'texto') return { tipo: 'texto', texto: contexto.texto };
+	const falantes = contexto.falas.map((f) => f.falante);
+	const ate = contexto.ate ?? contexto.falas.length;
+	return {
+		tipo: 'dialogo',
+		mostra: contexto.mostra,
+		falas: contexto.falas.slice(0, ate).map((fala, i) => {
+			const audio = audios.find((a) => a.papel === 'fala' && a.fala === i);
+			return {
+				falante: fala.falante,
+				lado: ladoDe(falantes, fala.falante),
+				texto: contexto.mostra === 'audio' ? undefined : fala.texto,
+				audio: audio?.arquivos[0] ? audioUrlByHash.get(audio.arquivos[0].hash) : undefined,
+				audioSlow: audio?.arquivos[1] ? audioUrlByHash.get(audio.arquivos[1].hash) : undefined
+			};
+		}),
+		vez:
+			contexto.ate !== undefined && contexto.falas[ate]
+				? {
+						falante: contexto.falas[ate]!.falante,
+						lado: ladoDe(falantes, contexto.falas[ate]!.falante)
+					}
+				: undefined
+	};
 }
 
 export function buildRuntimeItem(
@@ -180,22 +323,27 @@ export function buildRuntimeItem(
 	const targetProfile = getProfile(locale.target);
 	const registered = getInteraction(interaction.type);
 	const skills = registered.skills(prompt);
-	// O rótulo do cabeçalho é o que a questão PEDE, não o enunciado. Todo prompt
-	// de texto rende `reading`, e ela vinha primeiro na lista: "Diga esta frase
-	// em voz alta" aparecia como Leitura, "Complete a frase" também. A leitura
-	// só nomeia a questão quando é a única coisa nela (kernel.md, `selectItems`).
-	const skill = skills.find((s) => s !== 'reading') ?? skills[0] ?? 'reading';
+	// O rótulo do cabeçalho é o que a questão PEDE, não o enunciado: "Diga esta
+	// frase em voz alta" aparecia como Leitura. A regra é a do roteiro e do
+	// editor, num lugar só (`habilidadePrincipal`).
+	const skill = habilidadePrincipal(skills);
 
 	// A seed do item mistura a seed da tentativa com o id do item: cada
 	// questão embaralha diferente, e F5 não muda nada (regra nº 8).
 	const runtime = registered.toRuntime(interaction.payload, `${seed}:${row.id}`);
 
-	// Duas velocidades por item (server.md "TTS"): a normal e a reduzida. São
+	// Duas velocidades por áudio (server.md "TTS"): a normal e a reduzida. São
 	// arquivos diferentes, não `playbackRate` — TTS lento soa melhor gerado
 	// lento do que desacelerado no browser.
 	// A voz sai do TEXTO, não do idioma sozinho: frases diferentes falam com
 	// vozes diferentes dentro da mesma atividade (language/voice.ts).
-	const [hashNormal, hashLento] = itemAudioHashes(row, locale.target);
+	const audios = audiosDoItem(row, locale.target);
+	const url = (audio: AudioDoItem | undefined, i: number) => {
+		const arquivo = audio?.arquivos[i];
+		return arquivo ? audioUrlByHash.get(arquivo.hash) : undefined;
+	};
+	const doPrompt = audios.find((a) => a.papel === 'prompt');
+	const daPalavra = audios.find((a) => a.papel === 'palavra');
 
 	// O título da questão é o ENUNCIADO. `prompt.text` num item de áudio é o
 	// texto que o TTS sintetizou — ou seja, exatamente a frase que o aluno
@@ -204,10 +352,29 @@ export function buildRuntimeItem(
 	const instruction = promptInstruction(prompt);
 	const visibleText =
 		prompt.kind === 'text' || prompt.kind === 'composite' ? prompt.text : undefined;
+	// Com contexto, o texto do `composite` é a PERGUNTA (vem depois do trecho ou
+	// do diálogo). Sem contexto é a compreensão antiga, que mostrava a pergunta
+	// na caixa de apoio — e continua igual.
+	const contexto = prompt.kind === 'composite' && prompt.contexto ? prompt.contexto : undefined;
 
 	const digitaNoAlvo =
 		(interaction.type === 'type' || interaction.type === 'cloze') &&
 		(grading.answerLang ?? 'target') === 'target';
+
+	// A Pronúncia: a boca passo a passo, das regras do idioma, e o áudio da palavra.
+	const fonemas = 'fonemas' in runtime && Array.isArray(runtime.fonemas) ? runtime.fonemas : null;
+	const silabas = 'silabas' in runtime && Array.isArray(runtime.silabas) ? runtime.silabas : null;
+	const pronuncia =
+		fonemas && targetProfile.pronuncia && interaction.type === 'speak'
+			? {
+					passos: passosDaBoca(
+						pronunciaDe(fonemas, targetProfile.pronuncia),
+						targetProfile.pronuncia
+					),
+					audio: url(daPalavra, 0),
+					audioSlow: url(daPalavra, 1)
+				}
+			: undefined;
 
 	return {
 		...runtime,
@@ -216,15 +383,24 @@ export function buildRuntimeItem(
 		teclado: digitaNoAlvo ? (tecladoDe(targetProfile.input) ?? undefined) : undefined,
 		interaction: interaction.type,
 		prompt: instruction,
-		passage: visibleText,
+		passage: contexto ? undefined : visibleText,
+		pergunta: contexto ? visibleText : undefined,
+		contexto: contexto ? contextoNoRuntime(contexto, audios, audioUrlByHash) : undefined,
+		pronuncia: silabas ? pronuncia : undefined,
 		skill,
 		skillLabel: skillLabels[skill],
 		sourceLabel: labelForTag(locale.source),
 		targetLabel: labelForTag(locale.target),
-		hint: itemHint(prompt.kind, grading, interaction.type, targetProfile),
-		gradingLabel: GRADING_LABEL[grading.mode],
-		audio: hashNormal ? audioUrlByHash.get(hashNormal) : undefined,
-		audioSlow: hashLento ? audioUrlByHash.get(hashLento) : undefined,
+		hint: pronuncia
+			? DICA_DA_PRONUNCIA[rigorDoRuntime(runtime)]
+			: contexto?.tipo === 'dialogo' && contexto.mostra !== 'texto'
+				? 'Pode ouvir o diálogo quantas vezes quiser. A velocidade mais lenta não conta como erro.'
+				: itemHint(prompt.kind, grading, interaction.type, targetProfile),
+		gradingLabel: pronuncia
+			? ROTULO_DO_RIGOR[rigorDoRuntime(runtime)]
+			: GRADING_LABEL[grading.mode],
+		audio: url(doPrompt, 0),
+		audioSlow: url(doPrompt, 1),
 		gradedLater: grading.mode === 'rubric' || undefined,
 		skippable: interaction.type === 'speak' || undefined
 	};

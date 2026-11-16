@@ -44,6 +44,15 @@ prompt.kind === 'text'         → reading
 Isso permite o Studio mostrar "sua atividade é 80% reading e 0% speaking" sem pedir nada ao
 professor, e continua funcionando para qualquer idioma.
 
+**O `composite` deriva do CONTEXTO** (`Prompt.contexto`, abaixo): o trecho de um texto é reading;
+o diálogo é listening quando o aluno o OUVE e reading quando o LÊ, as duas com "Texto e áudio".
+
+**A habilidade que dá NOME à questão é uma só** (`habilidadePrincipal`, `interactions/skills.ts`):
+o rótulo do cabeçalho no Player, a bolha do roteiro, o cartão resumido e o tipo em que o editor
+abre. Falar vence ouvir ("Diga a próxima fala" ouve o diálogo, mas o que o aluno faz é falar),
+ouvir vence escrever ("Ouça e escreva" é escuta), e a leitura só nomeia quando é a única. Eram três
+regras parecidas, e o mesmo item saía Escuta no roteiro e Fala no editor.
+
 ## Registry de interação
 
 Cada tipo vive em `kernel/interactions/<id>.ts` e exporta:
@@ -125,6 +134,19 @@ resposta com o profile do idioma ALVO — normalizava o português com regra do 
 de "você" sumia por uma tolerância que é do inglês) e, pior, tokenizaria uma resposta japonesa
 com o segmentador errado, que devolve lixo.
 
+### O contexto do prompt (`Prompt.contexto`)
+
+O `composite` é a pergunta que vem DEPOIS de algo: o trecho de um texto (`{ tipo: 'texto', texto }`)
+ou um diálogo (`{ tipo: 'dialogo', falas: [{ falante, texto }], ate?, mostra }`). O contexto vai
+INTEIRO no item: a versão publicada não depende do material, e o editor troca a parada sem ele.
+
+- `mostra` é como o aluno recebe as falas: `ambos` (texto e áudio), `audio` ou `texto`.
+- `ate` é a parada da "próxima fala", a vez do aluno. Sem `ate`, a pergunta é sobre o diálogo
+  inteiro.
+- **O runtime corta o que o aluno não pode ver** (`contextoNoRuntime`, `server/player/runtime.ts`):
+  as falas depois da parada, o texto de todas em "só áudio" e SEMPRE o texto da fala da vez, que é
+  a resposta (regra nº 1). Cada fala tem o seu áudio, na voz de quem fala (server.md "TTS").
+
 ## O que o professor realmente informa
 
 Este é o ponto de produto mais importante do sistema. **O professor não preenche exercício por
@@ -134,12 +156,12 @@ exercício.** Ele cadastra conteúdo e o sistema gera.
 
 Quatro formas, e nenhuma exige conhecimento técnico:
 
-| Tipo           | Campos que o professor digita                                 |
-| -------------- | ------------------------------------------------------------- |
-| `SentencePair` | frase na língua de origem, frase na língua alvo, nota (opc.)  |
-| `VocabItem`    | termo, tradução, imagem (opc.), frase de exemplo (opc.)       |
-| `Passage`      | texto na língua alvo, título, perguntas de compreensão (opc.) |
-| `Dialogue`     | linhas `{ falante, texto }` na ordem correta                  |
+| Tipo           | Campos que o professor digita                                  |
+| -------------- | -------------------------------------------------------------- |
+| `SentencePair` | frase na língua de origem, frase na língua alvo, nota (opc.)   |
+| `VocabItem`    | termo, tradução, imagem (opc.), frase de exemplo (opc.)        |
+| `Passage`      | texto na língua alvo, título, perguntas de compreensão (opc.)  |
+| `Dialogue`     | linhas `{ falante, texto }` na ordem correta, perguntas (opc.) |
 
 Áudio nunca é campo de entrada obrigatório: sai do TTS na publicação.
 O professor pode subir áudio próprio para sobrescrever.
@@ -152,9 +174,11 @@ separador entrar com a tradução vazia em vez de descartá-la (e `previewRawLin
 `automatica`). Sem a opção, o comportamento é o de sempre.
 
 Os campos opcionais NÃO são decorativos e a etapa 2 os coleta: `Passage.questions` é o que
-`passage-comprehension` consome — sem elas o texto entra na lista e não gera nada. `note` e
+`passage-comprehension` consome — sem elas o texto entra na lista e não gera nada.
+`Dialogue.questions` é o que `dialogue-comprehension` consome; sem elas o diálogo ainda rende o
+ordenar e a próxima fala. `note` e
 `example` ainda não alimentam gerador nenhum; são contexto do professor, e existem no schema
-para os geradores de `VocabItem` que faltam (`vocab-image-choice`, `speak-vocab`).
+para o gerador de `VocabItem` que falta (`vocab-image-choice`).
 `imageMediaId` continua fora do formulário: depende de upload de mídia, que não existe.
 
 ### Nível 2 — geradores
@@ -175,17 +199,52 @@ have a cat." o "a" caía dentro de "have"):
 | `cloze-target`       | text (alvo)   | `cloze`    | reading + writing   |
 | `speak-target`       | text (origem) | `speak`    | speaking            |
 
-De `VocabItem`: `vocab-choice`, `vocab-image-choice`, `listen-vocab-choice`, `vocab-match`,
-`vocab-type`, `speak-vocab`.
+De `VocabItem`: `vocab-choice`, `vocab-choice-term`, `listen-vocab-choice`, `listen-vocab-type`,
+`vocab-type`, `vocab-pronuncia`, `speak-vocab`, `vocab-image-choice`, `vocab-match` (a tabela de
+"O vocabulário", abaixo).
 De `Passage`: `passage-cloze`, `passage-comprehension`, `select-in-text`.
-De `Dialogue`: `order-lines`, `listen-dialogue-choice`, `roleplay-speak`.
+De `Dialogue`: `order-lines`, `dialogue-comprehension`, `dialogue-next-line`.
 
 Vinte frases cadastradas viram cerca de cem exercícios. O professor revisa, edita e descarta —
 ele nunca vê JSON.
 
-**Implementados hoje**: os sete de `SentencePair`, mais `vocab-choice`,
-`passage-comprehension` e `order-lines` — um por tipo de conteúdo, o bastante para provar que o
-padrão não depende do `kind`. Os outros oito da tabela continuam pendentes.
+**Implementados hoje**: os sete de `SentencePair`, sete de `VocabItem`, `passage-comprehension` e
+os três do diálogo (`dialogue-comprehension` é o que a tabela chamava de `listen-dialogue-choice`;
+`dialogue-next-line` cobre o `roleplay-speak`). Faltam quatro: `vocab-image-choice` (depende de
+upload de imagem), `vocab-match` (o `closing-match` já liga palavra e sentido no fim da atividade),
+`passage-cloze` e `select-in-text`.
+
+### O vocabulário: tradução, escuta, escrita e fala
+
+De um `VocabItem` saem as quatro habilidades, não só a Pronúncia (pedido do dono do repositório):
+
+| Gerador               | Prompt         | Interação           | O aluno                   |
+| --------------------- | -------------- | ------------------- | ------------------------- |
+| `vocab-choice`        | text (termo)   | `choice` (sentidos) | escolhe o sentido         |
+| `vocab-choice-term`   | text (sentido) | `choice` (termos)   | escolhe a palavra         |
+| `listen-vocab-choice` | audio (termo)  | `choice` (sentidos) | ouve e escolhe o sentido  |
+| `vocab-type`          | text (sentido) | `type` (termo)      | escreve a palavra         |
+| `listen-vocab-type`   | audio (termo)  | `type` (termo)      | ouve e escreve            |
+| `vocab-pronuncia`     | text (termo)   | `speak` (som a som) | pronuncia, abaixo         |
+| `speak-vocab`         | text (termo)   | `speak` (ASR)       | diz a palavra em voz alta |
+
+- As escolhas tiram as erradas dos OUTROS termos do conjunto (um termo só não rende escolha); as de
+  escrever são `tolerant` a 0,9, para um dedo torto em palavra curta não zerar.
+- **`speak-vocab` é a fala de quem não tem Pronúncia**: expressão de mais de uma palavra, idioma sem
+  `LanguageProfile.pronuncia`, palavra fora do dicionário. Onde a Pronúncia sai, ele não sai — o
+  mesmo termo não pede a fala duas vezes.
+- As regras de sempre valem: sem TTS não sai escuta, sem ASR não sai fala, e a escrita no alvo
+  passa pelo alcance do teclado do idioma (`runGenerators`).
+
+**Vocabulário é palavra, não frase** (`problemaDoVocabulario`, `content/vocabulario.ts`, pedido do
+dono do repositório): o termo tem até `MAX_PALAVRAS_DO_TERMO` (3) palavras, contadas pelo
+segmentador do idioma (regra nº 5: `私は学生です。` não tem espaço e são quatro), e não leva
+pontuação de frase — `?` e `!` de qualquer escrita, e o ponto final em duas palavras ou mais (a
+abreviação de uma, "Mr.", passa). O sentido também não leva pontuação de frase, e pode ter mais
+palavras. A regra vale ao gravar (`montarMaterial`), na lista colada (`previewRawLines` marca a
+linha com o `motivo`, `parseRawMaterial` a deixa de fora, com a opção `vocabulario`) e nas
+propostas da IA (`validarProposta`). O schema de LEITURA não mudou: o vocabulário gravado antes
+continua abrindo.
 
 Mais o **`closing-match`**, que não está na tabela porque não é um gerador de unidade:
 
@@ -227,6 +286,42 @@ A assinatura real é `(ContentRef<D>, GeneratorContext<D>) => Item[]`: o context
 profiles, as `siblings` (única origem de distrator) e `capabilities`. O kernel é puro e não lê
 `env`, então quem informa se existe provedor de TTS/ASR é o servidor — **sem ASR não sai item de
 fala; sem TTS não sai item de escuta**, em vez de gerar exercício que não corrige nem toca.
+
+### O diálogo: a pergunta e a próxima fala
+
+Os dois geradores novos do `Dialogue` levam o diálogo junto (`Prompt.contexto`):
+
+- **`dialogue-comprehension`**: as perguntas que o professor escreveu (`Dialogue.questions`,
+  opcionais, como as do texto), com o diálogo inteiro antes. As erradas são as respostas das outras
+  perguntas do conjunto; sem nenhuma, a pergunta não vira questão.
+- **`dialogue-next-line`**: o diálogo toca até uma fala e PARA, e ali é a vez do aluno ("Sua vez").
+  A fala é sorteada (pedido do dono do repositório), de qualquer pessoa e nunca a primeira; são até
+  três paradas por diálogo (metade das falas que têm alguma antes), e **cada parada é um tipo**:
+  escolher, montar ou dizer, numa ordem sorteada, como nos diálogos do Duolingo. Quando um tipo não
+  dá (fala de uma palavra não se monta, sem ASR não se diz), a parada fica com o seguinte.
+- **As erradas da escolha nunca estão na tela.** Uma fala já dita, acima da vez do aluno, sai na
+  hora; as erradas vêm das falas DEPOIS da parada e dos outros diálogos. Sem nenhuma, a parada não
+  vira escolha (nunca se inventa errada). As peças a mais do montar saem de qualquer outra fala.
+
+**O nível é rótulo, com DUAS exceções: esta e o rigor da Pronúncia** (abaixo). Aqui é o
+`mostraDoDialogo` (pedido do dono do repositório; adr-004): até B1, e sem nível, o aluno lê as falas
+enquanto ouve; do B2 em diante, só ouve. Sem voz
+no idioma (ou sem TTS), só o texto. E **o material sem escuta vai lido** (`GeneratorContext.pedidas`,
+os tipos que o professor pediu para ele): com áudio, as questões dele exigiriam a escuta, e o corte
+tiraria todas. No editor o professor troca (paginas.md "O editor de questão").
+
+### Pronúncia (`vocab-pronuncia`)
+
+O termo do vocabulário vira a questão de dizer a palavra SOM A SOM: a boca de frente, a palavra, as
+sílabas como se leem ("prai · AW · ruh · tee", a tônica em destaque) e o áudio normal e devagar. Só
+sai em idioma com `LanguageProfile.pronuncia` e dicionário no servidor (`foneticaDe`), com ASR, e
+para termo de UMA palavra. O payload de `speak` ganha `pronuncia` (fonemas, sílabas e o RIGOR), e a
+correção passa a ser som a som ("Correção", abaixo).
+
+**O rigor sai do nível da atividade** (`rigorDaPronuncia`, a segunda exceção ao "nível é rótulo",
+pedido do dono do repositório): A1 e A2 começam no `leve`, B1 e B2 no `normal`, C1 e C2 no
+`rigoroso`, e sem nível vale o `normal`. O professor troca no editor de questão. A questão gravada
+antes dos níveis não tem rigor, e vale como `normal`.
 
 ### O corte: `selectItems`
 
@@ -363,6 +458,7 @@ type LanguageProfile = {
 	equivalences: string[][]; // [['7', 'seven'], ['vai', 'irá'], ['i am', 'im']]
 	input: EntradaDoIdioma; // como o aluno DIGITA neste idioma — ver "Entrada" abaixo
 	sujeitoOmitivel?: { pronomes: string[]; conjuncoes: string[] }; // ver "Respostas aceitas"
+	pronuncia?: RegrasDePronuncia; // a questão de Pronúncia — ver "Pronúncia" abaixo
 };
 ```
 
@@ -535,6 +631,39 @@ Três regras para quem cadastrar um layout:
   descuido — a hamza sobre o alif é omitida na escrita corrente. As teclas existem porque são a
   grafia correta; só não são exigidas.
 
+### Pronúncia (`LanguageProfile.pronuncia`)
+
+As regras de pronúncia do idioma, para a questão de Pronúncia (`language/pronuncia.ts`): o alfabeto
+dos fonemas (`arpabet`), as vogais, os ataques legais (a silabação é por ataque máximo), a LEITURA
+de cada fonema ("ruh", "tee": nunca IPA na tela do aluno) e o VISEMA de cada um, a forma da boca
+entre quinze (`repouso`, `mbp`, `fv`, `th`…). Ditongo são dois visemas, e o peso de cada passo da
+boca (`passosDaBoca`) faz a animação andar no tempo do som.
+
+- **Só o `en-US` tem**, com o CMU Pronouncing Dictionary (ARPAbet, licença ISC), que é americano:
+  o `en-GB` fica sem a questão até ter dicionário próprio.
+- O dicionário é do SERVIDOR (`server/pronuncia`, carregado sob demanda), como o kuromoji. O kernel
+  só recebe `foneticaDe(palavra)`, e palavra fora do dicionário não vira questão.
+
+E as regras de CORRIGIR, que ligam o dicionário aos sons que o reconhecedor de fonemas ouve (o IPA
+do espeak):
+
+- `sons`: como o reconhecedor escreve cada fonema, com o acento quando ele muda o som (`AH0` é [ə],
+  `AH` é [ʌ]; `ER0` é [ɚ]; `IY0` é o [i] curto do fim de "happy").
+- `equivalentes`: sons que o idioma trata como o mesmo fonema, em qualquer rigor — no americano, a
+  vogal de "lot" e a de "thought", o tepe e a glotal do t ("water", "button"), a vogal de "bird" com
+  ou sem o r escrito à parte. Valem em PAR (dois sons do mesmo grupo), nunca em cadeia: [t] igual a
+  [ɾ] e [d] igual a [ɾ] não fazem [t] igual a [d].
+- `equivalentesNaAtona`: os mesmos, só onde a vogal esperada é átona (a reduzida: [ə], [ɪ], [ᵻ]).
+- `semPeso`: o som que não conta quando sobra (a glotal antes de vogal).
+- `leituraDeOutrosSons`: como escrever, para o aluno ler, o som que o idioma não tem e o brasileiro
+  produz — o "r" de "rato" ([x], [ʁ], [h]) é "h".
+
+**A fonética em si não é do idioma** (`language/fones.ts`): os traços de cada som em IPA (altura,
+recuo e arredondamento da vogal; ponto, modo e vozeamento da consoante) e a distância entre dois sons,
+de 0 a 1. A vogal [i] é alta e anterior em qualquer língua; o que é do idioma é quais sons ele junta.
+`pronuncia.test.ts` confere que todo fonema do dicionário tem som, e que todo som citado nas regras
+existe na fonética.
+
 ## Correção
 
 Camadas, da mais barata para a mais cara. Use sempre a mais barata que resolve:
@@ -606,3 +735,38 @@ e o botão de pular sempre disponível — por acessibilidade e por ambiente bar
 destacada é a do alvo COMO ESTÁ ESCRITA ("repare em seven", não "em 7"): o grader normaliza a
 frase inteira antes de tokenizar — é o que faz as equivalências do profile valerem para a
 palavra que faltou também.
+
+**A Pronúncia é a exceção, porque ali o som É o exercício** (`speak.ts`): correto quando todos os
+sons batem; **quase** quando UMA sílaba sai diferente numa palavra de duas ou mais; senão incorreto.
+O retorno sempre DIZ a sílaba ("A sílaba "ruh" saiu diferente.") e o veredito a grifa
+(`Score.marks` por sílaba).
+
+**Os sons vêm do RECONHECEDOR DE FONEMAS do serviço de áudio** (server.md "ASR"), não do Whisper: o
+Whisper devolve a palavra certa de uma pronúncia torta, porque é modelo de língua. A resposta guarda
+os sons ouvidos com a certeza de cada um (`SpeakAnswer.sons`), e `compararSons`
+(`language/pronuncia.ts`) os alinha com os esperados — distância de edição com custos de FONÉTICA
+(`fones.ts`), e três movimentos que a fala pede: um símbolo ouvido valendo vários sons ("ɔːɹ"), a
+vogal rótica ouvida em dois pedaços, e a sílaba final de "-ble" ouvida num som só. Cada som esperado
+fica certo quando a distância cabe na tolerância do rigor (`TOLERANCIA`):
+
+| Rigor      | Passa                                                                                                | Erra                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `leve`     | som vizinho ("sheep" por "ship", "fink" por "think"), átona parecida, a vogal a mais no fim ("dogi") | troca de som de verdade ("tink", o "r" de "rato", "bery"), som que falta ou que sobra |
+| `normal`   | só as variações do idioma (`equivalentes`), a diferença de vozeamento, a átona parecida              | o vizinho também, e a vogal a mais                                                    |
+| `rigoroso` | só as variações do idioma; a átona precisa sair reduzida                                             | o vozeamento também                                                                   |
+
+- **A dúvida do reconhecedor vale a favor do aluno**: quando o som esperado é uma das alternativas
+  que ele considerou, perto o bastante da certeza do primeiro (metade no normal, 80% no rigoroso), ele
+  conta como o ouvido. Sem isso, o aluno era reprovado pela hesitação do modelo entre dois vizinhos.
+- **Nem todo som a mais é som**: a semivogal de passagem ("prai-y-or"), a glotal (`semPeso`), o
+  estalo fraco da consoante final e o que o modelo quase não ouviu ficam de fora. A vogal a mais
+  tolerada pelo leve aparece no "Ouvimos", só não reprova.
+- **O que se ouviu volta escrito como a pronúncia** ("prai · aw · huh · tee"): o som certo na grafia
+  do esperado, o diferente na dele. É o `transcript` da resposta e o "Ouvimos:" do veredito.
+- **Os números saíram da bancada** (docs/plano-dialogo-e-pronuncia.md): vozes nativas do Kokoro
+  dizendo a palavra certa e com os erros típicos de brasileiro. Os casos estão em
+  `pronuncia.test.ts`, e gravação de aluno de verdade pode pedir outro ajuste: é na `TOLERANCIA`.
+
+**Sem o reconhecedor (desligado ou fora do ar), a correção é a de reserva** (`corrigirPronuncia`):
+o dicionário aplicado ao que o Whisper transcreveu (`compararPronuncia`), que só pega palavra
+trocada.

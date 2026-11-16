@@ -114,7 +114,11 @@ confirmando que nada de gabarito chega ao browser.
 
 Teste de determinismo: duas cargas da mesma tentativa produzem a mesma ordem de alternativas.
 
-**Os três estão em `e2e/aluno.spec.ts`** (`pnpm test:e2e`, contra o `preview` na 4173 e o banco do
+E a questão que CABE NA TELA (design-system.md "Player numa tela só"): em 390×700 e em 1366×657,
+nem a página nem a área da questão rolam, antes e depois de responder — o montar respondido
+errado, que é o veredito mais alto.
+
+**Os quatro estão em `e2e/aluno.spec.ts`** (`pnpm test:e2e`, contra o `preview` na 4173 e o banco do
 `.env`). A semente (`e2e/semente.ts`, via `globalSetup`/`globalTeardown`) cria um professor
 descartável e duas atividades publicadas só de texto — escolher, montar e digitar, sem áudio, para
 não depender da fila de TTS —, uma com o resultado liberado e outra sem, e tira tudo no fim,

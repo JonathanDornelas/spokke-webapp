@@ -126,7 +126,8 @@ marca (`PILL_TONE`, `material-form.ts`). Cada tipo tem os SEUS campos, não um c
 sentença é alvo + tradução + as
 variações da tradução (a "nota do professor" saiu do formulário); vocabulário tem frase de exemplo; texto tem as perguntas de compreensão campo a campo; e diálogo é uma lista
 de falas com falante, com reordenar e remover — colado num bloco só, uma linha sem "Nome:" caía
-em A/B alternado sem o professor saber. Na edição o tipo fica TRAVADO com o motivo escrito, e
+em A/B alternado sem o professor saber. Embaixo das falas vêm as perguntas de compreensão,
+opcionais como as do texto: cada uma vira uma questão sobre o diálogo. Na edição o tipo fica TRAVADO com o motivo escrito, e
 um aviso diz em quantas atividades o material está — salvar muda o que os rascunhos veem, o que
 está no ar não.
 
@@ -197,6 +198,15 @@ termo. As alternativas erradas são os seus outros termos. Com um só, nenhuma q
 para as perguntas de um texto). Distrator sai sempre do próprio conjunto (kernel.md), e isso só
 aparecia na etapa 3, depois de gerar. A conta inclui o que já está digitado no formulário, e quando
 está tudo certo não aparece nada — a linha "N frases nesta atividade. Cada frase rende…" saiu.
+
+**Vocabulário é PALAVRA, não frase** (pedido do dono do repositório; a regra é do kernel,
+`problemaDoVocabulario`, kernel.md "O vocabulário"): até três palavras e sem pontuação de frase, e o
+sentido também sem ela. Um de cada vez, o motivo aparece sob o termo enquanto se digita, com o
+ícone, e o "Adicionar" espera ("Frase inteira entra como Sentença"). Na lista colada a linha que é
+frase aparece riscada com "frase, não palavra" (o motivo no `title`), uma frase embaixo diz a regra,
+e ela fica de fora — o resultado conta quantas ficaram. O servidor confere de novo, ao gravar e nas
+propostas da IA (que recebe a mesma regra no pedido), e a tradução automática de um termo chega sem
+o ponto final que o tradutor põe.
 
 Descartar um item **marca** (`Item.discarded`), não apaga: "Restaurar" precisa dele, e a
 publicação é que remove os descartados de vez.
@@ -277,8 +287,9 @@ altura com o que se escolhe** — as colunas são centralizadas, e uma linha a m
 nome do nível vai na linha do rótulo, numa linha só (na frase de baixo, "Intermediário superior"
 quebrava em três linhas), os seletores de idioma não têm frase embaixo, e no desktop os cartões
 da direita têm altura fixa e o chip "inglês · B2" (como no desenho: o idioma sem a região) reserva
-o lugar do nível mesmo sem nível. O nível diz que é rótulo e não muda as questões (o "calibra o
-vocabulário" do desenho não é verdade aqui).
+o lugar do nível mesmo sem nível. O nível diz que é rótulo e que pesa em dois pontos: do B2 em
+diante o aluno ouve o diálogo sem ler, e a Pronúncia corrige com mais rigor nos níveis altos (o
+"calibra o vocabulário" do desenho não é verdade aqui).
 
 **QUANTAS questões e de QUAIS tipos é a etapa 2, logo acima da lista** (`BlocoDeGeracao.svelte`).
 Isso não contradiz "o professor nunca escolhe a habilidade": ele não marca a habilidade de cada
@@ -421,11 +432,12 @@ rune é a mesma do `lg:` (64rem) — duas fontes de verdade dariam uma faixa de 
 legenda de teclado sem o leiaute de duas colunas.
 
 Cada tela do Player é um cartão com **cabeçalho e rodapé próprios**: marca e estado em cima,
-frase de contexto e ação principal embaixo — e **a página não rola**, quem rola é a área do
-meio (design-system.md "Dois contextos"). **Quem está logado vê o próprio avatar e o nome no cabeçalho, e
+frase de contexto e ação principal embaixo — e **a página não rola**: a questão cabe na área do
+meio, e o que não cabe é o bloco do diálogo ou do texto, que rola por dentro (design-system.md
+"Player numa tela só"). **Quem está logado vê o próprio avatar e o nome no cabeçalho, e
 ele é a porta do painel do aluno** (`/aluno`) — na entrada, no lugar do cadeado "você não precisa
-de conta", e no resultado. Sem conta é só o nome (ou o cadeado): a área não existe para quem não
-a tem, e o Player não é o lugar de oferecê-la. No cabeçalho mora também o **regulador de volume**
+de conta", e no resultado. Sem conta é só o nome (ou o cadeado) durante a atividade: a conta só é
+oferecida DEPOIS dela, no rodapé do resultado (abaixo). No cabeçalho mora também o **regulador de volume**
 do som de retorno (entrada, questão e resultado), para o aluno numa sala cheia desligar antes
 da primeira questão — regras em components.md "Volume do retorno". O corpo tem faixas decorativas em cima E embaixo
 (`AmbientShapes edges="both"`) — uma faixa só deixa a metade de baixo chapada.
@@ -447,13 +459,17 @@ interações não tinham onde mostrar o resultado. Ícone e texto, nunca só cor
 e este é o momento mais importante do exercício. O som (`correct` / `almost` / `incorrect`, e
 `finish` na tela de desfecho) entra junto como reforço, jamais no lugar deles.
 
-**Em "montar a frase", "ordenar" e "associar", o veredito GRIFA em vez de contar.** O feedback
-traz a resposta que o aluno montou com o que saiu do lugar sublinhado (`Score.marks`,
-kernel.md) **e, logo abaixo, como deveria ficar** ("O certo era:", `Score.expected`). Antes ele
-lia "8 de 9 palavras na posição certa; a primeira fora de lugar é a 5ª" e tinha de recontar a
-própria frase para descobrir qual era a 5ª — e mesmo com o grifo, sem a resposta certa ao lado
-ele sabia ONDE errou sem saber o QUE era. O sublinhado ondulado vem acompanhado de uma linha
-`sr-only` dizendo quais palavras estão fora — grifo é visual e não se anuncia sozinho.
+**Em "montar a frase", "ordenar" e "associar", o veredito GRIFA em vez de contar** — e o grifo
+fica NA PRÓPRIA RESPOSTA (`Score.marks`, kernel.md): no montar, a peça fora do lugar ganha o
+sublinhado ondulado na frase que o aluno montou, e o veredito embaixo traz **como deveria ficar**
+("O certo era:", `Score.expected`); no ordenar, cada fala diz se está no lugar ou qual é o lugar
+dela ("é a 3ª"); no associar, os cartões se pintam. Antes ele lia "8 de 9 palavras na posição
+certa; a primeira fora de lugar é a 5ª" e tinha de recontar a própria frase para descobrir qual
+era a 5ª — e mesmo com o grifo, sem a resposta certa ao lado ele sabia ONDE errou sem saber o QUE
+era. Houve uma versão em que o veredito repetia a resposta inteira para grifar, e o ordenar de
+seis falas virava dezoito linhas: não cabia na tela (design-system.md "Player numa tela só"). O
+grifo vem com texto para o leitor de tela ("fora do lugar", "esta fala é a 3ª") — grifo é visual e
+não se anuncia sozinho.
 
 **E a tela PARA nele.** Corrigido o item, o rodapé vira "Próxima questão" ("Ver o resultado" na
 última) e nada avança sozinho — quem decide quando a leitura acabou é o aluno. O cronômetro
@@ -500,7 +516,8 @@ desabilitado — foi um bug real. Três merecem nota:
   para quem tem dificuldade motora. `svelte-dnd-action` tem suporte a teclado nativo, mas as
   setas ficam porque elas DIZEM o que fazem — um alvo arrastável não. Quem arrasta é a linha
   inteira; a alça de pontinhos é decorativa, porque num celular ela sozinha seria um alvo de
-  20px. Correção por sequência.
+  20px. Correção por sequência. **Respondida, a correção fica nas falas**, como no associar: cada
+  uma diz se está no lugar ou qual é o lugar dela, e o veredito fica só com a linha de estado.
 - **speak** — compõe o `Recorder.svelte` existente (`size="lg"`) em vez de duplicar o botão de
   gravação. Pular está sempre visível, mas mora no rodapé da casca (é navegação, não da
   interação). Sem provedor de ASR configurado, o servidor omite o item do payload.
@@ -550,6 +567,18 @@ mandarim o aluno escreve a LEITURA da frase e ela é certa: o servidor a põe no
 do aluno nunca tem teclado: ali o aparelho é dele. Respondida a questão, a grade some: não há
 mais o que digitar.
 
+**A questão com contexto** (o trecho de um texto, um diálogo) mostra o contexto na coluna da
+questão e a PERGUNTA no topo da coluna da resposta (`ContextoDaQuestao`, components.md): no desktop
+ela fica ao lado das alternativas, e não no pé de um diálogo longo; no celular, entre o diálogo e
+elas. O diálogo toca inteiro num toque ou fala a fala, e a velocidade lenta não conta como erro.
+
+**A Pronúncia** mostra a boca, a palavra e as sílabas acima do microfone, com "Ouvir" e "Devagar". O
+rótulo diz o rigor ("Fala · pronúncia leve", "Fala · pronúncia", "Fala · pronúncia rigorosa"), e a
+`hint` diz o que ele aceita. Gravada a palavra, o quadro sob o microfone é **"Ouvimos"**, com os SONS
+que o reconhecedor ouviu na escrita das sílabas ("prai · aw · huh · tee", em mono como elas), e não
+"Entendemos" com uma palavra: é isso que deixa o aluno ver o "r" de "rato" antes de enviar. O
+veredito grifa a sílaba que saiu diferente e repete o "Ouvimos" (kernel.md "Correção").
+
 Não existe um 9º tipo de interação "escrita longa": é `type` com `grading.mode === 'rubric'`
 (exposto ao Player como `item.gradedLater`), renderizado por `WritingInteraction.svelte` em vez
 de `ClozeInteraction.svelte`. Kernel.md define só oito interações — inventar uma nona no nível
@@ -583,6 +612,15 @@ caminho, senão "Ver meu resultado" devolvia para a entrada, em círculo.
 **O resultado tem quatro blocos, em ordem de pergunta**: quanto eu fiz (anel de acerto, a trilha
 por item e a legenda em texto), como foi meu percurso, em que eu fui bem, e o que aconteceu em cada
 questão.
+
+**O rodapé do resultado leva ao painel do aluno, e a quem não tem conta ele OFERECE uma** (pedido do
+dono do repositório). Logado: "Ir para o meu painel" (`/aluno`). Sem conta: "Criar minha conta"
+(`/cadastro?como=aluno`) com "Já tenho conta" ao lado, e a frase do porquê — guardar este resultado e
+ver tudo o que já respondeu. É o único lugar do Player que oferece a conta, e só depois de a
+atividade acabar: antes seria pré-requisito, que é o oposto do produto (auth.md "A conta do aluno").
+"Rever minhas respostas" fica no mesmo rodapé quando o professor liberou o resultado. As tentativas
+deste aparelho continuam soltas até a área do aluno oferecer adotá-las — criar a conta não as leva
+sozinha.
 
 **O tempo entra como informação de ESTUDO, nunca como cobrança.** A média por questão vem ao lado
 da média da turma (`avgMsPorQuestao`, só de tentativas terminadas e sem a do próprio aluno —
@@ -723,6 +761,19 @@ Pendências dentro do que já está ligado:
     roteiro (antes do associar que fecha, quando ele é a última). Ela nascia no clique com um texto marcador, e fechar o
     editor deixava aquilo na atividade. Rascunho antigo que ainda tenha o marcador é recusado na
     publicação.
+  - **A questão de diálogo traz o diálogo junto** (o painel "O diálogo"): "O aluno recebe" (Texto e
+    áudio, Só áudio, Só texto; sem voz no idioma, só texto), "A questão pede" (uma pergunta sobre o
+    diálogo inteiro ou a próxima fala) e as falas, com a vez do aluno num rádio (nunca a primeira).
+    Na próxima fala a resposta certa É a fala da vez: escrever outra resposta troca o texto dela.
+    **Escuta e leitura são o mesmo formato com o diálogo ouvido ou lido**: trocar um troca o outro
+    ("Só texto" é Leitura; com áudio, Escuta), sem refazer os campos. Na questão NOVA, "Usar um
+    diálogo desta atividade" (no escolher, no montar e no falar) começa por um deles, como o aluno o
+    receberia pelo nível; quem escolheu Leitura o recebe lido.
+  - **A questão de Pronúncia continua de Pronúncia ao salvar**: trocar a palavra lê a nova no
+    dicionário, e uma fora dele vira uma fala comum. Na moldura da resposta ela tem **"Rigor da
+    correção"**: Leve, Normal ou Rigoroso, em rádios de linha inteira, cada um com uma frase do que
+    aceita (`RIGOR_NO_EDITOR`). Abre no rigor gravado, que a geração tirou do nível da atividade; a
+    questão de antes dos níveis abre em Normal. Trocar a palavra leva o rigor junto.
   - **Fechar com mudança não salva pergunta antes** ("Continuar editando" ou "Fechar sem
     salvar"), pelo X, pelo Esc ou pelo véu. "Salvar e ir para a próxima" anda pela lista; "Descartar"
     e "Aceitar" (as palavras do roteiro) valem dali mesmo.
@@ -1093,7 +1144,12 @@ nenhuma tentativa uma tela vazia. Os resultados continuam a um clique, no cartã
 no botão do cabeçalho.
 
 É uma tela de LEITURA: toda ação leva para onde ela já existe (o wizard para editar, a etapa de
-publicar para reenviar, os resultados para o relatório), e nada é editado no lugar.
+publicar para reenviar, os resultados para o relatório). **As exceções são o título e o nível**,
+que se trocam ali mesmo (pedido do dono do repositório: renomear obrigava a entrar no wizard). O
+lápis ao lado do título abre o campo NO LUGAR do `h1`, com "Salvar" e "Cancelar" (Enter salva, Esc
+cancela; `renomearAtividade`, teto de 120 caracteres em `$lib/atividades/titulo.ts`). O título é da
+ATIVIDADE, não da versão publicada: o nome novo vale na hora na lista, no link e na tela do aluno,
+sem republicar — e sem tocar na versão, que continua imutável.
 
 **Uma coluna, e só o que vale para o estado dela** (o desenho que o dono do repositório pediu
 para "a disposição confusa" do topo):
@@ -1384,7 +1440,9 @@ por dentro e abre na fase atual.
 
 Rótulo CEFR opcional (A1–C2), escolhido em chips na etapa 1 e trocado no cabeçalho do detalhe, sem
 republicar. Aparece na lista (com filtro), na entrada do Player ao lado do idioma, no histórico do
-aluno e no seletor de atividades da turma. **Não muda os exercícios.**
+aluno e no seletor de atividades da turma. **Não muda os exercícios, menos em dois pontos: do B2 em
+diante o diálogo vai só em áudio** (kernel.md "O diálogo"), **e o rigor da Pronúncia sai dele**
+(A1–A2 leve, B1–B2 normal, C1–C2 rigoroso; kernel.md "Pronúncia"). A etapa 1 diz isso sob os chips.
 
 ## Arquivar e apagar
 

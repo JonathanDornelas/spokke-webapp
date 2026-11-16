@@ -10,8 +10,38 @@
  */
 
 import type { Teclado } from '$lib/kernel/language/teclado';
+import type { MostraDoDialogo } from '$lib/kernel/interactions/types';
+import type { PassoDaBoca, RigorDaPronuncia } from '$lib/kernel/language/pronuncia';
 
 export type Dir = 'ltr' | 'rtl';
+
+/**
+ * O contexto de um `composite` como chega ao browser (`server/player/runtime.ts`,
+ * `contextoNoRuntime`). No diálogo: só as falas ANTES da parada, o texto só
+ * quando o aluno lê, o áudio só quando ele ouve — e da fala da parada, só quem
+ * fala ("Sua vez"), nunca o texto (regra nº 1).
+ */
+export type ContextoNoRuntime =
+	| { tipo: 'texto'; texto: string }
+	| {
+			tipo: 'dialogo';
+			mostra: MostraDoDialogo;
+			falas: {
+				falante: string;
+				lado: 'inicio' | 'fim';
+				texto?: string;
+				audio?: string;
+				audioSlow?: string;
+			}[];
+			vez?: { falante: string; lado: 'inicio' | 'fim' };
+	  };
+
+/** A Pronúncia como chega ao browser: a boca passo a passo e o áudio da palavra. */
+export interface PronunciaNoRuntime {
+	passos: PassoDaBoca[];
+	audio?: string;
+	audioSlow?: string;
+}
 
 export interface RuntimeOption {
 	id: string;
@@ -92,6 +122,11 @@ export interface SpeakRuntimeItem {
 	dir: Dir;
 	target: string;
 	ipa?: string;
+	/** Só na Pronúncia: as sílabas como se leem, e a boca com o áudio da palavra. */
+	silabas?: { leitura: string; tonica: boolean }[];
+	pronuncia?: PronunciaNoRuntime;
+	/** E o rigor da correção (não é gabarito). */
+	rigor?: RigorDaPronuncia;
 }
 
 export interface WritingRuntimeItem {
@@ -113,6 +148,12 @@ export interface RuntimeDaQuestao {
 	interaction: import('$lib/kernel/interactions/types').InteractionKind;
 	prompt: string;
 	passage?: string;
+	/** O trecho ou o diálogo antes da pergunta, e a pergunta (`composite` com contexto). */
+	contexto?: ContextoNoRuntime;
+	pergunta?: string;
+	/** Só na Pronúncia. */
+	silabas?: { leitura: string; tonica: boolean }[];
+	pronuncia?: PronunciaNoRuntime;
 	skillLabel: string;
 	audio?: string;
 	audioSlow?: string;

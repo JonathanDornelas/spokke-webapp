@@ -9,11 +9,7 @@ import {
 	type StoredItemRow
 } from '$lib/server/player/runtime';
 import { transcreverNoIdioma } from '$lib/server/asr/audiotext-provider';
-import {
-	guardarTranscricao,
-	hashDoAudio,
-	transcricaoGuardada
-} from '$lib/server/asr/pre-transcricao';
+import { guardarResposta, hashDoAudio, respostaGuardada } from '$lib/server/asr/pre-transcricao';
 
 /**
  * A atividade de exemplo: a de `/exemplo` e a do celular da home.
@@ -200,8 +196,8 @@ export async function transcreverNoExemplo(
 
 	const chave = `${SEMENTE}:${quem}`;
 	const hash = hashDoAudio(bytes);
-	const guardada = transcricaoGuardada(chave, itemId, hash);
-	if (guardada !== null) return { ok: true, texto: guardada };
+	const guardada = respostaGuardada(chave, itemId, hash);
+	if (guardada !== null) return { ok: true, texto: guardada.transcript };
 	if (!podeTranscrever()) return { ok: false, motivo: 'limite' };
 
 	const { text } = await transcreverNoIdioma(
@@ -210,6 +206,6 @@ export async function transcreverNoExemplo(
 		[...profile.asr.hints, ...(payload.hints ?? [])],
 		contentType
 	);
-	guardarTranscricao(chave, itemId, hash, text);
+	guardarResposta(chave, itemId, hash, { transcript: text });
 	return { ok: true, texto: text };
 }

@@ -24,17 +24,29 @@
 		MAX_PARES_DA_QUESTAO,
 		ROTULO_DO_FORMATO,
 		ROTULO_DO_TIPO,
+		ROTULO_DO_MOSTRA,
+		RIGOR_NO_EDITOR,
 		TIPOS_DE_QUESTAO,
 		camposIniciais,
+		chaveDoContexto,
 		comoECorrigida,
 		enunciadoPadrao,
+		formatoUsaContexto,
 		fraseDaQuestao,
 		type CamposDaQuestao,
+		type ContextoNaQuestao,
 		type Questao,
 		type QuestaoGravada,
 		type TipoDeQuestao
 	} from '$lib/atividades/questao';
-	import { previaDaQuestao, questaoParaEditar, salvarQuestao } from '../../atividades.remote';
+	import { instructionText } from '$lib/atividades/enunciados';
+	import { RIGORES, type RigorDaPronuncia } from '$lib/kernel/language/pronuncia';
+	import {
+		dialogosDaAtividade,
+		previaDaQuestao,
+		questaoParaEditar,
+		salvarQuestao
+	} from '../../atividades.remote';
 
 	let {
 		activityId,
@@ -80,6 +92,19 @@
 	let pares = $state<{ esquerda: string; direita: string }[]>([]);
 	let falas = $state<string[]>(['', '']);
 	let palavraCerta = $state('');
+	/** Só na questão de Pronúncia: o rigor da correção. Nulo nas outras falas. */
+	let rigor = $state<RigorDaPronuncia | null>(null);
+	/**
+	 * O trecho ou o diálogo da questão (`Prompt.contexto`). Atravessa a edição:
+	 * salvar uma questão de diálogo não pode perder o diálogo. No formato que não o
+	 * usa, ele sai ao salvar (`formatoUsaContexto`).
+	 */
+	let contexto = $state<ContextoNaQuestao | undefined>(undefined);
+	const usaContexto = $derived(formatoUsaContexto(contexto, interacao));
+	/** Na próxima fala, o texto do campo "o que o aluno lê" não é usado. */
+	const proximaFala = $derived(
+		usaContexto && contexto?.tipo === 'dialogo' && contexto.ate !== null
+	);
 
 	let gravada = $state<QuestaoGravada | undefined>(undefined);
 	/**
@@ -96,7 +121,8 @@
 	/** A frase gravada: o áudio que falta é "na fila" se ela não mudou, "ao salvar" se mudou. */
 	let textoGravado = $state<string | null>(null);
 	const avisoDoAudio = $derived.by(() => {
-		if (tipo !== 'escuta' || !previa?.ok || !previa.audioPendente) return null;
+		// O diálogo avisa do áudio das falas nele mesmo, no celular ao lado.
+		if (tipo !== 'escuta' || usaContexto || !previa?.ok || !previa.audioPendente) return null;
 		const mudou = gravada?.tipo !== 'escuta' || texto.trim() !== (textoGravado ?? '').trim();
 		return mudou
 			? 'O áudio desta frase é gerado quando você salvar.'
@@ -106,10 +132,14 @@
 	const campos = $derived.by((): CamposDaQuestao | null => {
 		switch (interacao) {
 			case 'choice':
-				// Na escuta a certa é a frase do áudio, sempre a de agora.
+				// Na escuta a certa é a frase do áudio, sempre a de agora (no diálogo, não:
+				// o áudio sai das falas).
 				return {
 					interacao,
-					opcoes: tipo === 'escuta' ? opcoes.map((o, i) => (i === certa ? texto : o)) : opcoes,
+					opcoes:
+						tipo === 'escuta' && !usaContexto
+							? opcoes.map((o, i) => (i === certa ? texto : o))
+							: opcoes,
 					certa
 				};
 			case 'assemble':
@@ -131,13 +161,13 @@
 			case 'select':
 				return { interacao, frase, certa: palavraCerta };
 			case 'speak':
-				return { interacao, frase };
+				return { interacao, frase, ...(rigor ? { rigor } : {}) };
 			default:
 				return null;
 		}
 	});
 	const questao = $derived<Questao | null>(
-		tipo && campos ? { tipo, enunciado, texto, campos } : null
+		tipo && campos ? { tipo, enunciado, texto, campos, ...(contexto ? { contexto } : {}) } : null
 	);
 	const alterada = $derived(nova ? tipo !== null : JSON.stringify(questao) !== original);
 
@@ -172,6 +202,7 @@
 				break;
 			case 'speak':
 				frase = c.frase;
+				rigor = c.rigor ?? null;
 				break;
 		}
 	}
@@ -188,6 +219,7 @@
 			enunciado = r.questao.enunciado;
 			texto = r.questao.texto;
 			textoGravado = r.questao.texto;
+			contexto = r.questao.contexto;
 			aplicarCampos(r.questao.campos);
 			gravada = r.gravada;
 			original = JSON.stringify(questao);
@@ -264,18 +296,112 @@
 		if (!enunciado.trim() || enunciado === antes) enunciado = depois;
 	}
 
+	/** O enunciado padrão: o da questão com contexto, quando o formato o usa; senão o do tipo. */
+	function padraoDe(t: TipoDeQuestao | null, f: InteractionKind | null): string {
+		if (!t || !f) return '';
+		if (contexto && formatoUsaContexto(contexto, f))
+			return instructionText(chaveDoContexto(contexto, f));
+		return enunciadoPadrao(t, f, gravada);
+	}
+
+	/** Na próxima fala, a resposta é a fala da vez: o campo da resposta a traz. */
+	function preencherDaFala() {
+		if (contexto?.tipo !== 'dialogo' || contexto.ate === null || !usaContexto) return;
+		const fala = contexto.falas[contexto.ate]?.texto ?? '';
+		if (interacao === 'choice') opcoes = opcoes.map((o, i) => (i === certa ? fala : o));
+		else if (interacao === 'assemble' || interacao === 'speak') frase = fala;
+	}
+
 	function trocarPara(novoTipo: TipoDeQuestao, formato: InteractionKind) {
 		const frases = frasesAtuais();
-		const padraoAntes = tipo && interacao ? enunciadoPadrao(tipo, interacao, gravada) : '';
+		const padraoAntes = padraoDe(tipo, interacao);
 		const novo = comAsFrases(novoTipo, formato, frases);
 		tipo = novoTipo;
 		texto = novo.texto;
 		aplicarCampos(novo.campos);
-		trocarEnunciado(padraoAntes, enunciadoPadrao(novoTipo, formato, gravada));
+		preencherDaFala();
+		trocarEnunciado(padraoAntes, padraoDe(novoTipo, formato));
+	}
+
+	// ── o diálogo ───────────────────────────────────────────────────────────
+	/**
+	 * No diálogo, ESCUTA e LEITURA são o mesmo formato com as falas ouvidas ou
+	 * lidas — o nome que o roteiro e o celular dão (`habilidadePrincipal`): só
+	 * texto é leitura; com áudio, escuta. Trocar um troca o outro, e nenhum campo
+	 * da resposta é refeito.
+	 */
+	const trocaSoOMostra = (t: TipoDeQuestao | null) =>
+		contexto?.tipo === 'dialogo' &&
+		usaContexto &&
+		(t === 'escuta' || t === 'leitura') &&
+		(interacao === 'choice' || interacao === 'assemble');
+
+	/** Como o aluno recebe o diálogo: texto e áudio, só áudio, só texto. */
+	function mudarMostra(mostra: 'ambos' | 'audio' | 'texto') {
+		if (contexto?.tipo !== 'dialogo') return;
+		contexto = { ...contexto, mostra };
+		if (trocaSoOMostra(tipo)) tipo = mostra === 'texto' ? 'leitura' : 'escuta';
+	}
+	/** Qual fala é a vez do aluno (nunca a primeira: sem nada antes não há conversa). */
+	function escolherVez(i: number) {
+		if (contexto?.tipo !== 'dialogo' || i < 1) return;
+		contexto = { ...contexto, ate: i };
+		preencherDaFala();
+	}
+	/** A escolha pede uma pergunta sobre o diálogo inteiro, ou a próxima fala. */
+	function pedir(oQue: 'pergunta' | 'proxima') {
+		if (contexto?.tipo !== 'dialogo') return;
+		const antes = padraoDe(tipo, interacao);
+		contexto = { ...contexto, ate: oQue === 'pergunta' ? null : contexto.falas.length - 1 };
+		preencherDaFala();
+		trocarEnunciado(antes, padraoDe(tipo, interacao));
+	}
+
+	/**
+	 * Questão NOVA sobre um diálogo da atividade: o editor oferece os diálogos dela
+	 * e, escolhido um, a questão nasce com ele — na escolha, uma pergunta; no
+	 * montar e no dizer, a próxima fala (a última). Como o aluno recebe sai do
+	 * nível da atividade, como na geração; o professor troca no painel.
+	 */
+	const dialogos = $derived(nova ? dialogosDaAtividade({ activityId }) : null);
+	function usarDialogo(id: string) {
+		const lista = dialogos?.current;
+		const escolhido = lista?.dialogos.find((d) => d.id === id);
+		if (!lista || !escolhido || !interacao) return;
+		const antes = padraoDe(tipo, interacao);
+		// Quem escolheu Leitura quer o diálogo LIDO; nos outros tipos vale o padrão
+		// do nível, como na geração (na escuta, com áudio).
+		const padrao = lista.mostraPadrao;
+		const mostra =
+			tipo === 'leitura' && interacao !== 'speak'
+				? 'texto'
+				: tipo === 'escuta' && padrao === 'texto'
+					? 'ambos'
+					: padrao;
+		contexto = {
+			tipo: 'dialogo',
+			falas: escolhido.falas,
+			ate: interacao === 'choice' ? null : escolhido.falas.length - 1,
+			mostra
+		};
+		preencherDaFala();
+		trocarEnunciado(antes, padraoDe(tipo, interacao));
+	}
+	function largarDialogo() {
+		const antes = padraoDe(tipo, interacao);
+		contexto = undefined;
+		trocarEnunciado(antes, padraoDe(tipo, interacao));
 	}
 
 	function escolherTipo(novo: TipoDeQuestao) {
 		if (novo === tipo) return;
+		if (contexto?.tipo === 'dialogo' && trocaSoOMostra(tipo) && trocaSoOMostra(novo)) {
+			tipo = novo;
+			const mostra =
+				novo === 'leitura' ? 'texto' : contexto.mostra === 'texto' ? 'ambos' : contexto.mostra;
+			contexto = { ...contexto, mostra };
+			return;
+		}
 		const formato =
 			interacao && FORMATOS_DO_TIPO[novo].includes(interacao)
 				? interacao
@@ -288,9 +414,14 @@
 		trocarPara(tipo, novo);
 	}
 
-	const padrao = $derived(tipo && interacao ? enunciadoPadrao(tipo, interacao, gravada) : '');
+	const padrao = $derived(padraoDe(tipo, interacao));
+	// No diálogo, escuta ⇄ leitura é só como o aluno recebe as falas: nenhum campo
+	// é refeito, e o aviso de que "trocar refaz os campos" mentiria.
 	const tipoMudou = $derived(
-		!nova && !!gravada && (tipo !== gravada.tipo || interacao !== gravada.interacao)
+		!nova &&
+			!!gravada &&
+			(interacao !== gravada.interacao ||
+				(tipo !== gravada.tipo && !(trocaSoOMostra(tipo) && trocaSoOMostra(gravada.tipo))))
 	);
 
 	/** O tipo que o servidor não entrega hoje fica desligado, a não ser que já seja o da questão. */
@@ -317,6 +448,12 @@
 	const emAluno = $derived(`em ${noMeio(idioma.aluno)}`);
 
 	const rotuloDoTexto = $derived.by(() => {
+		if (usaContexto && contexto && (contexto.tipo === 'texto' || contexto.ate === null))
+			return {
+				rotulo: 'A pergunta',
+				nota:
+					contexto.tipo === 'texto' ? `sobre o texto · ${emAlvo}` : `sobre o diálogo · ${emAlvo}`
+			};
 		if (tipo === 'escuta')
 			return { rotulo: 'Frase que o aluno ouve', nota: `${emAlvo} · o áudio sai dela` };
 		if (tipo === 'fala')
@@ -653,6 +790,164 @@
 					<p class="mt-1.5 text-[12.5px] text-base-content/65">{DICA_DO_FORMATO[interacao]}</p>
 				</div>
 
+				<!-- 2b. o diálogo (ou o trecho) da questão. Na questão nova, um diálogo da
+				     atividade pode entrar: na escolha, para uma pergunta; no montar e no
+				     dizer, para a próxima fala. -->
+				{#if nova && !contexto && (interacao === 'choice' || interacao === 'assemble' || interacao === 'speak') && (dialogos?.current?.dialogos.length ?? 0) > 0}
+					<label class="mt-6 block">
+						<span class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
+							Usar um diálogo desta atividade
+							<span class="text-[11.5px] font-medium text-base-content/65">opcional</span>
+						</span>
+						<select
+							class="select w-full text-[14px]"
+							onchange={(e) => {
+								if (e.currentTarget.value) usarDialogo(e.currentTarget.value);
+							}}
+						>
+							<option value="">Sem diálogo</option>
+							{#each dialogos?.current?.dialogos ?? [] as d (d.id)}
+								<option value={d.id}>{d.falas[0]?.falante}: {d.falas[0]?.texto}</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
+
+				{#if contexto?.tipo === 'dialogo'}
+					<section
+						class="mt-6 rounded-box border border-line bg-base-200 p-4"
+						aria-labelledby="editor-dialogo"
+					>
+						<div class="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+							<span id="editor-dialogo" class="text-[13px] font-bold">O diálogo</span>
+							<span class="text-[12px] text-base-content/65">
+								{#if !usaContexto}
+									este formato não usa o diálogo: ele sai ao salvar
+								{:else if contexto.ate === null}
+									o aluno responde sobre ele inteiro
+								{:else}
+									a fala marcada é a vez do aluno
+								{/if}
+							</span>
+							{#if nova}
+								<button
+									type="button"
+									onclick={largarDialogo}
+									class="ms-auto text-[12px] font-semibold text-primary underline-offset-2 hover:underline"
+									>Não usar diálogo</button
+								>
+							{/if}
+						</div>
+						{#if usaContexto}
+							<div
+								role="group"
+								aria-label="Como o aluno recebe o diálogo"
+								class="mb-3 flex flex-wrap items-center gap-1.5"
+							>
+								<span class="me-1 text-[12px] font-semibold text-base-content/65"
+									>O aluno recebe</span
+								>
+								{#each ['ambos', 'audio', 'texto'] as const as m (m)}
+									{@const semVoz = m !== 'texto' && !capacidades.tts}
+									<button
+										type="button"
+										onclick={() => mudarMostra(m)}
+										disabled={semVoz}
+										title={semVoz ? 'Sem voz para este idioma agora.' : undefined}
+										aria-pressed={contexto.mostra === m}
+										class="rounded-full px-3 py-1.5 text-[12.5px] transition-colors disabled:cursor-not-allowed disabled:opacity-50
+										       {contexto.mostra === m
+											? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
+											: 'border border-line bg-base-100 font-semibold text-base-content/65'}"
+									>
+										{ROTULO_DO_MOSTRA[m]}
+									</button>
+								{/each}
+							</div>
+							{#if interacao === 'choice'}
+								<div
+									role="group"
+									aria-label="O que a questão pede"
+									class="mb-3 flex flex-wrap items-center gap-1.5"
+								>
+									<span class="me-1 text-[12px] font-semibold text-base-content/65"
+										>A questão pede</span
+									>
+									{#each [['pergunta', 'Uma pergunta sobre o diálogo'], ['proxima', 'A próxima fala']] as const as [chave, rotulo] (chave)}
+										{@const ativa =
+											chave === 'pergunta' ? contexto.ate === null : contexto.ate !== null}
+										<button
+											type="button"
+											onclick={() => pedir(chave)}
+											aria-pressed={ativa}
+											class="rounded-full px-3 py-1.5 text-[12.5px] transition-colors
+											       {ativa
+												? 'border-[1.5px] border-primary bg-base-300 font-bold text-primary'
+												: 'border border-line bg-base-100 font-semibold text-base-content/65'}"
+										>
+											{rotulo}
+										</button>
+									{/each}
+								</div>
+							{/if}
+							<ol class="grid list-none gap-1.5 p-0" aria-label="As falas do diálogo">
+								{#each contexto.falas as fala, i (i)}
+									{@const vez = contexto.ate === i}
+									<li class="flex items-start gap-2.5">
+										{#if contexto.ate !== null}
+											<input
+												type="radio"
+												name="vez-do-aluno"
+												class="mt-1 radio"
+												checked={vez}
+												disabled={i === 0}
+												onchange={() => escolherVez(i)}
+												aria-label="A vez do aluno é a fala {i + 1}, de {fala.falante}"
+											/>
+										{/if}
+										<span
+											class="mt-0.5 w-14 shrink-0 truncate text-[11.5px] font-bold tracking-[0.04em] text-base-content/65 uppercase"
+											>{fala.falante}</span
+										>
+										<span
+											dir={idioma.dir}
+											lang={idioma.tag}
+											class="min-w-0 flex-1 rounded-field px-2 py-1 font-content text-[14px] leading-snug
+											       {vez
+												? 'border-[1.5px] border-dashed border-primary bg-base-100 font-semibold text-primary'
+												: ''}">{fala.texto}</span
+										>
+									</li>
+								{/each}
+							</ol>
+							{#if contexto.ate !== null}
+								<p class="mt-2.5 text-[12px] leading-snug text-base-content/65">
+									A fala marcada é a resposta: o que você escrever na resposta certa vira o texto
+									dela.
+								</p>
+							{/if}
+						{/if}
+					</section>
+				{:else if contexto?.tipo === 'texto'}
+					<section class="mt-6 rounded-box border border-line bg-base-200 p-4">
+						<p class="mb-2 flex flex-wrap items-baseline gap-x-2 text-[13px] font-bold">
+							O trecho
+							<span class="text-[12px] font-medium text-base-content/65">
+								{usaContexto
+									? 'do material, antes da pergunta'
+									: 'este formato não usa o trecho: ele sai ao salvar'}
+							</span>
+						</p>
+						<p
+							dir={idioma.dir}
+							lang={idioma.tag}
+							class="font-content text-[14px] leading-relaxed whitespace-pre-line"
+						>
+							{contexto.texto}
+						</p>
+					</section>
+				{/if}
+
 				<!-- 3. o que o aluno lê -->
 				<div class="mt-6 grid gap-4">
 					<label class="block">
@@ -677,23 +972,28 @@
 							class="input w-full text-[14.5px]"
 						/>
 					</label>
-					<label class="block">
-						<span class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
-							{rotuloDoTexto.rotulo}
-							<span class="text-[11.5px] font-medium text-base-content/65"
-								>{rotuloDoTexto.nota}</span
-							>
-						</span>
-						<input
-							bind:value={texto}
-							dir={textoNoAlvo ? idioma.dir : 'auto'}
-							lang={textoNoAlvo ? idioma.tag : undefined}
-							class="input w-full text-[14.5px] {textoNoAlvo ? 'font-content' : ''}"
-						/>
-						{#if avisoDoAudio}
-							<span class="mt-1.5 block text-[12px] text-base-content/65">{avisoDoAudio}</span>
-						{/if}
-					</label>
+					<!-- Na próxima fala o aluno não lê nada além do diálogo: o campo sai. -->
+					{#if !proximaFala}
+						<label class="block">
+							<span class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
+								{rotuloDoTexto.rotulo}
+								<span class="text-[11.5px] font-medium text-base-content/65"
+									>{rotuloDoTexto.nota}</span
+								>
+							</span>
+							<input
+								bind:value={texto}
+								dir={textoNoAlvo || usaContexto ? idioma.dir : 'auto'}
+								lang={textoNoAlvo || usaContexto ? idioma.tag : undefined}
+								class="input w-full text-[14.5px] {textoNoAlvo || usaContexto
+									? 'font-content'
+									: ''}"
+							/>
+							{#if avisoDoAudio}
+								<span class="mt-1.5 block text-[12px] text-base-content/65">{avisoDoAudio}</span>
+							{/if}
+						</label>
+					{/if}
 				</div>
 
 				<!-- 4. a resposta certa, só para o professor -->
@@ -1046,9 +1346,8 @@
 						{:else if interacao === 'speak'}
 							<label class="block">
 								<span class="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-bold">
-									Frase que o aluno fala <span
-										class="text-[11.5px] font-medium text-base-content/65">{emAlvo}</span
-									>
+									{rigor ? 'Palavra que o aluno pronuncia' : 'Frase que o aluno fala'}
+									<span class="text-[11.5px] font-medium text-base-content/65">{emAlvo}</span>
 								</span>
 								<input
 									bind:value={frase}
@@ -1057,6 +1356,37 @@
 									class="input w-full font-content text-[14.5px]"
 								/>
 							</label>
+							{#if rigor}
+								<!-- O rigor da Pronúncia (`TOLERANCIA`): o nível da atividade escolheu
+								     o padrão na geração, e é aqui que o professor troca. -->
+								<fieldset class="mt-3.5">
+									<legend class="mb-1.5 text-[12.5px] font-bold">Rigor da correção</legend>
+									<div class="grid gap-1.5">
+										{#each RIGORES as opcao (opcao)}
+											<label
+												class="flex cursor-pointer items-start gap-2.5 rounded-field border border-line bg-base-100 px-3 py-2.5 transition-[border-color] has-[:checked]:border-primary"
+											>
+												<input
+													type="radio"
+													name="editor-rigor"
+													class="mt-0.5 radio shrink-0"
+													value={opcao}
+													checked={rigor === opcao}
+													onchange={() => (rigor = opcao)}
+												/>
+												<span class="min-w-0">
+													<span class="block text-[13.5px] font-semibold"
+														>{RIGOR_NO_EDITOR[opcao].rotulo}</span
+													>
+													<span class="block text-[12.5px] leading-snug text-base-content/65"
+														>{RIGOR_NO_EDITOR[opcao].descricao}</span
+													>
+												</span>
+											</label>
+										{/each}
+									</div>
+								</fieldset>
+							{/if}
 						{/if}
 
 						{#if campos}

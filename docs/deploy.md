@@ -75,8 +75,8 @@ rede docker "spokke":  spokke-caddy · spokke-web · spokke-worker · spokke-pos
 | Web + worker                   | `docker-compose.yml` + `deploy/compose/app.yml` | 1 GB + 768 MB  |
 | PostgreSQL 16                  | `docker/postgres.yml` + override                | 2 GB           |
 | MinIO (mídia)                  | `docker/minio.yml` + override                   | 1 GB           |
-| Áudio e tradução               | `../audiotext-service` + override               | 7 GB           |
-| Total, de 16 GB + 4 GB de swap |                                                 | ~12 GB         |
+| Áudio, tradução e fonemas      | `../audiotext-service` + override               | 7,5 GB         |
+| Total, de 16 GB + 4 GB de swap |                                                 | ~12,5 GB       |
 
 Cinco decisões, todas reversíveis:
 
@@ -1248,21 +1248,21 @@ restaurar o backup.
 
 ### Se algo der errado
 
-| Sintoma                                          | Causa provável                                         | Conserto                                                                     |
-| ------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| "Cross-site POST form submissions are forbidden" | `APP_ORIGIN` diferente do endereço aberto              | `APP_ORIGIN="https://spokke.com.br"` e recriar web e worker                  |
-| Entrar dá 404 em `/api/auth/...`                 | `BETTER_AUTH_URL` errado                               | o mesmo endereço do `APP_ORIGIN`                                             |
-| O Caddy não pega o certificado                   | DNS ainda não aponta, ou a porta 80 fechada            | `dig`, `sudo ufw status`; esperar o DNS — não fique recriando o container    |
-| Publicar trava em "gerando áudio"                | worker parado, ou o serviço de áudio fora ou sem token | `docker logs spokke-worker`; o `/health`; `AUDIOTEXT_TOKEN` igual nos dois   |
-| O áudio não toca no aluno                        | `STORAGE_PUBLIC_URL` errado, ou o Caddy sem a rota     | abrir no navegador a URL de um áudio; o log do Caddy                         |
-| E-mail não sai                                   | `EMAIL_PROVIDER` vazio, ou domínio não verificado      | o log do worker e a aba "Logs" do Resend; `EMAIL_FROM` do domínio verificado |
-| E-mail cai no spam                               | DKIM ou SPF faltando                                   | o Resend mostra o status de cada registro; conferir o DMARC                  |
-| Todo mundo bate no limite de tentativas          | faltou `ADDRESS_HEADER` / `XFF_DEPTH`                  | conferir o `.env` e recriar o web                                            |
-| Google: `redirect_uri_mismatch`                  | URI diferente no cliente OAuth                         | as duas URIs exatas, com `https://spokke.com.br`                             |
-| Google: só alguns e-mails conseguem entrar       | o app OAuth ainda está "em teste"                      | publicar o app (passo 1.11, item 5)                                          |
-| A gravação de voz (ou o vídeo do "Gerar com IA") dá erro 413 | `BODY_SIZE_LIMIT` ausente ou abaixo de 10M | `BODY_SIZE_LIMIT="10M"` no `.env` e recriar o web                            |
-| O serviço de áudio reinicia sozinho              | memória                                                | `docker stats`, `free -h`; o tradutor sozinho ocupa ~3 GB                    |
-| O disco está enchendo                            | imagens velhas do Docker                               | `docker system df`; `docker image prune -f` (nunca com `--volumes`)          |
+| Sintoma                                                      | Causa provável                                         | Conserto                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| "Cross-site POST form submissions are forbidden"             | `APP_ORIGIN` diferente do endereço aberto              | `APP_ORIGIN="https://spokke.com.br"` e recriar web e worker                  |
+| Entrar dá 404 em `/api/auth/...`                             | `BETTER_AUTH_URL` errado                               | o mesmo endereço do `APP_ORIGIN`                                             |
+| O Caddy não pega o certificado                               | DNS ainda não aponta, ou a porta 80 fechada            | `dig`, `sudo ufw status`; esperar o DNS — não fique recriando o container    |
+| Publicar trava em "gerando áudio"                            | worker parado, ou o serviço de áudio fora ou sem token | `docker logs spokke-worker`; o `/health`; `AUDIOTEXT_TOKEN` igual nos dois   |
+| O áudio não toca no aluno                                    | `STORAGE_PUBLIC_URL` errado, ou o Caddy sem a rota     | abrir no navegador a URL de um áudio; o log do Caddy                         |
+| E-mail não sai                                               | `EMAIL_PROVIDER` vazio, ou domínio não verificado      | o log do worker e a aba "Logs" do Resend; `EMAIL_FROM` do domínio verificado |
+| E-mail cai no spam                                           | DKIM ou SPF faltando                                   | o Resend mostra o status de cada registro; conferir o DMARC                  |
+| Todo mundo bate no limite de tentativas                      | faltou `ADDRESS_HEADER` / `XFF_DEPTH`                  | conferir o `.env` e recriar o web                                            |
+| Google: `redirect_uri_mismatch`                              | URI diferente no cliente OAuth                         | as duas URIs exatas, com `https://spokke.com.br`                             |
+| Google: só alguns e-mails conseguem entrar                   | o app OAuth ainda está "em teste"                      | publicar o app (passo 1.11, item 5)                                          |
+| A gravação de voz (ou o vídeo do "Gerar com IA") dá erro 413 | `BODY_SIZE_LIMIT` ausente ou abaixo de 10M             | `BODY_SIZE_LIMIT="10M"` no `.env` e recriar o web                            |
+| O serviço de áudio reinicia sozinho                          | memória                                                | `docker stats`, `free -h`; o tradutor sozinho ocupa ~3 GB                    |
+| O disco está enchendo                                        | imagens velhas do Docker                               | `docker system df`; `docker image prune -f` (nunca com `--volumes`)          |
 
 Não resolveu? Junte a saída de `docker ps -a`, `docker logs --tail 100 <container>` e `free -h`, e me
 chame.

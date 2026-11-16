@@ -1,9 +1,10 @@
 import type { Item } from '$lib/kernel/item';
 import { getInteraction } from '$lib/kernel/interactions/registry';
-import type {
-	CorpoDaResumida,
-	HabilidadeDaResumida,
-	QuestaoResumida
+import {
+	habilidadeDaQuestao,
+	type CorpoDaResumida,
+	type HabilidadeDaResumida,
+	type QuestaoResumida
 } from '$lib/atividades/questao-resumida';
 
 /**
@@ -19,16 +20,54 @@ const texto = (valor: unknown): string => (typeof valor === 'string' ? valor : '
 
 /** A habilidade do rótulo do cartão: a que a questão exige (ler o enunciado não conta). */
 function habilidadeDe(item: Item): HabilidadeDaResumida {
-	const skills = getInteraction(item.interaction.type).skills(item.prompt);
-	if (skills.includes('listening')) return 'escuta';
-	if (skills.includes('speaking')) return 'fala';
-	if (skills.includes('writing')) return 'escrita';
-	return 'leitura';
+	return habilidadeDaQuestao(getInteraction(item.interaction.type).skills(item.prompt));
+}
+
+/** O diálogo do contexto, como cartão: as duas últimas falas antes da parada. */
+function conversaDe(item: Item, payload: Record<string, unknown>): CorpoDaResumida | null {
+	const contexto = item.prompt.contexto;
+	if (item.prompt.kind !== 'composite' || contexto?.tipo !== 'dialogo') return null;
+	const elenco = [...new Set(contexto.falas.map((f) => f.falante))];
+	const lado = (falante: string) =>
+		(elenco.indexOf(falante) % 2 === 0 ? 'inicio' : 'fim') as 'inicio' | 'fim';
+	const ate = contexto.ate ?? contexto.falas.length;
+	const falas = contexto.falas
+		.slice(0, ate)
+		.slice(-2)
+		.map((f) => ({ falante: f.falante, texto: f.texto, lado: lado(f.falante) }));
+	const alvo = contexto.ate !== undefined ? contexto.falas[contexto.ate] : undefined;
+	const opcoes = lista(payload.options);
+	const indice = typeof payload.correctIndex === 'number' ? payload.correctIndex : 0;
+	return {
+		forma: 'conversa',
+		falas,
+		vez: alvo
+			? { falante: alvo.falante, lado: lado(alvo.falante), resposta: alvo.texto }
+			: undefined,
+		pergunta: alvo ? undefined : item.prompt.text,
+		certa: alvo ? undefined : opcoes[indice],
+		ouve: contexto.mostra !== 'texto'
+	};
 }
 
 function corpoDe(item: Item, payload: Record<string, unknown>): CorpoDaResumida {
 	const audio = item.prompt.kind === 'audio';
 	const enunciado = item.prompt.text ?? '';
+	const conversa = conversaDe(item, payload);
+	if (conversa) return conversa;
+	if (
+		item.interaction.type === 'speak' &&
+		payload.pronuncia &&
+		typeof payload.pronuncia === 'object'
+	) {
+		const silabas =
+			(payload.pronuncia as { silabas?: { leitura: string; tonica: boolean }[] }).silabas ?? [];
+		return {
+			forma: 'pronuncia',
+			palavra: texto(payload.target),
+			silabas: silabas.map((s) => ({ leitura: s.leitura, tonica: s.tonica }))
+		};
+	}
 	switch (item.interaction.type) {
 		case 'choice': {
 			const opcoes = lista(payload.options);
@@ -121,6 +160,16 @@ function legendaDe(item: Item, corpo: CorpoDaResumida): string {
 			return 'Liga cada palavra ao sentido';
 		case 'tocar':
 			return 'Toca na palavra certa';
+		case 'conversa':
+			if (corpo.pergunta)
+				return corpo.ouve ? 'Ouve o diálogo e responde' : 'Lê o diálogo e responde';
+			return item.interaction.type === 'speak'
+				? 'Diz a próxima fala'
+				: item.interaction.type === 'assemble'
+					? 'Monta a próxima fala'
+					: 'Escolhe a próxima fala';
+		case 'pronuncia':
+			return 'Pronuncia a palavra, som a som';
 	}
 }
 

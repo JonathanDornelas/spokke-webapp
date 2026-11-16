@@ -9,7 +9,8 @@ import { GABARITO } from './semente.ts';
  *    diferentes (escolher, montar, digitar) e ver o resultado;
  * 2. o mesmo com o resultado DESLIGADO, conferindo que nada do gabarito chega
  *    ao navegador — nem no HTML, nem nas respostas das remote functions;
- * 3. determinismo: recarregar a questão não muda a ordem das alternativas.
+ * 3. determinismo: recarregar a questão não muda a ordem das alternativas;
+ * 4. cada questão cabe na tela sem rolar, no celular e no notebook.
  */
 
 const slugCom = () => process.env.E2E_SLUG_COM_RESULTADO ?? '';
@@ -197,3 +198,56 @@ test('relatar um problema manda a questão e a resposta para a equipe, sem o nom
 		}
 	});
 });
+
+/**
+ * A questão cabe numa tela só (design-system.md "Player numa tela só"): nem a
+ * página nem a área da questão rolam, antes e depois de responder, no celular
+ * com as barras do navegador e no notebook de 768 com o navegador aberto. O
+ * montar é respondido ERRADO de propósito: é o veredito mais alto, com a frase
+ * certa embaixo.
+ */
+for (const tela of [
+	{ nome: 'celular', width: 390, height: 700 },
+	{ nome: 'notebook', width: 1366, height: 657 }
+]) {
+	test(`cada questão cabe na tela sem rolar (${tela.nome})`, async ({ page }) => {
+		await page.setViewportSize({ width: tela.width, height: tela.height });
+		await comecar(page, slugCom(), `Tela ${tela.nome} E2E`);
+
+		async function cabe(momento: string) {
+			const sobra = await page.evaluate(() => {
+				const area = document.querySelector('form > div');
+				return {
+					area: area ? area.scrollHeight - area.clientHeight : 0,
+					pagina: document.documentElement.scrollHeight - window.innerHeight
+				};
+			});
+			expect(sobra.area, `a área da questão rola (${momento})`).toBeLessThanOrEqual(1);
+			expect(sobra.pagina, `a página rola (${momento})`).toBeLessThanOrEqual(1);
+		}
+
+		// 1. escolher
+		await cabe('escolher');
+		await page.getByRole('button', { name: new RegExp(GABARITO.escolha) }).click();
+		await page.getByRole('button', { name: 'Verificar' }).click();
+		await expect(page.getByText('Correto', { exact: false }).first()).toBeVisible();
+		await cabe('escolher, respondida');
+		await seguir(page, 2);
+
+		// 2. montar, errando
+		await cabe('montar');
+		await palavraDisponivel(page, GABARITO.distrator).click();
+		for (const palavra of GABARITO.montar.slice(1)) await palavraDisponivel(page, palavra).click();
+		await page.getByRole('button', { name: 'Verificar' }).click();
+		await expect(page.getByText('O certo era:')).toBeVisible();
+		await cabe('montar, respondida');
+		await seguir(page, 3);
+
+		// 3. digitar
+		await cabe('digitar');
+		await page.getByPlaceholder('Digite sua resposta').fill('Purple zebra dances');
+		await page.getByRole('button', { name: 'Verificar' }).click();
+		await expect(page.getByText(/Correto|Quase|Não foi dessa vez/).first()).toBeVisible();
+		await cabe('digitar, respondida');
+	});
+}

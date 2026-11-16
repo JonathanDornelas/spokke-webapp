@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { contentUnitSchemas, type ContentUnitKind } from '$lib/kernel/content/types';
+import { problemaDoVocabulario } from '$lib/kernel/content/vocabulario';
 
 /**
  * O formato que a IA DEVOLVE, por tipo de material (docs/adr-003-ia-gemini.md).
@@ -58,11 +59,22 @@ export function jsonSchemaDaResposta(kind: ContentUnitKind, quantos: number): un
 /**
  * Valida uma proposta contra o schema do KERNEL — a régua da autoria manual.
  * `safeParse`, nunca `parse`: proposta ruim é descartada (e estornada), não
- * exceção no meio do lote.
+ * exceção no meio do lote. Com as tags dos idiomas, o vocabulário passa também
+ * pela regra da autoria manual: palavra ou expressão curta, nunca frase
+ * (`problemaDoVocabulario`).
  */
-export function validarProposta(kind: ContentUnitKind, bruta: unknown) {
+export function validarProposta(
+	kind: ContentUnitKind,
+	bruta: unknown,
+	tags?: { alvo: string; origem: string }
+) {
 	const estreita = PROPOSTA_SCHEMAS[kind].safeParse(bruta);
 	if (!estreita.success) return null;
 	const doKernel = contentUnitSchemas[kind].safeParse(estreita.data);
-	return doKernel.success ? doKernel.data : null;
+	if (!doKernel.success) return null;
+	if (kind === 'VocabItem' && tags) {
+		const item = doKernel.data as { term: string; translation: string };
+		if (problemaDoVocabulario(item, tags)) return null;
+	}
+	return doKernel.data;
 }

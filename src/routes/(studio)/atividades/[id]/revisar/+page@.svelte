@@ -628,9 +628,10 @@
 									{avisoDaCorrecao}
 								</p>
 							{/if}
-							{#if escolhida.audioPendente}
+							<!-- O diálogo avisa do áudio dele no próprio diálogo. -->
+							{#if escolhida.audioPendente && escolhida.runtime.contexto?.tipo !== 'dialogo'}
 								<p class="mt-3 text-[12px] leading-snug text-base-content/65">
-									O áudio desta frase ainda está sendo gerado.
+									O áudio desta questão ainda está sendo gerado.
 								</p>
 							{/if}
 						{:else}

@@ -45,11 +45,14 @@
 	{:else if q.interaction === 'type' || q.interaction === 'cloze'}
 		<ClozeInteraction item={q} bind:value={resposta.texto} feedback={resposta.feedback} />
 	{:else if q.interaction === 'assemble'}
+		<!-- Como no Player: a dica de teclado só no desktop, e respondida, as peças
+		     que sobraram saem e as fora do lugar ficam grifadas na própria frase. -->
 		<AssembleInteraction
 			item={q}
 			bind:chosen={resposta.montagem}
-			dicaDeTeclado={!compacto}
-			corrigida={compacto && resposta.feedback !== null}
+			dicaDeTeclado={!compacto && desktop}
+			corrigida={resposta.feedback !== null}
+			feedback={resposta.feedback}
 		/>
 	{:else if q.interaction === 'match'}
 		<MatchInteraction
@@ -84,7 +87,9 @@
 			<AnswerFeedback
 				state={resposta.feedback.state}
 				hint={resposta.feedback.hint}
-				marks={q.interaction === 'match' ? undefined : resposta.feedback.marks}
+				marks={q.interaction === 'match' || q.interaction === 'assemble'
+					? undefined
+					: resposta.feedback.marks}
 				expected={q.interaction === 'match' ? undefined : resposta.feedback.expected}
 				heard={resposta.feedback.heard}
 				dir={q.dir}

@@ -6,6 +6,7 @@ import type {
 	ChoiceRuntimeItem,
 	ClozeFeedback,
 	ClozeRuntimeItem,
+	ContextoNoRuntime,
 	Dir,
 	MatchPair,
 	MatchRuntimeItem,
@@ -32,6 +33,11 @@ interface Comum {
 	audio?: string;
 	audioSlow?: string;
 	passage?: string;
+	/** O trecho ou o diálogo antes da pergunta, e a pergunta (`composite` com contexto). */
+	contexto?: ContextoNoRuntime;
+	pergunta?: string;
+	/** Só na Pronúncia: as sílabas (o veredito grifa por sílaba). */
+	silabas?: { leitura: string; tonica: boolean }[];
 	gradedLater?: boolean;
 	skippable?: boolean;
 }

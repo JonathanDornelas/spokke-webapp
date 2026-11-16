@@ -14,6 +14,7 @@
 	// "Movimento"). Com `prefers-reduced-motion` tudo para, pela regra do app.css.
 	import type { QuestaoResumida } from '$lib/atividades/questao-resumida';
 	import { ROTULO_DA_HABILIDADE } from '$lib/atividades/questao-resumida';
+	import BocaDaPronuncia from './pronuncia/BocaDaPronuncia.svelte';
 
 	let {
 		questao: q,
@@ -278,6 +279,53 @@
 				{q.corpo.antes}<span class="rounded-md px-1 py-0.5 {escolhida}">{q.corpo.palavra}</span>{q
 					.corpo.depois}
 			</p>
+		{:else if q.corpo.forma === 'conversa'}
+			<!-- O diálogo: as últimas falas em balões, um lado por pessoa; na próxima
+			     fala, o balão tracejado de quem tem a vez, com a resposta (tela do
+			     professor); na compreensão, a pergunta e a resposta certa. -->
+			{#if q.corpo.ouve}{@render audio()}{/if}
+			<div class="grid gap-1">
+				{#each q.corpo.falas as fala, i (i)}
+					<span
+						class="max-w-[88%] truncate rounded-[10px] border border-line px-2 py-1 font-content text-[11.5px]
+						       {fala.lado === 'fim' ? 'justify-self-end bg-base-300' : 'justify-self-start bg-base-200'}"
+						>{fala.texto}</span
+					>
+				{/each}
+				{#if q.corpo.vez}
+					<span
+						class="max-w-[88%] truncate rounded-[10px] border-[1.5px] border-dashed border-primary px-2 py-1 font-content text-[11.5px] font-semibold text-primary
+						       {q.corpo.vez.lado === 'fim' ? 'justify-self-end' : 'justify-self-start'}"
+						>{q.corpo.vez.resposta}</span
+					>
+				{/if}
+			</div>
+			{#if q.corpo.pergunta}
+				<div class="flex flex-wrap items-center gap-[5px]">
+					<span class="basis-full font-sans text-[11.5px] font-semibold" dir="auto"
+						>{q.corpo.pergunta}</span
+					>
+					{#if q.corpo.certa}
+						<span
+							class="max-w-full truncate rounded-lg px-[9px] py-1 text-[11.5px] {escolhida}"
+							dir="auto">{q.corpo.certa}</span
+						>
+					{/if}
+				</div>
+			{/if}
+		{:else if q.corpo.forma === 'pronuncia'}
+			<div class="flex items-center gap-2.5">
+				<BocaDaPronuncia visema="a" tamanho={pequena ? 52 : 60} decorativa />
+				<div class="min-w-0">
+					<p class="truncate font-content text-[15px] font-semibold">{q.corpo.palavra}</p>
+					<p class="font-mono text-[11px] text-base-content/65" dir="ltr">
+						{#each q.corpo.silabas as silaba, i (i)}{i > 0 ? ' · ' : ''}<span
+								class={silaba.tonica ? 'font-bold text-primary' : ''}
+								>{silaba.tonica ? silaba.leitura.toUpperCase() : silaba.leitura}</span
+							>{/each}
+					</p>
+				</div>
+			</div>
 		{/if}
 	</div>
 

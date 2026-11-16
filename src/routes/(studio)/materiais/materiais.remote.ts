@@ -7,6 +7,7 @@ import { materiais } from '$lib/server/db/repos/content-units';
 import {
 	camposMaterial,
 	montarMaterial,
+	nenhumaLinhaEntrou,
 	preencherTraducao,
 	traduzirLote
 } from '$lib/server/atividades/material-form';
@@ -44,6 +45,14 @@ function parDaBiblioteca(idioma: string | null, linguaDoAluno: string | null): P
 	return idioma && linguaDoAluno ? { de: idioma, para: linguaDoAluno } : null;
 }
 
+/**
+ * As tags que a regra do vocabulário usa para contar palavras. Material sem
+ * idioma conta pelo segmentador neutro (`und`), como a prévia da tela.
+ */
+function tagsDaBiblioteca(idioma: string | null, linguaDoAluno: string | null) {
+	return { alvo: idioma ?? 'und', origem: linguaDoAluno ?? 'und' };
+}
+
 export const criarMaterial = form(z.object(camposMaterial), async (campos) => {
 	const teacher = teacherOf();
 	const comTraducao = await preencherTraducao(
@@ -52,7 +61,10 @@ export const criarMaterial = form(z.object(camposMaterial), async (campos) => {
 		getTradutor()
 	);
 	if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
-	const montado = montarMaterial(comTraducao.campos);
+	const montado = montarMaterial(
+		comTraducao.campos,
+		tagsDaBiblioteca(campos.idioma, campos.linguaDoAluno)
+	);
 	if ('error' in montado) return { ok: false as const, error: montado.error };
 
 	// Igual ao que já existe? Reaproveita — a biblioteca é do professor, e duas
@@ -89,12 +101,12 @@ export const criarMateriaisEmLote = form(
 		const tradutor = par ? getTradutor() : null;
 
 		const linhas = raw.split('\n').filter((linha) => linha.trim()).length;
-		const lidas = parseRawMaterial(kind, raw, { traduzirSemSeparador: !!tradutor });
+		const lidas = parseRawMaterial(kind, raw, {
+			traduzirSemSeparador: !!tradutor,
+			vocabulario: kind === 'VocabItem' ? tagsDaBiblioteca(idioma, linguaDoAluno) : undefined
+		});
 		if (lidas.length === 0) {
-			return {
-				ok: false as const,
-				error: 'Nenhuma linha tem o separador. Use "alvo · tradução", um por linha.'
-			};
+			return { ok: false as const, error: nenhumaLinhaEntrou(kind, raw, !!tradutor) };
 		}
 
 		if (lidas.length > MAX_LINHAS_POR_LOTE) {
@@ -136,7 +148,10 @@ export const atualizarMaterial = form(
 			getTradutor()
 		);
 		if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
-		const montado = montarMaterial(comTraducao.campos);
+		const montado = montarMaterial(
+			comTraducao.campos,
+			tagsDaBiblioteca(campos.idioma, campos.linguaDoAluno)
+		);
 		if ('error' in montado) return { ok: false as const, error: montado.error };
 
 		const atualizado = await materiais(teacher).update(

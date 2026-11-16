@@ -80,16 +80,16 @@
 	const linhas = $derived(Math.max(item.left.length, item.right.length) + (comCabecalho ? 1 : 0));
 
 	const cell =
-		'flex min-h-12 items-center rounded-box border-[1.5px] px-3.5 py-3 text-base transition-[transform,border-color,translate,scale] duration-150 hover:-translate-y-0.5';
+		'flex min-h-12 items-center rounded-box border-[1.5px] px-3.5 py-3 text-base baixa:py-2 transition-[transform,border-color,translate,scale] duration-150 hover:-translate-y-0.5';
 	const badge = 'grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold me-2.5';
 </script>
 
-<p class="mb-3.5 text-[12.5px] font-semibold text-base-content/65">
+<p class="mb-3.5 text-[12.5px] font-semibold text-base-content/65 baixa:mb-2.5">
 	Forme os {item.left.length} pares
 </p>
 
-<div class="grid grid-cols-2 gap-2.5">
-	<div class="grid grid-rows-subgrid gap-2.5" style:grid-row="span {linhas}">
+<div class="grid grid-cols-2 gap-2.5 baixa:gap-2">
+	<div class="grid grid-rows-subgrid gap-2.5 baixa:gap-2" style:grid-row="span {linhas}">
 		{#if comCabecalho}
 			<p class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
 				{leftLabel}
@@ -119,7 +119,7 @@
 			</button>
 		{/each}
 	</div>
-	<div class="grid grid-rows-subgrid gap-2.5" style:grid-row="span {linhas}">
+	<div class="grid grid-rows-subgrid gap-2.5 baixa:gap-2" style:grid-row="span {linhas}">
 		{#if comCabecalho}
 			<p class="text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
 				{rightLabel}
@@ -147,9 +147,13 @@
 	</div>
 </div>
 
-<p
-	class="mt-4 flex items-center gap-2.5 rounded-field border border-line bg-base-200 px-3.5 py-3
-	       text-[12.5px] leading-snug text-base-content/65"
->
-	Toque numa palavra, depois no sentido. O par ganha um número.
-</p>
+<!-- Respondida, a dica sai: não há mais o que ligar, e a altura dela empurrava o
+     veredito para fora da tela. -->
+{#if !respondido}
+	<p
+		class="mt-4 flex items-center gap-2.5 rounded-field border border-line bg-base-200 px-3.5 py-3
+		       text-[12.5px] leading-snug text-base-content/65 baixa:mt-3 baixa:py-2"
+	>
+		Toque numa palavra, depois no sentido. O par ganha um número.
+	</p>
+{/if}

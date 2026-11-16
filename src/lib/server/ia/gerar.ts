@@ -170,7 +170,10 @@ export async function gerarPropostas(
 	const validas: Record<string, unknown>[] = [];
 	for (const candidata of envelope.success ? envelope.data.propostas : []) {
 		if (validas.length >= entrada.quantos) break;
-		const dados = validarProposta(entrada.kind, candidata) as Record<string, unknown> | null;
+		const dados = validarProposta(entrada.kind, candidata, entrada.tags) as Record<
+			string,
+			unknown
+		> | null;
 		if (!dados) continue;
 		const chave = chaveDe(dados);
 		if (vistos.has(chave)) continue;

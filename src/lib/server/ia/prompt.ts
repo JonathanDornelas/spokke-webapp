@@ -1,4 +1,5 @@
 import type { ContentUnitKind } from '$lib/kernel/content/types';
+import { MAX_PALAVRAS_DO_TERMO } from '$lib/kernel/content/vocabulario';
 import type { AnexoDaIa } from './provider';
 
 /**
@@ -23,6 +24,11 @@ export interface PedidoDeMateriais {
 	idiomaAlvo: string;
 	/** Rótulo do idioma do aluno. */
 	idiomaOrigem: string;
+	/**
+	 * As TAGS dos dois idiomas (não vão ao modelo): é com elas que a regra do
+	 * vocabulário conta palavras na volta (`validarProposta`).
+	 */
+	tags?: { alvo: string; origem: string };
 	/** A foto de uma página ou a fala de um vídeo, quando a fonte não é o prompt (adr-003). */
 	anexo?: AnexoDaIa;
 }
@@ -31,7 +37,7 @@ const O_QUE_GERAR: Record<ContentUnitKind, (quantos: number) => string> = {
 	SentencePair: (n) =>
 		`até ${n} pares de frases: cada um com a frase no idioma alvo ("target") e a tradução natural no idioma do aluno ("source"). Frases curtas e completas, uma ideia por frase.`,
 	VocabItem: (n) =>
-		`até ${n} itens de vocabulário: o termo no idioma alvo ("term"), o sentido no idioma do aluno ("translation") e, quando ajudar, uma frase curta de exemplo no idioma alvo ("example").`,
+		`até ${n} itens de vocabulário: o termo no idioma alvo ("term"), o sentido no idioma do aluno ("translation") e, quando ajudar, uma frase curta de exemplo no idioma alvo ("example"). O termo é uma palavra ou expressão curta, de até ${MAX_PALAVRAS_DO_TERMO} palavras, nunca uma frase; nem o termo nem o sentido levam ponto final, interrogação ou exclamação.`,
 	Passage: (n) =>
 		`até ${n} textos curtos no idioma alvo, cada um com título e de 2 a 4 perguntas de compreensão com a resposta, as duas no idioma alvo.`,
 	Dialogue: (n) =>

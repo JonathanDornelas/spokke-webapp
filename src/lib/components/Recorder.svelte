@@ -27,14 +27,17 @@
 		hint?: string;
 	} = $props();
 
+	// O `lg` (o do Player) volta ao tamanho do `md` na tela baixa: no celular
+	// com as barras do navegador, os 12px a mais eram a diferença entre a
+	// questão de fala caber ou rolar.
 	const buttonSize: Record<Size, string> = {
 		md: 'size-24 min-h-24',
-		lg: 'size-[108px] min-h-[108px]'
+		lg: 'size-[108px] min-h-[108px] baixa:size-24 baixa:min-h-24'
 	};
-	const iconSize: Record<Size, string> = { md: 'size-9', lg: 'size-[42px]' };
+	const iconSize: Record<Size, string> = { md: 'size-9', lg: 'size-[42px] baixa:size-9' };
 </script>
 
-<div class="flex flex-col items-center gap-[18px]">
+<div class="flex flex-col items-center gap-[18px] baixa:gap-3">
 	<button
 		type="button"
 		class="btn btn-circle {buttonSize[size]} btn-accent"

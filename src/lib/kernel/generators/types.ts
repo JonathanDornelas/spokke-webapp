@@ -1,5 +1,6 @@
 import type { LanguageProfile } from '../language/profile';
 import type { Item } from '../item';
+import type { Skill } from '../interactions/types';
 
 /**
  * `(ContentUnit, LanguageProfile) => Item[]`, função pura, sem I/O — ver
@@ -33,7 +34,28 @@ export interface GeneratorContext<D> {
 	 * (server.md: "Sem provedor de ASR configurado, o servidor omite o item").
 	 */
 	capabilities: { asr: boolean; tts: boolean };
+	/**
+	 * O nível CEFR da atividade, quando o professor escolheu um. É rótulo
+	 * (adr-004) com UMA exceção: no diálogo ele decide se o aluno recebe o texto
+	 * das falas junto do áudio (`mostraDoDialogo`).
+	 */
+	nivel?: NivelCefr | null;
+	/**
+	 * A pronúncia de uma palavra do idioma alvo, quando o idioma tem
+	 * (`LanguageProfile.pronuncia`). Quem consulta o dicionário é o servidor; sem
+	 * ele, a questão de Pronúncia não é gerada.
+	 */
+	foneticaDe?: (palavra: string) => string[] | null;
+	/**
+	 * Os tipos que o professor pediu para ESTE material (etapa 2), quando a
+	 * geração os conhece. Quem corta é o `selectItems`; aqui eles só decidem o
+	 * que tem duas formas: o diálogo de um material SEM escuta vai lido — com
+	 * áudio, as questões dele exigiriam a escuta e o corte tiraria todas.
+	 */
+	pedidas?: readonly Skill[];
 }
+
+export type NivelCefr = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export interface Generator<D> {
 	id: string;

@@ -1,5 +1,15 @@
 @import 'tailwindcss';
 
+/* Tela BAIXA: todo celular (um iPhone de 844 já aperta a escuta com o veredito, e
+   com as barras do navegador ele mostra uns 700) e o notebook com o navegador
+   aberto (1366×768 sobra com uns 650; 1536×864, com uns 730). É onde a questão do
+   Player aperta o espaço, para caber numa tela só sem rolar a página
+   (design-system.md "Player numa tela só"). Um monitor de 1080 fica de fora. */
+@custom-variant baixa (@media (max-height: 860px));
+/* E o degrau abaixo, o celular PEQUENO (375×667, 360×640): só respiro entre
+   alternativas, falas e veredito, nunca o alvo de 48px nem a letra. */
+@custom-variant muito-baixa (@media (max-height: 680px));
+
 /* ---------------------------------------------------------------------------
    Spokke — tema claro (padrão)
    Sem framework de componentes: Tailwind puro. Estes tokens geram as
@@ -53,6 +63,17 @@
 	--color-panel-dim: #9aa8c9;
 	--color-panel-line: #344369;
 	--color-bezel: #111a31;
+
+	/* A BOCA da questão de Pronúncia (components/pronuncia): o quadro, o rosto, o
+	   traço, o fundo da boca aberta, o dente e a língua. É uma ILUSTRAÇÃO, e por
+	   isso cor de CONTEÚDO, como a pele do avatar: igual nos dois temas. Com o
+	   rosto no `base-200` do tema escuro, o fundo escuro da boca sumia nele. */
+	--color-boca-quadro: #dee6f9;
+	--color-boca-rosto: #f2f5fc;
+	--color-boca-traco: #3659cb;
+	--color-boca: #1b2033;
+	--color-dente: #ffffff;
+	--color-lingua: #e8909f;
 
 	--radius-selector: 999px;
 	--radius-field: 0.625rem;

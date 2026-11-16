@@ -1,5 +1,6 @@
 import type { LanguageProfile } from '../profile';
 import { equivalenciasEmIngles } from './en-comum';
+import { pronunciaEmInglesAmericano } from './en-pronuncia';
 
 /**
  * Inglês americano — idioma alvo mais comum do produto hoje. Sem acento no
@@ -44,5 +45,6 @@ export const enUS: LanguageProfile = {
 	asr: { model: 'en-US', hints: [] },
 	input: { modo: 'nativo' },
 	// Numerais e contrações são os mesmos do britânico — `en-comum.ts`.
-	equivalences: equivalenciasEmIngles
+	equivalences: equivalenciasEmIngles,
+	pronuncia: pronunciaEmInglesAmericano
 };

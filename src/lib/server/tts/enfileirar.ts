@@ -1,11 +1,7 @@
 import { prisma } from '$lib/server/db/client';
 import { enqueueTts } from '$lib/server/queue';
 import { playerRepo } from '$lib/server/db/repos/player';
-import { getProfile } from '$lib/kernel/language/profiles';
-import { vozDoTexto } from '$lib/kernel/language/voice';
-import { promptSchema } from '$lib/kernel/item';
-import { ttsHash } from './index';
-import type { StoredItemRow } from '$lib/server/player/runtime';
+import { audiosDoItem, type StoredItemRow } from '$lib/server/player/runtime';
 
 /**
  * Enfileira o áudio que FALTA para um conjunto de itens.
@@ -35,23 +31,18 @@ export async function enfileirarAudioFaltante(params: {
 	items: StoredItemRow[];
 }): Promise<number> {
 	const { teacherId, targetTag, items } = params;
-	const profile = getProfile(targetTag);
 
 	// A chave é só o HASH, porque o áudio é identificado pelo conteúdo (db.md):
-	// a mesma frase em dois materiais, ou em duas atividades, é UM arquivo.
+	// a mesma frase em dois materiais, ou em duas atividades, é UM arquivo — e
+	// a mesma fala na mesma voz, em dois diálogos, também. `audiosDoItem` já
+	// deixa de fora o idioma sem voz no provedor: um item antigo que escapou não
+	// pode virar um job que falha para sempre e trava a publicação.
 	const pendentes = new Map<string, { text: string; voice: string; speed: number }>();
 	for (const item of items) {
-		const prompt = promptSchema.parse(item.prompt);
-		if (prompt.kind !== 'audio' || !prompt.text) continue;
-
-		const voz = vozDoTexto(profile, prompt.text);
-		// Idioma sem voz no provedor não gera item de escuta (o gerador já corta);
-		// se um item antigo escapou, ele não pode virar um job que falha para
-		// sempre e trava a publicação.
-		if (!voz) continue;
-
-		for (const speed of profile.tts.speeds) {
-			pendentes.set(ttsHash(prompt.text, voz, speed), { text: prompt.text, voice: voz, speed });
+		for (const audio of audiosDoItem(item, targetTag)) {
+			for (const { hash, velocidade } of audio.arquivos) {
+				pendentes.set(hash, { text: audio.texto, voice: audio.voz, speed: velocidade });
+			}
 		}
 	}
 	if (pendentes.size === 0) return 0;

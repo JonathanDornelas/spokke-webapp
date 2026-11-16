@@ -65,6 +65,10 @@ pares é o erro mais comum ao portar um componente.
 cores de etiqueta de turma e módulo (`$lib/etiquetas.ts`). Nunca use em botão, foco ou destaque:
 ali é `primary`.
 
+**A boca da Pronúncia tem paleta própria** (`--color-boca-quadro`, `-rosto`, `-traco`, `boca`,
+`dente` e `lingua`, soltas no `@theme`): é ILUSTRAÇÃO, e por isso cor de conteúdo, como a pele do
+avatar, igual nos dois temas. Com o rosto em `base-200`, o fundo escuro da boca sumia no tema escuro.
+
 Raios: `--radius-field: 0.625rem`, `--radius-box: 0.875rem`, seletores em pill
 (`--radius-selector`). Como são tokens `@theme`, viram `rounded-field`/`rounded-box`/
 `rounded-selector` de graça.
@@ -154,7 +158,8 @@ alvo de toque de 48px. Todo ícone que carrega significado vem com texto ao lado
 ícones já em uso: seção "Ícones" de `/dev/components`.
 
 Ilustração é conteúdo, não decoração: imagem otimizada com `width`/`height` fixos. Não desenhe
-SVG ilustrativo à mão.
+SVG ilustrativo à mão. As exceções são as ilustrações que são DADO: o avatar (`$lib/avatar`) e a boca
+da Pronúncia (`components/pronuncia/formas.ts`, placeholder até a arte final).
 
 ## Largura das telas do Studio
 
@@ -180,9 +185,9 @@ leiaute precisa de margem compensatória), tabelas densas, painel de contexto à
 **Player** é a superfície crítica: celular fraco, 4G, aluno sem paciência. Uma pergunta por
 tela, ação principal fixa no rodapé, alvo de toque de 48px (`[data-surface="player"]`).
 
-**A PÁGINA do Player não rola — o conteúdo rola por dentro.** A casca é `h-dvh` (não
-`min-h-dvh`) e quem ganha `overflow-y-auto` é a área da questão; cabeçalho com o progresso e
-rodapé com a ação principal ficam onde estão. Com a página rolando, a barra de progresso subia
+**A PÁGINA do Player não rola — e a questão cabe na área do meio** ("Player numa tela só",
+abaixo). A casca é `h-dvh` (não `min-h-dvh`) e quem ganha `overflow-y-auto` é a área da questão,
+como último recurso; cabeçalho com o progresso e rodapé com a ação principal ficam onde estão. Com a página rolando, a barra de progresso subia
 para fora da tela e o botão de verificar ficava abaixo da dobra.
 Duas armadilhas de flexbox, as duas já custaram um bug aqui: **todo pai entre a casca e a área
 rolável precisa de `min-h-0`** (item de flex não encolhe abaixo do próprio conteúdo, então a
@@ -191,6 +196,43 @@ centralização vertical usa `[align-content:safe_center]` — com `center` puro
 alto que a área transborda para os dois lados e o topo fica inalcançável. Antes de
 adicionar qualquer dependência a um componente do Player, verifique o impacto no bundle. A
 pergunta padrão é "dá para fazer com CSS e o que já temos?".
+
+## Player numa tela só
+
+**A questão cabe na área do meio sem rolar, antes e depois de responder, no desktop e no celular**
+(pedido do dono do repositório, 2026-11-15). O que não cabe é o BLOCO antes da pergunta — o
+diálogo, o trecho de um texto —, e só ele rola por dentro (`ContextoDaQuestao ajustavel`). A
+`/q/[n]` e a prévia do aluno são a mesma casca e seguem as mesmas regras:
+
+- **No desktop a grade tem UMA linha com a altura da área** (`grid-rows-[minmax(0,1fr)]`) e as
+  colunas ficam no meio dela (`[align-items:safe_center]`). A coluna com o bloco tem `max-h-full`,
+  e o bloco encolhe até caber (`min-h-24` de piso).
+- **No celular a coluna com o bloco CRESCE até a resposta**, e a da resposta tem a altura do
+  conteúdo. A área do bloco nasce com 5,5rem e fica com toda a sobra: 5,5rem é o mínimo antes de a
+  área inteira precisar rolar, e é por ser uma altura DECLARADA, não a do conteúdo, que a coluna
+  não encolhe abaixo dela — com `min-h-0` ela encolheria até sumir com o título.
+- **A rolagem da área continua como último recurso.** Numa tela pequena demais nada pode ficar fora
+  do alcance; por isso `safe center`, e não `center`, nas duas direções.
+- **Duas variantes de altura, no `app.css`**: `baixa:` (até 860px de altura: todo celular, e o
+  notebook com o navegador aberto — 1366×768 sobra com uns 650) e `muito-baixa:` (até 680px: o
+  celular pequeno, 375×667). Na `baixa` o título desce para 22–28px, alternativas, peças e falas
+  perdem respiro (o alvo continua de 48px), cabeçalho e rodapé ficam mais baixos, o player de
+  áudio vira uma linha só e o microfone e a boca da Pronúncia voltam a 96px; a `muito-baixa` só
+  aperta o respiro. Desktop e celular baixos se separam com `lg:baixa:` e `max-lg:baixa:`. Um
+  monitor de 1080 fica de fora das duas.
+- **Respondida a questão, sai o que não serve mais**: a legenda dos números da escolha, as peças que
+  sobraram do montar e a dica de teclado (que só existe no desktop), a dica do associar. **Em
+  montar, associar e ordenar o grifo fica NA INTERAÇÃO** — a peça fora do lugar sublinhada, os
+  cartões pintados, a fala com o lugar dela — e o veredito embaixo não repete a resposta: repetir
+  as falas na ordem do aluno e na certa transformava seis falas em dezoito linhas.
+- **Os rótulos do veredito vão na linha do conteúdo** ("Ouvimos:", "O certo era:"): numa linha
+  própria cada um custava a altura que a questão precisava.
+- Os tamanhos de referência são os de NAVEGADOR aberto, não os de tela: 1366×657, 1536×730 e
+  1920×911 no desktop; 390×700, 412×780, 390×844 e 375×667 no celular. Medido com todos os tipos
+  de questão, antes e depois de responder, tudo cabe neles; no 360×640 algumas questões pesadas
+  (ordenar falas longas, escuta com alternativas longas) ainda rolam a área. Com o teclado do
+  idioma aberto a questão rola por cima dele, como sob o teclado de um celular.
+  `e2e/aluno.spec.ts` confere as questões da semente em 390×700 e 1366×657.
 
 ## Movimento
 

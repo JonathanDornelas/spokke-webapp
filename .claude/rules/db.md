@@ -257,6 +257,10 @@ mesma frase duas vezes criava duas linhas na biblioteca e o professor passava a 
 que ele não fez. Ele devolve `{ id, reused }` — é o `reused` que a tela mostra como
 "biblioteca".
 
+**Diálogo sem pergunta não grava a chave `questions`** (`montarMaterial`): as perguntas entraram no
+diálogo depois, e com `questions: []` o jsonb de um diálogo novo deixava de ser igual ao de um
+antigo com as mesmas falas, e o reaproveitamento parava de achá-lo. O schema lê a falta como `[]`.
+
 **Repositório que participa de escrita com cota aceita `db: Db`** (o cliente ou a transação —
 `src/lib/server/db/client.ts`): `atividades`, `materiais`, `uso` e `creditos`. Dentro de `comCota`
 toda escrita vai pelo `tx`; com o `prisma` global ela iria por outra conexão, fora da trava.

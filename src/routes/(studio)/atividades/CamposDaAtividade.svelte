@@ -144,7 +144,9 @@
 			{/if}
 
 			<!-- O nível é um RÓTULO (CEFR): organiza a lista, filtra e aparece para o
-			     aluno. Não muda os exercícios gerados (adr-004-modulos-e-nivel.md). -->
+			     aluno. Na geração ele muda DUAS coisas: do B2 em diante o diálogo vai só
+			     em áudio (`mostraDoDialogo`), e o rigor da Pronúncia sai dele
+			     (`rigorDaPronuncia`; adr-004-modulos-e-nivel.md). -->
 			<div role="group" aria-labelledby="nivel-rotulo" class="min-w-0">
 				<!-- O nome do nível escolhido vai na linha do rótulo, numa linha só: na
 				     frase de baixo ele fazia "Intermediário superior" quebrar em três
@@ -182,7 +184,8 @@
 				</div>
 				<input type="hidden" name="level" value={nivel ?? ''} />
 				<p class="mt-[7px] text-[12.5px] leading-normal text-base-content/65">
-					Um rótulo para você organizar e o aluno ver. Não muda as questões.
+					Um rótulo para você organizar e o aluno ver. Pesa em dois pontos: do B2 em diante o aluno
+					ouve o diálogo sem ler, e a Pronúncia corrige com mais rigor nos níveis altos.
 				</p>
 			</div>
 		</div>

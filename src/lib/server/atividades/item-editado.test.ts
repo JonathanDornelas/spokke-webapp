@@ -400,3 +400,194 @@ describe('readableAnswerKey', () => {
 		});
 	});
 });
+
+describe('questão com diálogo no editor', () => {
+	const falas = [
+		{ falante: 'Ana', texto: 'Hi, are you new here?' },
+		{ falante: 'Ben', texto: 'Yes, I started this week.' },
+		{ falante: 'Ana', texto: 'Welcome to the team!' }
+	];
+	/** A próxima fala de escolher, como o gerador a grava. */
+	const proxima = {
+		prompt: {
+			kind: 'composite',
+			instructionKey: 'choose-next-line',
+			contexto: { tipo: 'dialogo', falas, ate: 2, mostra: 'ambos' }
+		},
+		interaction: {
+			type: 'choice',
+			payload: { options: ['Welcome to the team!', 'Yes, I started this week.'], correctIndex: 0 }
+		},
+		grading: { mode: 'exact' }
+	};
+
+	it('abre com o diálogo, e salvar sem mexer o mantém igual', () => {
+		const questao = questaoDoItem(proxima);
+		expect(questao.contexto).toEqual({ tipo: 'dialogo', falas, ate: 2, mostra: 'ambos' });
+		const montada = montarQuestao(questao, ctx({ atual: proxima }));
+		if (!montada.ok) throw new Error(montada.error);
+		expect(montada.prompt.kind).toBe('composite');
+		expect(montada.prompt.contexto).toEqual({ tipo: 'dialogo', falas, ate: 2, mostra: 'ambos' });
+		expect(montada.prompt.instructionKey).toBe('choose-next-line');
+	});
+
+	it('abre no tipo que o roteiro mostra: com áudio é escuta, só texto é leitura', () => {
+		expect(questaoDoItem(proxima).tipo).toBe('escuta');
+		const lida = {
+			...proxima,
+			prompt: { ...proxima.prompt, contexto: { ...proxima.prompt.contexto, mostra: 'texto' } }
+		};
+		expect(questaoDoItem(lida).tipo).toBe('leitura');
+		// E salvar como escuta continua sendo o diálogo, não uma escuta de frase.
+		const montada = montarQuestao(questaoDoItem(proxima), ctx({ atual: proxima }));
+		if (!montada.ok) throw new Error(montada.error);
+		expect(montada.prompt.kind).toBe('composite');
+	});
+
+	it('trocar como o aluno recebe e escrever outra resposta: a fala da vez acompanha', () => {
+		const questao = questaoDoItem(proxima);
+		const editada: Questao = {
+			...questao,
+			contexto: { tipo: 'dialogo', falas, ate: 2, mostra: 'audio' },
+			campos: {
+				interacao: 'choice',
+				opcoes: ['Welcome aboard!', 'Yes, I started this week.'],
+				certa: 0
+			}
+		};
+		const montada = montarQuestao(editada, ctx({ atual: proxima }));
+		if (!montada.ok) throw new Error(montada.error);
+		const contexto = montada.prompt.contexto;
+		expect(contexto?.tipo === 'dialogo' && contexto.mostra).toBe('audio');
+		expect(contexto?.tipo === 'dialogo' && contexto.falas[2]!.texto).toBe('Welcome aboard!');
+	});
+
+	it('a pergunta sobre o diálogo inteiro exige a pergunta', () => {
+		const questao: Questao = {
+			tipo: 'leitura',
+			enunciado: '',
+			texto: '',
+			campos: { interacao: 'choice', opcoes: ['This week', 'Last year'], certa: 0 },
+			contexto: { tipo: 'dialogo', falas, ate: null, mostra: 'ambos' }
+		};
+		const sem = montarQuestao(questao, ctx());
+		expect(sem.ok).toBe(false);
+		const com = montarQuestao({ ...questao, texto: 'When did Ben start?' }, ctx());
+		if (!com.ok) throw new Error(com.error);
+		expect(com.prompt.text).toBe('When did Ben start?');
+		expect(com.prompt.instructionKey).toBe('answer-about-dialogue');
+	});
+
+	it('sem voz no idioma, o diálogo para ouvir é recusado (só texto passa)', () => {
+		const questao = questaoDoItem(proxima);
+		const semVoz = montarQuestao(questao, ctx({ capacidades: { tts: false, asr: true } }));
+		expect(semVoz.ok).toBe(false);
+		const soTexto = montarQuestao(
+			{ ...questao, contexto: { tipo: 'dialogo', falas, ate: 2, mostra: 'texto' } },
+			ctx({ capacidades: { tts: false, asr: true } })
+		);
+		expect(soTexto.ok).toBe(true);
+	});
+
+	it('num formato que não usa o diálogo, ele sai', () => {
+		const questao = questaoDoItem(proxima);
+		// "Tocar na palavra" é um formato da leitura: é lá que o professor o escolhe.
+		const montada = montarQuestao(
+			{
+				...questao,
+				tipo: 'leitura',
+				campos: { interacao: 'select', frase: 'Welcome to the team!', certa: 'team' }
+			},
+			ctx({ atual: proxima })
+		);
+		if (!montada.ok) throw new Error(montada.error);
+		expect(montada.prompt.contexto).toBeUndefined();
+	});
+});
+
+describe('questão de Pronúncia no editor', () => {
+	/** Como `vocab-pronuncia` a grava: a palavra, o sentido de apoio e a pronúncia. */
+	const pronuncia = {
+		prompt: { kind: 'text', text: 'prioridade', instructionKey: 'pronounce-the-word' },
+		interaction: {
+			type: 'speak',
+			payload: {
+				target: 'priority',
+				hints: [],
+				pronuncia: {
+					fonemas: ['P', 'R', 'AY0', 'AO1', 'R', 'AH0', 'T', 'IY0'],
+					silabas: [
+						{ leitura: 'prai', fonemas: ['P', 'R', 'AY0'], tonica: false },
+						{ leitura: 'aw', fonemas: ['AO1'], tonica: true },
+						{ leitura: 'ruh', fonemas: ['R', 'AH0'], tonica: false },
+						{ leitura: 'tee', fonemas: ['T', 'IY0'], tonica: false }
+					]
+				}
+			}
+		},
+		grading: { mode: 'asr' }
+	};
+	const dicionario: Record<string, string[]> = { kitchen: ['K', 'IH1', 'CH', 'AH0', 'N'] };
+	const foneticaDe = (palavra: string) => dicionario[palavra.toLowerCase()] ?? null;
+	const payloadDe = (montada: ReturnType<typeof montarQuestao>) => {
+		if (!montada.ok) throw new Error(montada.error);
+		return montada.interaction.payload as { target: string; pronuncia?: { fonemas: string[] } };
+	};
+
+	it('salvar sem trocar a palavra continua sendo Pronúncia (não vira uma fala comum)', () => {
+		const questao = questaoDoItem(pronuncia);
+		const payload = payloadDe(
+			montarQuestao({ ...questao, enunciado: 'Diga esta palavra.' }, ctx({ atual: pronuncia }))
+		);
+		expect(payload.pronuncia?.fonemas).toEqual(pronuncia.interaction.payload.pronuncia.fonemas);
+	});
+
+	it('trocar a palavra lê a nova no dicionário; fora dele, volta a ser uma fala comum', () => {
+		const questao = questaoDoItem(pronuncia);
+		const outra = payloadDe(
+			montarQuestao(
+				{ ...questao, campos: { interacao: 'speak', frase: 'kitchen' } },
+				ctx({ atual: pronuncia, foneticaDe })
+			)
+		);
+		expect(outra.pronuncia?.fonemas).toEqual(['K', 'IH1', 'CH', 'AH0', 'N']);
+		const fora = payloadDe(
+			montarQuestao(
+				{ ...questao, campos: { interacao: 'speak', frase: 'zxqw' } },
+				ctx({ atual: pronuncia, foneticaDe })
+			)
+		);
+		expect(fora.pronuncia).toBeUndefined();
+	});
+
+	it('abre com o rigor (normal, na questão de antes dos níveis) e salva o que o professor escolheu', () => {
+		const questao = questaoDoItem(pronuncia);
+		expect(questao.campos).toEqual({ interacao: 'speak', frase: 'priority', rigor: 'normal' });
+		const rigida = payloadDe(
+			montarQuestao(
+				{ ...questao, campos: { interacao: 'speak', frase: 'priority', rigor: 'rigoroso' } },
+				ctx({ atual: pronuncia })
+			)
+		) as { pronuncia?: { rigor?: string; fonemas: string[] } };
+		expect(rigida.pronuncia?.rigor).toBe('rigoroso');
+		expect(rigida.pronuncia?.fonemas).toEqual(pronuncia.interaction.payload.pronuncia.fonemas);
+	});
+
+	it('trocar a palavra leva o rigor junto; uma fala comum não abre com rigor nenhum', () => {
+		const comRigor = structuredClone(pronuncia);
+		Object.assign(comRigor.interaction.payload.pronuncia, { rigor: 'leve' });
+		const questao = questaoDoItem(comRigor);
+		const outra = payloadDe(
+			montarQuestao(
+				{ ...questao, campos: { interacao: 'speak', frase: 'kitchen' } },
+				ctx({ atual: comRigor, foneticaDe })
+			)
+		) as { pronuncia?: { rigor?: string } };
+		expect(outra.pronuncia?.rigor).toBe('leve');
+		const comum = questaoDoItem({
+			...pronuncia,
+			interaction: { type: 'speak', payload: { target: 'I like it.', hints: [] } }
+		});
+		expect(comum.campos).toEqual({ interacao: 'speak', frase: 'I like it.' });
+	});
+});

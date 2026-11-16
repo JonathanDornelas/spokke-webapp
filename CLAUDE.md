@@ -207,8 +207,22 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   ao meio (`会` de `会い`) fica sem leitura; o kana não tem dígitos (resposta com `3` não vira
   questão de digitar); e a equivalência dos dígitos arábico-índicos no `ar-SA` continua por
   ligar.
-- Geradores: os 7 de `SentencePair` mais um por tipo de conteúdo. Faltam 8 da tabela de
-  kernel.md.
+- Geradores: os 7 de `SentencePair`, os 7 de vocabulário (escolher o sentido ou a palavra, ouvir e
+  escolher, escrever, ouvir e escrever, a Pronúncia e dizer a palavra), a compreensão de texto e
+  três de diálogo (ordenar, a pergunta e a próxima fala). Faltam 4 da tabela de kernel.md.
+  **Vocabulário é palavra** (até três, sem pontuação de frase): frase entra como Sentença.
+- **O Player cabe numa tela só** (design-system.md): a questão não rola, antes e depois de
+  responder, nos tamanhos de navegador de referência; quem rola é o bloco do diálogo ou do texto.
+- **Pronúncia, só em `en-US`** (kernel.md "Pronúncia"): a correção é SOM A SOM, pelo reconhecedor
+  de fonemas do serviço de áudio (um wav2vec2 afinado para fonemas, Apache 2.0, o quarto motor, ~0,5
+  GB e ~0,2 s por palavra), e não pelo Whisper, que devolve a palavra certa de uma pronúncia torta.
+  **Três rigores** (leve, normal, rigoroso), com o padrão saído do nível da atividade e a troca no
+  editor de questão. Os números da tolerância saíram de uma bancada com voz SINTETIZADA, certa e com
+  os erros típicos de brasileiro (`docs/plano-dialogo-e-pronuncia.md`): **falta calibrar com
+  gravação de aluno de verdade**, e o acento tônico não é conferido. Sem o reconhecedor, a reserva é
+  a transcrição do Whisper. A boca dos quinze visemas é um placeholder desenhado por dado
+  (`components/pronuncia/formas.ts`), à espera da arte final, e o corte lateral com a língua não
+  existe ainda. O `en-GB` fica sem a questão até ter dicionário próprio.
 - **"Gerar com IA" é o Claude, com o Gemini de reserva** (`LLM_PROVIDER="claude,gemini"`, uma fila
   em ordem — `docs/adr-003-ia-gemini.md`): o Gemini só responde quando o Claude falha (sem
   créditos, sobrecarga, recusa). A IA propõe material a partir de um pedido, da FOTO de uma página
@@ -223,8 +237,9 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   `docs/adr-006-traducao.md`): o professor cadastra no idioma que ensina e a frase do aluno sai do
   **MADLAD-400 3B** (Apache 2.0), o terceiro motor do serviço de áudio. Ela só preenche o que vem em
   BRANCO — a do professor nunca é trocada — e a lista colada aceita linha sem tradução. Custou
-  **2,9 GB** de memória: o teto do container de áudio subiu para 7 GB, e a conta da máquina de
-  produção ainda fecha (11,75 de 16). O tradutor é opcional no serviço: falhar ao carregar não tira
+  **2,9 GB** de memória: com o reconhecedor de fonemas da Pronúncia (mais 0,5), o teto do container
+  de áudio é 7,5 GB, e a conta da máquina de produção ainda fecha (12,25 de 16). O tradutor é
+  opcional no serviço: falhar ao carregar não tira
   voz e fala do ar. **O PyAV do serviço está fixado abaixo do 19** (o 19 quebrou a transcrição com o
   `/health` dizendo "ok") — subir só quando o faster-whisper acompanhar.
 - **Módulos e nível** (`docs/adr-004-modulos-e-nivel.md`): módulo é coleção ordenada N:N de

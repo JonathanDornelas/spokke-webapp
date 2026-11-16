@@ -20,7 +20,17 @@ export const ENUNCIADOS: Record<string, string> = {
 	'answer-about-passage': 'Responda sobre o texto.',
 	'order-the-lines': 'Coloque as falas na ordem certa.',
 	'match-pairs': 'Ligue cada um ao seu par.',
-	'tap-the-word': 'Toque na palavra certa.'
+	'tap-the-word': 'Toque na palavra certa.',
+	'answer-about-dialogue': 'Responda sobre o diálogo.',
+	'choose-next-line': 'Escolha a próxima fala.',
+	'assemble-next-line': 'Monte a próxima fala.',
+	'say-next-line': 'Diga a próxima fala.',
+	'pronounce-the-word': 'Pronuncie a palavra.',
+	'choose-the-word': 'Escolha a palavra com este sentido.',
+	'listen-and-choose-meaning': 'Ouça e escolha o significado.',
+	'listen-and-type-word': 'Ouça e escreva a palavra.',
+	'write-the-word': 'Escreva a palavra com este sentido.',
+	'say-the-word': 'Diga esta palavra em voz alta.'
 };
 
 /** O enunciado por extenso. O professor nunca vê a chave crua. */

@@ -20,8 +20,16 @@ const RESUMO_POR_GERADOR: Record<string, string> = {
 	'cloze-target': 'Completar a lacuna na frase',
 	'speak-target': 'Falar a frase em voz alta',
 	'vocab-choice': 'Escolher a tradução do termo',
+	'vocab-choice-term': 'Escolher o termo pelo sentido',
+	'listen-vocab-choice': 'Ouvir o termo e escolher o sentido',
+	'listen-vocab-type': 'Digitar o termo ao ouvir o áudio',
+	'vocab-type': 'Digitar o termo pelo sentido',
+	'speak-vocab': 'Falar o termo em voz alta',
 	'passage-comprehension': 'Responder uma pergunta sobre o texto',
 	'order-lines': 'Colocar as falas do diálogo na ordem',
+	'dialogue-comprehension': 'Responder uma pergunta sobre o diálogo',
+	'dialogue-next-line': 'Continuar o diálogo com a próxima fala',
+	'vocab-pronuncia': 'Pronunciar a palavra, som a som',
 	'closing-match': 'Associar os pares — revisão do que apareceu na atividade'
 };
 

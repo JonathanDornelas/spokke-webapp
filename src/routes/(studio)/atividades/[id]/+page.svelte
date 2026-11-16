@@ -12,6 +12,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { goto, invalidateAll } from '$app/navigation';
+	import { tick } from 'svelte';
 	import IdiomaTag from '$lib/components/IdiomaTag.svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import HeaderCard from '$lib/components/HeaderCard.svelte';
@@ -28,9 +29,11 @@
 		arquivarAtividade,
 		definirNivel,
 		desarquivarAtividade,
-		regerarAudio
+		regerarAudio,
+		renomearAtividade
 	} from '../atividades.remote';
 	import { NIVEIS, nivelOuNulo, rotuloDoNivel } from '$lib/atividades/nivel';
+	import { TETO_DO_TITULO } from '$lib/atividades/titulo';
 	import { CLASSE_DA_ETIQUETA, corOuPadrao } from '$lib/etiquetas';
 	import { ICONE_DA_HABILIDADE, ROTULO_DA_HABILIDADE } from '$lib/atividades/questao-resumida';
 	import { KERNEL_TO_KIND, PILL_TONE, tipoDe } from '$lib/components/material-form';
@@ -108,6 +111,54 @@
 			await invalidateAll();
 		} finally {
 			regerando = false;
+		}
+	}
+
+	// ── o título, editado no próprio cartão ────────────────────────────────
+	// Renomear não pede o wizard (pedido do dono do repositório): é UM campo, e
+	// a etapa 1 era o único lugar. Vale na hora, inclusive no que está no ar.
+	let renomeando = $state(false);
+	let tituloNovo = $state('');
+	let salvandoTitulo = $state(false);
+	let erroDoTitulo = $state<string | null>(null);
+	let campoDoTitulo = $state<HTMLInputElement>();
+	async function abrirRenomear() {
+		tituloNovo = data.activity.title;
+		erroDoTitulo = null;
+		renomeando = true;
+		await tick();
+		campoDoTitulo?.focus();
+		campoDoTitulo?.select();
+	}
+	function cancelarRenomear() {
+		renomeando = false;
+		erroDoTitulo = null;
+	}
+	async function salvarTitulo(evento: SubmitEvent) {
+		evento.preventDefault();
+		const titulo = tituloNovo.trim();
+		if (!titulo) {
+			erroDoTitulo = 'Dê um título para a atividade.';
+			return;
+		}
+		if (titulo === data.activity.title) {
+			renomeando = false;
+			return;
+		}
+		salvandoTitulo = true;
+		erroDoTitulo = null;
+		try {
+			const r = await renomearAtividade({ activityId: data.activity.id, title: titulo });
+			if (!r.ok) {
+				erroDoTitulo = 'Não deu para renomear agora.';
+				return;
+			}
+			await invalidateAll();
+			renomeando = false;
+		} catch {
+			erroDoTitulo = 'Não deu para renomear agora. Tente de novo em instantes.';
+		} finally {
+			salvandoTitulo = false;
 		}
 	}
 
@@ -287,11 +338,66 @@
 				{@render icone('M4 5.5h16v13H4zM4 10h16M8 14h8', 'size-[22px]')}
 			</span>
 		{/snippet}
-		<h1
-			class="mb-2 font-display text-[22px] leading-[1.16] font-semibold tracking-[-0.024em] text-pretty lg:text-[28px]"
-		>
-			{data.activity.title}
-		</h1>
+		{#if renomeando}
+			<form onsubmit={salvarTitulo} class="mb-2.5 flex flex-wrap items-center gap-2">
+				<label class="sr-only" for="titulo-da-atividade">Título da atividade</label>
+				<input
+					id="titulo-da-atividade"
+					bind:this={campoDoTitulo}
+					bind:value={tituloNovo}
+					maxlength={TETO_DO_TITULO}
+					autocomplete="off"
+					onkeydown={(e) => {
+						if (e.key === 'Escape') cancelarRenomear();
+					}}
+					class="input min-h-11 w-full min-w-0 font-display text-[18px] font-semibold sm:w-auto sm:flex-1 lg:text-[22px]"
+				/>
+				<button
+					type="submit"
+					disabled={salvandoTitulo}
+					class="btn h-11 flex-1 motion-tap gap-2 btn-primary font-bold sm:flex-none"
+				>
+					{#if salvandoTitulo}
+						<Loading variant="fila" size={11} tone="current" label="Salvando o título" />
+					{/if}
+					Salvar
+				</button>
+				<button
+					type="button"
+					onclick={cancelarRenomear}
+					disabled={salvandoTitulo}
+					class="btn h-11 flex-1 motion-tap btn-plain font-semibold sm:flex-none"
+				>
+					Cancelar
+				</button>
+				{#if erroDoTitulo}
+					<p
+						class="flex w-full items-center gap-2 text-[12.5px] font-semibold text-error"
+						role="alert"
+					>
+						{@render icone('M12 8v4.5M12 16h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', 'size-[15px]')}
+						{erroDoTitulo}
+					</p>
+				{/if}
+			</form>
+		{:else}
+			<div class="mb-2 flex items-start gap-1.5">
+				<h1
+					class="min-w-0 font-display text-[22px] leading-[1.16] font-semibold tracking-[-0.024em] text-pretty lg:text-[28px]"
+				>
+					{data.activity.title}
+				</h1>
+				<button
+					type="button"
+					onclick={abrirRenomear}
+					aria-label="Renomear a atividade"
+					title="Renomear"
+					class="btn btn-circle size-9 min-h-9 shrink-0 motion-tap btn-ghost lg:mt-0.5"
+				>
+					{@render icone('M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4', 'size-4')}
+				</button>
+			</div>
+		{/if}
 		<p class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px] leading-snug">
 			<span
 				class="inline-flex shrink-0 items-center gap-[7px] rounded-full px-[11px] py-[5px] text-xs font-bold {estado.pill}"
@@ -620,9 +726,10 @@
 								{#key escolhida.id}
 									<PreviaDaQuestao runtime={escolhida.runtime} chave={escolhida.id} compacta />
 								{/key}
-								{#if escolhida.audioPendente}
+								<!-- O diálogo avisa do áudio dele no próprio diálogo. -->
+								{#if escolhida.audioPendente && escolhida.runtime.contexto?.tipo !== 'dialogo'}
 									<p class="mt-3 text-[12px] leading-snug text-base-content/65">
-										O áudio desta frase ainda está sendo gerado.
+										O áudio desta questão ainda está sendo gerado.
 									</p>
 								{/if}
 							{:else}
