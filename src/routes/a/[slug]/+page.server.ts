@@ -74,21 +74,23 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 	const hashes = activityVersion.items.flatMap((item) =>
 		itemAudioHashes(item, activityVersion.activity.targetLang)
 	);
+	// **A reposição roda SEMPRE, antes de contar.** Falta áudio quando a primeira
+	// publicação ainda está sintetizando ou um job falhou; o áudio de atividade
+	// não vence mais, mas sem repor um arquivo que não chegou ao bucket travaria o
+	// link aqui para sempre. E o áudio de antes da conferência (a versão devagar,
+	// a palavra da Pronúncia) é refeito por aqui, uma vez, sem tirar o link do ar
+	// — o arquivo antigo fica até o novo chegar (`enfileirarAudioFaltante`).
+	//
+	// Enfileirar de uma tela pública é seguro porque o helper é idempotente nas
+	// duas pontas: pula o que tem áudio válido e pula o que já está na fila.
+	// Trinta alunos abrindo o link ao mesmo tempo não viram trinta jobs.
+	await enfileirarAudioFaltante({
+		teacherId: activityVersion.activity.teacherId,
+		targetTag: activityVersion.activity.targetLang,
+		items: activityVersion.items
+	});
 	const audio = await playerRepo.audioReady(activityVersion.activity.teacherId, hashes);
 	if (audio.done < audio.total) {
-		// **Falta áudio: a primeira publicação ainda sintetizando, ou um job que
-		// falhou.** O áudio de atividade não vence mais, mas sem esta reposição um
-		// arquivo que não chegou ao bucket travaria o link aqui para sempre.
-		//
-		// Enfileirar de uma tela pública é seguro porque o helper é idempotente
-		// nas duas pontas: pula o que tem áudio válido e pula o que já está na
-		// fila. Trinta alunos abrindo o link ao mesmo tempo não viram trinta
-		// jobs.
-		await enfileirarAudioFaltante({
-			teacherId: activityVersion.activity.teacherId,
-			targetTag: activityVersion.activity.targetLang,
-			items: activityVersion.items
-		});
 		error(503, { message: 'Áudio ainda sendo gerado', reason: 'audioPending' });
 	}
 

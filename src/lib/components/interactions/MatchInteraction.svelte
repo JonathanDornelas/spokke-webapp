@@ -57,12 +57,30 @@
 	const indexOfLeft = (id: string) => pairs.findIndex((p) => p.left === id);
 	const indexOfRight = (id: string) => pairs.findIndex((p) => p.right === id);
 
+	/**
+	 * Tocar num cartão que JÁ está num par desfaz o par, dos dois lados — os dois
+	 * voltam a ficar livres. Antes não havia como: na palavra o toque só a
+	 * escolhia de novo, e no sentido, sem palavra escolhida, não fazia nada. O
+	 * aluno que ligava errado só conseguia trocar, nunca soltar.
+	 */
+	function desfazer(i: number) {
+		pairs = pairs.filter((_, j) => j !== i);
+		pendingLeft = null;
+	}
+
 	function pickLeft(id: string) {
 		if (respondido) return;
+		const par = indexOfLeft(id);
+		if (par >= 0) return desfazer(par);
 		pendingLeft = pendingLeft === id ? null : id;
 	}
 	function pickRight(id: string) {
-		if (respondido || pendingLeft === null) return;
+		if (respondido) return;
+		if (pendingLeft === null) {
+			const par = indexOfRight(id);
+			if (par >= 0) desfazer(par);
+			return;
+		}
 		const left = pendingLeft;
 		pairs = [...pairs.filter((p) => p.left !== left && p.right !== id), { left, right: id }];
 		pendingLeft = null;
@@ -154,6 +172,6 @@
 		class="mt-4 flex items-center gap-2.5 rounded-field border border-line bg-base-200 px-3.5 py-3
 		       text-[12.5px] leading-snug text-base-content/65 baixa:mt-3 baixa:py-2"
 	>
-		Toque numa palavra, depois no sentido. O par ganha um número.
+		Toque numa palavra, depois no sentido. Tocar num par desfaz a ligação.
 	</p>
 {/if}

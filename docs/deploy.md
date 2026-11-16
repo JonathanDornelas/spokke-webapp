@@ -87,7 +87,10 @@ Cinco decisões, todas reversíveis:
   ficam presas ao `127.0.0.1` pelas variáveis de ambiente.
 - **A mídia fica no MinIO do próprio servidor no lançamento**, atrás do Caddy. O R2 é a migração
   planejada (Parte 5): ele pede o DNS na Cloudflare para o domínio próprio, e não tem leitura pública
-  por pasta — a voz dos alunos (`fala/`) ficaria pública sem uma regra extra.
+  por pasta — a voz dos alunos (`fala/`) ficaria pública sem uma regra extra. **E pede uma regra de
+  CORS** liberando `GET` para a origem do site: a questão de Pronúncia baixa o áudio da palavra pelo
+  `fetch`, para tocar uma sílaba só. O MinIO responde com CORS de fábrica; sem a regra no R2 a
+  sílaba ainda toca, mas pela reserva (o `<audio>`), com o corte menos exato.
 - **A cobrança abre manual** (`BILLING_PROVIDER` vazio): "Assinar" vira um pedido atendido no
   `/admin`. O Mercado Pago liga na semana, depois do sandbox (Parte 4).
 - **A intranet fica para depois.** O `/admin` cobre a operação do dia 1.
@@ -1152,12 +1155,26 @@ Ele baixa o código, guarda a imagem atual como `spokke-service:anterior`, const
 migrations e recria o worker e depois o web, esperando o web ficar saudável. O banco, o MinIO, o
 áudio e o Caddy não são tocados. **Deve aparecer:** `web: healthy` e `ok` no fim.
 
+**Entre o worker e o web ele confere o áudio que falta.** Quase sempre aparece "0 áudios faltando" e
+ele segue na hora. Quando a versão muda a voz de algum áudio (a palavra da questão de Pronúncia
+passou a sair na melhor voz do inglês), as atividades já publicadas pedem áudio novo, e ali ele
+espera o worker gerar (até 20 minutos, mostrando quanto falta) com o site antigo
+ainda no ar: ninguém encontra o link fechado. Se o tempo acabar ou o serviço de áudio estiver fora,
+ele avisa e segue; a atividade que ficou sem áudio abre quando o worker chegar nela. O áudio antigo
+continua no MinIO: é dele que o `voltar.sh` precisa, e ele sai sozinho quando o professor apagar ou
+regerar uma atividade.
+
 Para o serviço de áudio (quando ele mudar):
 
 ```bash
 cd /srv/spokke/audiotext-service && git pull --ff-only
 docker compose -f docker-compose.yml -f ../spokke-service/deploy/compose/audiotext.yml up -d --build
 ```
+
+**Quando os dois mudam juntos, o áudio vai PRIMEIRO**, e só depois o `atualizar.sh`. O app novo
+refaz o áudio antigo das palavras da Pronúncia para guardar onde cada som está nele, e quem informa
+isso é o serviço de áudio novo. Refeito com o serviço antigo, o áudio fica sem essa informação (a
+sílaba mostra a boca, mas não toca sozinha) até alguém pedir "Gerar áudio de novo" na atividade.
 
 Para o Caddyfile (quando ele mudar, depois do `git pull` no `spokke-service`):
 

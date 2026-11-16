@@ -12,6 +12,7 @@
 import type { Teclado } from '$lib/kernel/language/teclado';
 import type { MostraDoDialogo } from '$lib/kernel/interactions/types';
 import type { PassoDaBoca, RigorDaPronuncia } from '$lib/kernel/language/pronuncia';
+import type { LinhaDaPalavra } from '$lib/kernel/language/sintese';
 
 export type Dir = 'ltr' | 'rtl';
 
@@ -41,6 +42,13 @@ export interface PronunciaNoRuntime {
 	passos: PassoDaBoca[];
 	audio?: string;
 	audioSlow?: string;
+	/**
+	 * Onde cada FONEMA está no arquivo normal e no devagar (`LinhaDaPalavra`): o
+	 * que toca uma sílaba só e anda a boca no tempo de cada som. Sem ela, a boca
+	 * anda pelo peso e a sílaba só mostra a boca.
+	 */
+	linha?: LinhaDaPalavra;
+	linhaLenta?: LinhaDaPalavra;
 }
 
 export interface RuntimeOption {

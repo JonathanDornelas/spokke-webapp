@@ -29,6 +29,29 @@ export function vozDoTexto(profile: LanguageProfile, texto: string): string | nu
 }
 
 /**
+ * Qual voz diz a PALAVRA da questão de Pronúncia: o modelo que o aluno imita.
+ *
+ * **É a voz de referência do idioma, quando ele tem uma**
+ * (`LanguageProfile.tts.referencia`), e não a que o texto sortearia. Pedido do
+ * dono do repositório: a Pronúncia corrige som a som, às vezes com rigor, e o
+ * modelo que o aluno ouve antes de falar tem de ser o melhor que o TTS oferece —
+ * uma voz mediana ensinaria o som torto que depois é cobrado. Hoje só o inglês
+ * americano tem (`af_heart`, a única nota A do Kokoro).
+ *
+ * **Só a Pronúncia.** A frase da escuta e a palavra de "ouça e escolha"
+ * continuam variando de voz (`vozDoTexto`), e o diálogo segue com uma voz por
+ * pessoa (`vozDoFalante`). Por isso a mesma palavra pode ter dois arquivos: o
+ * da escuta, na voz do texto, e o da Pronúncia, na de referência.
+ *
+ * Sem voz de referência no idioma, vale a do texto. Determinística como as
+ * outras: o hash do áudio é recalculado em qualquer lugar.
+ */
+export function vozDaPronuncia(profile: LanguageProfile, palavra: string): string | null {
+	if (profile.tts.voices.length === 0) return null;
+	return profile.tts.referencia ?? vozDoTexto(profile, palavra);
+}
+
+/**
  * Qual voz fala por uma PESSOA de um diálogo.
  *
  * No diálogo a voz sai do falante, e não do texto: com `vozDoTexto` cada fala

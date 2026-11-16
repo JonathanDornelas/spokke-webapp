@@ -61,6 +61,19 @@ class GravadorFalso {
 }
 
 class ContextoFalso {
+	static criados = 0;
+	/** O estado com que o contexto nasce (o do iPhone fora do toque é `suspended`). */
+	static estadoInicial: AudioContextState = 'running';
+	/** `resume()` destrava? No Safari, fora de um gesto, não. */
+	static destrava = true;
+	state: AudioContextState = ContextoFalso.estadoInicial;
+	constructor() {
+		ContextoFalso.criados += 1;
+	}
+	resume() {
+		if (ContextoFalso.destrava) this.state = 'running';
+		return Promise.resolve();
+	}
 	createMediaStreamSource() {
 		return { connect() {} };
 	}
@@ -73,9 +86,13 @@ class ContextoFalso {
 		};
 	}
 	close() {
+		this.state = 'closed';
 		return Promise.resolve();
 	}
 }
+
+/** Uma recusa do `getUserMedia` como o navegador a manda. */
+const recusa = (nome: string, mensagem = '') => new DOMException(mensagem, nome);
 
 beforeEach(() => {
 	vi.resetModules();
@@ -86,6 +103,9 @@ beforeEach(() => {
 	GravadorFalso.todos = [];
 	GravadorFalso.atraso = 0;
 	GravadorFalso.vazio = false;
+	ContextoFalso.criados = 0;
+	ContextoFalso.estadoInicial = 'running';
+	ContextoFalso.destrava = true;
 	vi.stubGlobal('navigator', {
 		mediaDevices: {
 			getUserMedia: () => new Promise((responder, recusar) => pedidos.push({ responder, recusar }))
@@ -272,5 +292,157 @@ describe('Gravacao', () => {
 		expect(passos[0]).toBe('abrindo o microfone');
 		expect(passos).toContain('a gravação começou');
 		expect(passos.at(-1)).toMatch(/^a gravação terminou: silêncio depois da fala/);
+	});
+});
+
+/**
+ * O que muda de um navegador e de um aparelho para outro. Cada caso é uma
+ * reclamação possível: "no iPhone cortou no meio da frase", "no Firefox ficou
+ * abrindo para sempre", "diz que não tenho permissão e eu dei".
+ */
+describe('Gravacao em cada navegador', () => {
+	it('cada recusa do microfone vira o seu estado, e o diário guarda o nome do erro', async () => {
+		const casos: [DOMException, string][] = [
+			[recusa('NotAllowedError', 'Permission denied'), 'negado'],
+			[recusa('NotAllowedError', 'Permission dismissed'), 'dispensado'],
+			[recusa('NotAllowedError', 'Permission denied by system'), 'negado-sistema'],
+			[recusa('NotFoundError', 'Requested device not found'), 'sem-microfone'],
+			[recusa('NotReadableError', 'Could not start audio source'), 'ocupado']
+		];
+		for (const [erro, estado] of casos) {
+			const passos: string[] = [];
+			const g = await novaGravacao((p) => passos.push(p));
+			const inicio = g.iniciar();
+			pedidos.shift()?.recusar(erro);
+			await inicio;
+			expect(g.estado).toBe(estado);
+			expect(passos.at(-1)).toContain(erro.name);
+		}
+		// Nada fica para trás: nem o medidor do toque, nem a espera da permissão.
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
+	it('o medidor nasce no toque, antes de o microfone abrir (o iPhone exige o gesto)', async () => {
+		const g = await novaGravacao();
+		void g.iniciar();
+		// O microfone ainda não abriu e o contexto já existe: foi criado no toque.
+		expect(ContextoFalso.criados).toBe(1);
+		await abrirMicrofone();
+		expect(ContextoFalso.criados).toBe(1);
+	});
+
+	it('com o medidor suspenso, ninguém corta por silêncio: a gravação vai até o toque ou o teto', async () => {
+		ContextoFalso.estadoInicial = 'suspended';
+		ContextoFalso.destrava = false;
+		const passos: string[] = [];
+		const g = await novaGravacao((p) => passos.push(p));
+		const inicio = g.iniciar();
+		await abrirMicrofone();
+		await inicio;
+		nivel = 0; // o que um contexto suspenso entrega, com o aluno falando
+		await vi.advanceTimersByTimeAsync(6000);
+		expect(g.estado).toBe('gravando'); // antes, cortava aos 4 s
+		await vi.advanceTimersByTimeAsync(4100);
+		expect(g.estado).toBe('pronto');
+		// Sem medidor, não se afirma que veio sem som.
+		expect(g.semSom).toBe(false);
+		expect(passos.at(-1)).toContain('teto');
+		expect(passos.at(-1)).toContain('sem medidor de silêncio');
+	});
+
+	it('o pedido de permissão parado (Firefox) vira instrução, e o toque seguinte abre de novo', async () => {
+		const g = await novaGravacao();
+		const primeiro = g.iniciar();
+		await vi.advanceTimersByTimeAsync(2900);
+		expect(g.esperandoPermissao).toBe(false);
+		await vi.advanceTimersByTimeAsync(200);
+		expect(g.estado).toBe('abrindo');
+		expect(g.esperandoPermissao).toBe(true);
+
+		// O toque de novo pede outra vez; o pedido antigo, se um dia responder, não vale.
+		const segundo = g.iniciar();
+		expect(pedidos).toHaveLength(2);
+		expect(g.esperandoPermissao).toBe(false);
+		await abrirMicrofone();
+		await Promise.all([primeiro, segundo]);
+		expect(g.estado).toBe('gravando');
+		expect(faixasVivas).toBe(1);
+		expect(GravadorFalso.todos).toHaveLength(1);
+	});
+
+	it('microfone mudo: a gravação termina e diz que não chegou som', async () => {
+		const g = await novaGravacao();
+		const inicio = g.iniciar();
+		await abrirMicrofone();
+		await inicio;
+		nivel = 0;
+		await vi.advanceTimersByTimeAsync(4100);
+		expect(g.estado).toBe('pronto');
+		expect(g.blob).not.toBeNull(); // o arquivo continua: se o serviço ouvir algo, vale
+		expect(g.semSom).toBe(true);
+
+		// Regravar zera o aviso já no toque, e uma gravação com fala não o tem.
+		const deNovo = g.iniciar();
+		expect(g.semSom).toBe(false);
+		await abrirMicrofone();
+		await deNovo;
+		nivel = 0.001;
+		await vi.advanceTimersByTimeAsync(400);
+		nivel = 0.2;
+		await vi.advanceTimersByTimeAsync(500);
+		nivel = 0.001;
+		await vi.advanceTimersByTimeAsync(1200);
+		expect(g.estado).toBe('pronto');
+		expect(g.semSom).toBe(false);
+	});
+
+	it('uma sala silenciosa não é microfone mudo', async () => {
+		const g = await novaGravacao();
+		const inicio = g.iniciar();
+		await abrirMicrofone();
+		await inicio;
+		nivel = 0.003; // o chiado de um microfone ligado, ninguém falando
+		await vi.advanceTimersByTimeAsync(4100);
+		expect(g.estado).toBe('pronto');
+		expect(g.semSom).toBe(false);
+	});
+
+	it('o microfone já bloqueado aparece antes do toque, e sai sozinho quando é liberado', async () => {
+		const ouvintes: (() => void)[] = [];
+		const status = {
+			state: 'denied' as PermissionState,
+			addEventListener: (_: string, f: () => void) => ouvintes.push(f)
+		};
+		vi.stubGlobal('navigator', {
+			mediaDevices: {
+				getUserMedia: () =>
+					new Promise((responder, recusar) => pedidos.push({ responder, recusar }))
+			},
+			permissions: { query: () => Promise.resolve(status) }
+		});
+		const g = await novaGravacao();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(g.estado).toBe('negado');
+
+		// Trocar de questão não esquece o bloqueio.
+		g.descartar();
+		expect(g.estado).toBe('negado');
+
+		// O aluno liberou nas configurações: a mensagem sai sem recarregar.
+		status.state = 'granted';
+		ouvintes.forEach((f) => f());
+		expect(g.estado).toBe('ocioso');
+	});
+
+	it('fora do https o estado é "inseguro", não "este navegador não grava"', async () => {
+		vi.stubGlobal('navigator', {});
+		vi.stubGlobal('isSecureContext', false);
+		const g = await novaGravacao();
+		await g.iniciar();
+		expect(g.estado).toBe('inseguro');
+
+		vi.stubGlobal('isSecureContext', true);
+		await g.iniciar();
+		expect(g.estado).toBe('indisponivel');
 	});
 });

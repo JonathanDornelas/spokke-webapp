@@ -323,6 +323,66 @@ deixa de usar um áudio: gerar de novo (as questões antigas saem), tirar uma qu
 salvar no editor uma escuta que mudou a frase ou deixou de ser escuta, publicar (as de fora somem) e
 apagar a atividade. A conta continua por conteúdo: o arquivo que outra questão usa fica.
 
+**Toda síntese é CONFERIDA antes de ir para o bucket** (`server/tts/verificacao.ts`, pedido do dono
+do repositório depois do relato R-LX4WSJ: "a fala ficou estranha, não parecia a mesma frase"). O
+worker manda o arquivo ao reconhecedor de fonemas do serviço de áudio e compara o que ele ouviu com
+o que a voz PRETENDIA dizer — os fonemas que o Kokoro usou, em IPA (`X-Phonemes-Ipa`) —, pela
+fonética do kernel (`verificarSintese`, `kernel/language/sintese.ts`):
+
+- **O que se mediu** nas nove vozes do inglês (25 frases e palavras, as duas velocidades, o Whisper
+  como juiz): a versão NORMAL sai certa; a DEVAGAR às vezes nasce com um som a mais no começo, que
+  se ouve como uma sílaba ("So I don't know", "A good morning", "A beautiful"). A conferência pega
+  esses casos e não dá alarme nenhum na normal.
+- **Reprovada a devagar, a reserva é a normal ESTICADA** (`esticar` no `/v1/tts/speak`: o serviço
+  sintetiza na velocidade normal e estica a fala com o `atempo` do FFmpeg, sem mudar o tom), e ela é
+  conferida de novo. Mais ou menos uma devagar em seis sai assim.
+- **Reprovada a normal, não há reserva** (trocar a voz trocaria a voz da frase, que sai do texto):
+  vai como saiu, marcada `suspeita`, e o log do worker diz o motivo.
+- **Sem como ouvir** (o provedor de mentira, o reconhecedor desligado ou fora do ar, um idioma cuja
+  escrita a fonética não mede), o áudio vai como sempre foi. Conferir nunca trava a fila.
+- O desfecho fica em `MediaAsset.qualidade` (db.md). **O áudio de antes da conferência** (qualidade
+  nula) é refeito UMA vez, na mesma chave, quando é versão devagar ou palavra da Pronúncia: quem pede
+  é `enfileirarAudioFaltante` (com `refazer`), que agora roda em toda entrada do Player. O arquivo
+  antigo fica no ar até o novo chegar, então o link nunca fecha por isso.
+
+**Quando a regra da voz muda, o áudio muda de identidade** (o hash leva a voz): foi o que
+aconteceu quando a palavra da Pronúncia passou a sair na voz de referência do inglês (kernel.md
+"LanguageProfile"). A atividade que já existia pede arquivos que ainda não foram sintetizados, e a
+entrada do Player a fecharia em "áudio sendo gerado" até o worker chegar neles.
+`server/tts/pendencias.ts` (`pnpm audio:faltando`) enfileira o que falta de TODAS as atividades de
+uma vez, e `deploy/scripts/atualizar.sh` o roda entre o worker novo e o web novo: o áudio novo fica
+pronto com o web antigo ainda servindo o antigo. É operação, não tela — atravessa professores como
+o worker, e cada job sai com o `teacherId` do dono. O áudio antigo não é apagado ali: sai pela
+limpeza de sempre (`limparAudioSemUso`), e é o que `voltar.sh` precisaria.
+
+**A LINHA DO TEMPO de cada áudio vem do próprio serviço de áudio**, junto da síntese
+(`X-Phoneme-Times`, `LinhaDoTempo` no kernel): os sons que o TTS disse, em IPA, com o começo e o fim
+de cada um no arquivo, e onde a fala começa e termina. O worker a guarda como veio em
+`MediaAsset.trechos` (`server/tts/linha.ts`, o mesmo formato no cabeçalho, na coluna e na leitura),
+para TODO áudio — o mesmo arquivo serve a uma escuta e a uma Pronúncia, porque é identificado pelo
+conteúdo. Na Pronúncia, o runtime a casa com os fonemas do dicionário (`temposDosFonemas`, kernel.md
+"Pronúncia") e a tela toca uma sílaba só e anda a boca no tempo de cada som.
+
+- **Não sai do reconhecedor de fonemas** (saía, e a sílaba tocava fora do lugar — o retorno do dono
+  do repositório foi "não está sincronizado e tem corte abrupto"): ele marca um INSTANTE por som, o
+  pico do CTC, não onde o som começa e termina.
+- **Quem sabe é o Kokoro**, que prevê a duração de cada fonema (`pred_dur`, quadros de 25 ms) e gera
+  exatamente `soma × 600` amostras. Mas o som sai ADIANTADO em relação à soma: medido contra o
+  silêncio do fechamento de "p", "t" e "k" (120 limites, quatro vozes), 74 ms na velocidade normal e
+  102 ms na de 0,75 — o mesmo desvio que o `join_timestamps` do próprio Kokoro corrige. O serviço
+  desconta `75 ms ÷ velocidade` (`audiotext-service/app/tempos.py`).
+- **Os limites que se veem na onda são acertados por ela**, no áudio FINAL (depois do corte das
+  pontas e do esticamento): antes de um fechamento (oclusiva, africada, o tepe) e de vogal para
+  nasal, o limite vai para onde a energia do som de antes cai. É onde a sílaba seguinte começa: o
+  "ha" de "happy" termina com a vogal, e o silêncio do "p" é do "pee". Entre duas vogais, ou antes
+  de "l" e "r", não há vale que se meça, e fica a estimativa (uns 30 ms de erro num limite em dez).
+  Houve uma versão que levava TODO limite ao ponto de menor energia; ela espremia o "aw" de
+  "priority" em 36 ms.
+- A versão esticada tem a linha DELA: os tempos da síntese normal, na proporção do esticamento.
+- Áudio de antes disto não tem linha (a coluna é nula, ou está no formato antigo e não é lida): a
+  sílaba só mostra a boca, até a palavra ser refeita (acima). **Por isso o serviço de áudio sobe
+  ANTES do app num deploy**: refeito com o serviço antigo, o áudio ganha `qualidade` e fica sem linha.
+
 ## Geração das questões — em segundo plano, passo a passo
 
 `gerarItens` não gera: ele grava o plano, confere a atividade e COMEÇA a geração

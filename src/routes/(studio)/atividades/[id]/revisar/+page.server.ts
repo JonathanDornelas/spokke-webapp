@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { atividades } from '$lib/server/db/repos/activities';
 import { materiais } from '$lib/server/db/repos/content-units';
-import { playerRepo } from '$lib/server/db/repos/player';
+import { playerRepo, linhasPorHash } from '$lib/server/db/repos/player';
 import { itemAudioHashes } from '$lib/server/player/runtime';
 import { materiaisPorId, questoesDoRoteiro } from '$lib/server/atividades/roteiro';
 import { isTtsConfigured } from '$lib/server/tts';
@@ -52,6 +52,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		targetLang: activity.targetLang,
 		semente: `revisao:${draft?.id ?? activity.id}`,
 		urlByHash,
+		linhasByHash: linhasPorHash(assets),
 		materialPorId
 	});
 

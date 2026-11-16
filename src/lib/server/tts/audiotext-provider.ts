@@ -10,7 +10,7 @@ import { sintetizar } from '$lib/server/audiotext/client';
  * modelo de voz vira uma edição em cinco perfis de idioma.
  */
 export const audiotextTtsProvider: TtsProvider = {
-	synthesize(text, voice, speed) {
-		return sintetizar(text, voice, speed);
+	synthesize(text, voice, speed, opcoes) {
+		return sintetizar(text, voice, speed, { esticar: opcoes?.esticar });
 	}
 };

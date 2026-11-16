@@ -10,7 +10,7 @@ import { materiais } from '$lib/server/db/repos/content-units';
 import { envios } from '$lib/server/db/repos/deliveries';
 import { prisma } from '$lib/server/db/client';
 import { itemAudioHashes, itemSkills } from '$lib/server/player/runtime';
-import { playerRepo } from '$lib/server/db/repos/player';
+import { playerRepo, linhasPorHash } from '$lib/server/db/repos/player';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
 import { materiaisPorId, questoesDoRoteiro } from '$lib/server/atividades/roteiro';
 import { etiquetaDaTurma } from '$lib/server/turmas/etiqueta';
@@ -86,6 +86,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		targetLang: activity.targetLang,
 		semente: `previa:${versao?.id ?? activity.id}`,
 		urlByHash: new Map(assets.map((asset) => [asset.hash, asset.url])),
+		linhasByHash: linhasPorHash(assets),
 		materialPorId: materiaisPorId(unidades)
 	});
 

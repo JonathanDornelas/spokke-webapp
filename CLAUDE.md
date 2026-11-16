@@ -84,6 +84,7 @@ pnpm worker         # worker da fila (rodar junto do dev)
 pnpm db:migrate     # prisma migrate dev
 pnpm db:studio
 pnpm db:seed:demo <email>   # cenário de demonstração numa conta (docs/operacao.md)
+pnpm audio:faltando         # enfileira o áudio que as atividades pedem e não existe (operacao.md)
 bash deploy/scripts/atualizar.sh   # NO SERVIDOR: nova versão no ar (docs/deploy.md)
 ```
 
@@ -136,6 +137,12 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
 - **O TTS não fica mais rápido com paralelismo, e isso foi medido** (server.md "Fila"): o serviço
   é CPU-bound nos 2 vCPU dele. O que acelerava era o worker parar de dormir 2 s entre cada job —
   10 áudios passaram de 53,9 s para 35,4 s. Mais concorrência não move o número.
+- **A palavra da questão de Pronúncia sai sempre na melhor voz: a `af_heart`**, a única nota A do
+  Kokoro (`tts.referencia` + `vozDaPronuncia`, kernel.md "LanguageProfile"). Pedido do dono, "pelo
+  menos a princípio": a correção ali é som a som, e o modelo que o aluno imita tem de ser o melhor.
+  **Só a Pronúncia**: a escuta e os diálogos continuam variando entre as nove vozes. Trocar a voz
+  muda a identidade do áudio, então o das palavras da Pronúncia já publicadas é refeito:
+  `atualizar.sh` adianta isso antes de trocar o web, para o link não fechar.
 - As vozes de cada idioma saem da NOTA que o próprio Kokoro publica (kernel.md
   "LanguageProfile"), não do catálogo inteiro: só C+ para cima. **Mas o corte só está aplicado
   onde existe nota**: o VOICES.md do modelo não está no repositório, e nota por voz só foi
@@ -222,7 +229,17 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   gravação de aluno de verdade**, e o acento tônico não é conferido. Sem o reconhecedor, a reserva é
   a transcrição do Whisper. A boca dos quinze visemas é um placeholder desenhado por dado
   (`components/pronuncia/formas.ts`), à espera da arte final, e o corte lateral com a língua não
-  existe ainda. O `en-GB` fica sem a questão até ter dicionário próprio.
+  existe ainda. O `en-GB` fica sem a questão até ter dicionário próprio. **Tocar numa sílaba toca
+  exatamente ela, e a boca anda no tempo de cada som**: o serviço de áudio devolve onde cada fonema
+  está no arquivo (a duração que o próprio Kokoro prevê, corrigida pelo adiantamento medido), e a
+  tela toca pelo Web Audio, com início e fim na amostra certa (server.md "TTS", components.md "A
+  Pronúncia"). Conferido em Chromium e Firefox; **falta ouvir num iPhone**, e o R2, quando vier,
+  precisa de uma regra de CORS para isso. **Num deploy, o serviço de áudio sobe antes do app.**
+- **Toda síntese de voz é conferida pelo reconhecedor de fonemas** antes de ir para o bucket
+  (server.md "TTS", depois do relato R-LX4WSJ): a versão DEVAGAR às vezes nasce com uma sílaba a mais
+  no começo ("So I don't know"), e a reprovada é trocada pela normal esticada. A calibração é com as
+  nove vozes do inglês; nos outros idiomas a conferência roda pela mesma fonética, sem calibração
+  própria ainda.
 - **"Gerar com IA" é o Claude, com o Gemini de reserva** (`LLM_PROVIDER="claude,gemini"`, uma fila
   em ordem — `docs/adr-003-ia-gemini.md`): o Gemini só responde quando o Claude falha (sem
   créditos, sobrecarga, recusa). A IA propõe material a partir de um pedido, da FOTO de uma página
@@ -260,6 +277,13 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   (`docs/notificacoes.md`). Os mesmos avisos numeram os itens da barra lateral, e abrir a tela de
   destino conta como ver. Fica de fora o e-mail que voltou: SMTP não devolve aviso de devolução, e
   nada marca `Invite.bouncedAt` hoje.
+- **O microfone se explica em qualquer navegador** (components.md "Gravação",
+  `$lib/client/microfone.ts`): cada recusa tem a sua frase e o caminho de liberar no aparelho do
+  aluno (Safari do iPhone, Chrome do Android, Firefox, o navegador de dentro de um app), o medidor
+  de silêncio nasce no toque (no iPhone ele nascia suspenso e cortava aos 4 s), o pedido de
+  permissão parado vira instrução e a gravação sem som diz para conferir o microfone. Conferido em
+  Chromium e Firefox com o microfone falso deles. **Falta conferir num iPhone e num Mac de
+  verdade**: o WebKit do Playwright no Windows não tem captura.
 - Não existe mais fila de correção: comentar e dar nota de rubrica acontecem na tela da
   tentativa, em cima da resposta (paginas.md "Resultados").
 - `conta` é real: salva o nome, pede plano, cancela no fim do período, sai da escola e mostra o

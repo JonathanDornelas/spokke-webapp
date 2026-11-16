@@ -16,7 +16,13 @@ export const ttsJobSchema = z.object({
 	voice: z.string(),
 	speed: z.number(),
 	/** O dono. O áudio é identificado pelo CONTEÚDO (o hash) e escopado por professor (db.md). */
-	teacherId: z.string()
+	teacherId: z.string(),
+	/**
+	 * Sintetiza de novo mesmo com o arquivo já no bucket: o áudio de antes da
+	 * verificação (`MediaAsset.qualidade` nulo), refeito uma vez com ela. Grava na
+	 * mesma chave, então o link nunca fica sem áudio no meio.
+	 */
+	refazer: z.boolean().optional()
 });
 export type TtsJob = z.infer<typeof ttsJobSchema>;
 

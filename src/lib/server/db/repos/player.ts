@@ -1,4 +1,6 @@
 import { prisma } from '$lib/server/db/client';
+import type { LinhaDoTempo } from '$lib/kernel/language/sintese';
+import { lerLinha } from '$lib/server/tts/linha';
 import type { Prisma } from '../../../../../generated/prisma/client.ts';
 
 /**
@@ -244,6 +246,23 @@ export const playerRepo = {
 		return new Set(linhas.map((linha) => linha.hash));
 	},
 
+	/**
+	 * Os áudios que existem e a QUALIDADE de cada um (`MediaAsset.qualidade`):
+	 * nula é o áudio de antes da conferência, que `enfileirarAudioFaltante`
+	 * refaz uma vez quando é versão devagar ou palavra da Pronúncia.
+	 */
+	async qualidadeDosAudios(
+		teacherId: string,
+		hashes: string[]
+	): Promise<Map<string, string | null>> {
+		if (hashes.length === 0) return new Map();
+		const linhas = await prisma.mediaAsset.findMany({
+			where: { teacherId, hash: { in: hashes } },
+			select: { hash: true, qualidade: true }
+		});
+		return new Map(linhas.map((linha) => [linha.hash, linha.qualidade]));
+	},
+
 	/** Quantos dos áudios pedidos já existem — o contador da etapa 4 e do link. */
 	async audioReady(teacherId: string, hashes: string[]): Promise<{ done: number; total: number }> {
 		const unicos = [...new Set(hashes)];
@@ -266,12 +285,29 @@ export const playerRepo = {
 		return count;
 	},
 
-	/** As URLs, por hash — é o que `buildRuntimeItem` consulta para montar a questão. */
-	mediaUrls(teacherId: string, hashes: string[]) {
-		if (hashes.length === 0) return Promise.resolve([] as { hash: string; url: string }[]);
-		return prisma.mediaAsset.findMany({
+	/**
+	 * As URLs, por hash — é o que `buildRuntimeItem` consulta para montar a
+	 * questão —, e a linha do tempo de cada áudio, onde cada som está nele
+	 * (Json, validado aqui; fora do formato vira nulo).
+	 */
+	async mediaUrls(
+		teacherId: string,
+		hashes: string[]
+	): Promise<{ hash: string; url: string; linha: LinhaDoTempo | null }[]> {
+		if (hashes.length === 0) return [];
+		const linhas = await prisma.mediaAsset.findMany({
 			where: { teacherId, hash: { in: [...new Set(hashes)] } },
-			select: { hash: true, url: true }
+			select: { hash: true, url: true, trechos: true }
 		});
+		return linhas.map((m) => ({ hash: m.hash, url: m.url, linha: lerLinha(m.trechos) }));
 	}
 };
+
+/** O mapa hash → linha do tempo que `buildRuntimeItem` recebe, do que `mediaUrls` leu. */
+export function linhasPorHash(
+	midias: { hash: string; linha: LinhaDoTempo | null }[]
+): Map<string, LinhaDoTempo> {
+	return new Map(
+		midias.flatMap((m) => (m.linha ? [[m.hash, m.linha] as [string, LinhaDoTempo]] : []))
+	);
+}

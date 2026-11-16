@@ -2,6 +2,7 @@
 	import Recorder from '../Recorder.svelte';
 	import Loading from '../Loading.svelte';
 	import type { EstadoDaGravacao } from '$lib/client/gravacao.svelte';
+	import { ajudaDoMicrofone, ehImpedimento, lerAmbiente } from '$lib/client/microfone';
 	import type { SpeakRuntimeItem } from './types';
 	import PronunciaDaPalavra from '../pronuncia/PronunciaDaPalavra.svelte';
 
@@ -17,6 +18,8 @@
 		recording = $bindable(false),
 		ontoggle,
 		estado = 'ocioso',
+		esperandoPermissao = false,
+		semSom = false,
 		segundos = 0,
 		maxSegundos = 10,
 		ouvido = null,
@@ -29,6 +32,13 @@
 		recording?: boolean;
 		ontoggle?: () => void;
 		estado?: EstadoDaGravacao;
+		/**
+		 * O microfone demora a abrir: há um pedido de permissão na tela, ou um que
+		 * o aluno fechou. O botão volta a valer e a linha diz para permitir.
+		 */
+		esperandoPermissao?: boolean;
+		/** A gravação terminou sem som nenhum do microfone (`Gravacao.semSom`). */
+		semSom?: boolean;
 		segundos?: number;
 		maxSegundos?: number;
 		/**
@@ -54,11 +64,12 @@
 		compacta?: boolean;
 	} = $props();
 
-	const impedimento: Partial<Record<EstadoDaGravacao, string>> = {
-		negado:
-			'Não conseguimos usar o microfone. Libere o acesso nas permissões do navegador — ou pule esta questão.',
-		indisponivel: 'Este navegador não grava áudio. Pule esta questão e siga em frente.'
-	};
+	// O que fazer quando não dá para gravar: cada recusa tem a sua frase, e o
+	// caminho da permissão sai do aparelho e do navegador (`microfone.ts`).
+	// Só existe depois de um toque (ou do bloqueio que o navegador já informou),
+	// então nunca no servidor.
+	const ajuda = $derived(ehImpedimento(estado) ? ajudaDoMicrofone(estado, lerAmbiente()) : null);
+	const ajudaSemSom = $derived(semSom ? ajudaDoMicrofone('sem-som', lerAmbiente()) : null);
 </script>
 
 {#snippet aviso(texto: string, papel: 'status' | 'alert')}
@@ -85,6 +96,37 @@
 	</p>
 {/snippet}
 
+{#snippet comoResolver(a: { titulo: string; passo: string | null })}
+	<!-- Não dá para gravar: o que aconteceu e o caminho. Ícone e texto, nunca cor
+	     sozinha — e o exercício continua possível porque o "Pular" do rodapé
+	     nunca some em `speak`. No lugar do quadro "Entendemos", e não maior que ele. -->
+	<div
+		class="flex max-w-[46ch] items-start gap-2 text-start text-[13px] leading-snug"
+		role="status"
+	>
+		<svg
+			class="mt-px size-4 shrink-0 text-warning"
+			viewBox="0 0 24 24"
+			fill="none"
+			aria-hidden="true"
+		>
+			<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
+			<path
+				d="M12 7.5v5.5M12 16.5h.01"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+			/>
+		</svg>
+		<div>
+			<p class="font-semibold text-base-content/80">{a.titulo}</p>
+			{#if a.passo}
+				<p class="mt-1 text-base-content/65">{a.passo}</p>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
 {#if item.silabas && item.pronuncia}
 	<!-- A Pronúncia: a palavra, as sílabas e a boca, com o áudio da palavra. -->
 	<PronunciaDaPalavra
@@ -93,6 +135,8 @@
 		passos={item.pronuncia.passos}
 		audio={item.pronuncia.audio}
 		audioSlow={item.pronuncia.audioSlow}
+		linha={item.pronuncia.linha}
+		linhaLenta={item.pronuncia.linhaLenta}
 		dir={item.dir}
 		{compacta}
 	/>
@@ -112,16 +156,18 @@
 <div class="mt-auto mb-6 flex flex-col items-center gap-3 baixa:mb-2" class:hidden={corrigida}>
 	<Recorder
 		{recording}
-		abrindo={estado === 'abrindo'}
+		abrindo={estado === 'abrindo' && !esperandoPermissao}
 		size="lg"
 		{ontoggle}
-		hint={estado === 'abrindo'
-			? 'Abrindo o microfone…'
-			: estado === 'gravando'
-				? `Fale ${item.silabas ? 'a palavra' : 'a frase'} — vamos parar sozinhos quando você terminar`
-				: estado === 'pronto'
-					? 'Toque para gravar de novo'
-					: 'Toque para gravar'}
+		hint={estado === 'abrindo' && esperandoPermissao
+			? 'Permita o microfone no aviso do navegador. Não apareceu? Toque de novo.'
+			: estado === 'abrindo'
+				? 'Abrindo o microfone…'
+				: estado === 'gravando'
+					? `Fale ${item.silabas ? 'a palavra' : 'a frase'} — vamos parar sozinhos quando você terminar`
+					: estado === 'pronto'
+						? 'Toque para gravar de novo'
+						: 'Toque para gravar'}
 	/>
 
 	{#if estado === 'gravando'}
@@ -138,6 +184,11 @@
 			<Loading variant="fila" size={11} label="Ouvindo a gravação" />
 			Ouvindo…
 		</p>
+	{:else if estado === 'pronto' && ouvido === '' && ajudaSemSom}
+		<!-- Nenhuma palavra, e o medidor não ouviu som nenhum: não é distância, é
+		     o microfone mudo. "Fale mais perto" mandaria o aluno gritar para um
+		     microfone desligado. -->
+		{@render comoResolver(ajudaSemSom)}
 	{:else if estado === 'pronto' && ouvido === ''}
 		<!-- O serviço ouviu e não reconheceu palavra nenhuma: quase sempre o
 		     microfone longe ou coberto. Dá para enviar assim mesmo, mas o aluno
@@ -175,6 +226,8 @@
 				Não foi isso? Toque no microfone e grave de novo.
 			</p>
 		</div>
+	{:else if estado === 'pronto' && ajudaSemSom}
+		{@render comoResolver(ajudaSemSom)}
 	{:else if estado === 'pronto'}
 		<p class="flex items-center gap-2 text-[13px] font-semibold text-success" role="status">
 			<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -188,28 +241,7 @@
 			</svg>
 			Sua fala está pronta para enviar
 		</p>
-	{:else if impedimento[estado]}
-		<!-- Ícone e texto, nunca cor sozinha — e o exercício continua possível
-		     porque o "Pular" do rodapé nunca some em `speak`. -->
-		<p
-			class="flex max-w-[38ch] items-start gap-2 text-center text-[13px] leading-snug text-base-content/65"
-			role="status"
-		>
-			<svg
-				class="mt-px size-4 shrink-0 text-warning"
-				viewBox="0 0 24 24"
-				fill="none"
-				aria-hidden="true"
-			>
-				<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
-				<path
-					d="M12 7.5v5.5M12 16.5h.01"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-				/>
-			</svg>
-			{impedimento[estado]}
-		</p>
+	{:else if ajuda}
+		{@render comoResolver(ajuda)}
 	{/if}
 </div>

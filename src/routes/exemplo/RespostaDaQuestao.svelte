@@ -68,6 +68,8 @@
 			recording={resposta.gravando}
 			ontoggle={() => resposta.alternarGravacao()}
 			estado={resposta.gravacao.estado}
+			esperandoPermissao={resposta.gravacao.esperandoPermissao}
+			semSom={resposta.gravacao.semSom}
 			segundos={resposta.gravacao.segundos}
 			maxSegundos={resposta.gravacao.maxSegundos}
 			ouvido={resposta.ouvido}

@@ -257,6 +257,21 @@ model MediaAsset {
   kind     String // audio | image
   duration Int? // segundos, só para áudio
 
+  /// **A síntese foi conferida?** (`server/tts/verificacao.ts`): o reconhecedor
+  /// de fonemas ouve o arquivo antes de ele ir para o bucket. `aprovada`;
+  /// `esticada` (a versão devagar nasceu com um som a mais e foi trocada pela
+  /// normal esticada); `suspeita` (reprovou e não havia reserva); `sem-verificacao`
+  /// (não havia como ouvir). Nula = áudio de antes da conferência: a versão
+  /// devagar e a palavra da Pronúncia nesse estado são refeitas uma vez
+  /// (`enfileirarAudioFaltante`), na mesma chave.
+  qualidade String?
+  /// A linha do tempo do áudio, como o serviço de áudio a devolveu: onde a fala
+  /// começa e termina, e cada som que o TTS disse com o começo e o fim dele, em
+  /// segundos (`{ fala: [a, b], sons: [["p", 0.03, 0.08], ...] }`,
+  /// `server/tts/linha.ts`). É o que deixa a Pronúncia tocar uma sílaba só e a
+  /// boca andar no tempo do som. Nulo no áudio de antes dela.
+  trechos   Json?
+
   createdAt DateTime @default(now())
 
   /// **O áudio de atividade não vence.** Ele vivia 10 dias (regra de ciclo de

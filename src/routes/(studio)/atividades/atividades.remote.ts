@@ -17,7 +17,7 @@ import {
 import { atividades } from '$lib/server/db/repos/activities';
 import { materiais } from '$lib/server/db/repos/content-units';
 import { isTtsConfigured } from '$lib/server/tts';
-import { playerRepo } from '$lib/server/db/repos/player';
+import { playerRepo, linhasPorHash } from '$lib/server/db/repos/player';
 import { buildRuntimeItem, itemAudioHashes, type StoredItemRow } from '$lib/server/player/runtime';
 import { montarQuestao, questaoDoItem } from '$lib/server/atividades/item-editado';
 import { iniciarGeracao, progressoDaGeracao as andamentoDe } from '$lib/server/atividades/geracao';
@@ -1060,7 +1060,12 @@ export const previaDaQuestao = query(
 		try {
 			return {
 				ok: true as const,
-				runtime: buildRuntimeItem(row, `previa:${itemId ?? 'nova'}`, urlByHash),
+				runtime: buildRuntimeItem(
+					row,
+					`previa:${itemId ?? 'nova'}`,
+					urlByHash,
+					linhasPorHash(assets)
+				),
 				// Frase de áudio nova ainda não tem arquivo: a tela diz isso em vez de
 				// mostrar um player que não toca.
 				audioPendente: hashes.length > 0 && assets.length < hashes.length

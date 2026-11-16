@@ -183,6 +183,12 @@ export interface PassoDaBoca {
 	peso: number;
 	/** Em qual sílaba o passo cai — para a tela acender a sílaba junto da boca. */
 	silaba: number;
+	/**
+	 * De qual fonema (a posição em `Pronuncia.fonemas`) o passo é. Com a linha do
+	 * tempo do áudio (`LinhaDaPalavra`), a boca anda no tempo REAL de cada som;
+	 * sem ela, pelo peso.
+	 */
+	fonema: number;
 }
 
 /**
@@ -193,6 +199,7 @@ export interface PassoDaBoca {
  */
 export function passosDaBoca(p: Pronuncia, regras: RegrasDePronuncia): PassoDaBoca[] {
 	const passos: PassoDaBoca[] = [];
+	let indice = 0;
 	p.silabas.forEach((s, silaba) => {
 		for (const fonema of s.fonemas) {
 			const base = baseDoFonema(fonema);
@@ -200,7 +207,8 @@ export function passosDaBoca(p: Pronuncia, regras: RegrasDePronuncia): PassoDaBo
 			const vogal = regras.vogais.includes(base);
 			const lista = Array.isArray(visema) ? visema : [visema];
 			const peso = (vogal ? 2.4 : 1) / lista.length;
-			for (const v of lista) passos.push({ visema: v, peso, silaba });
+			for (const v of lista) passos.push({ visema: v, peso, silaba, fonema: indice });
+			indice += 1;
 		}
 	});
 	return passos;
@@ -375,6 +383,16 @@ interface Ouvido {
 
 function somDoFonema(fonema: string, regras: RegrasDePronuncia): string {
 	return regras.sons[fonema] ?? regras.sons[baseDoFonema(fonema)] ?? baseDoFonema(fonema);
+}
+
+/**
+ * Os sons de CADA FONEMA, em IPA segmentado (como o reconhecedor de fonemas e o
+ * TTS os escrevem), na ordem das sílabas: é o que se alinha com a linha do tempo
+ * do áudio (`temposDosFonemas`) para saber onde cada um está. "priority" dá
+ * `[["p"],["ɹ"],["aɪ"],["ɔː"],["ɹ"],["ə"],["t"],["i"]]`.
+ */
+export function sonsDosFonemas(p: Pronuncia, regras: RegrasDePronuncia): string[][] {
+	return p.silabas.flatMap((s) => s.fonemas.map((f) => segmentar(somDoFonema(f, regras))));
 }
 
 function esperadosDe(p: Pronuncia, regras: RegrasDePronuncia): Esperado[] {

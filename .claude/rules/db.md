@@ -220,6 +220,15 @@ uma não leva o áudio da outra. Arquivar não apaga nada (desarquivar devolve t
 
 Regenerar reescreve `url` na mesma linha (`upsert`), nunca cria uma segunda.
 
+**`qualidade` e `trechos`** (server.md "TTS"): o desfecho da conferência da síntese — `aprovada`,
+`esticada` (a versão devagar trocada pela normal esticada), `suspeita` ou `sem-verificacao`; nula é o
+áudio de antes dela, que a versão devagar e a palavra da Pronúncia refazem uma vez — e a LINHA DO
+TEMPO do áudio, como o serviço de áudio a devolveu: `{ fala: [início, fim], sons: [["p", 0.03,
+0.08], ...] }`, onde cada som que o TTS disse está no arquivo (Json; quem lê e escreve é
+`server/tts/linha.ts`, com Zod, e fora do formato vira nulo). Vai em todo áudio, não só na palavra
+da Pronúncia: o áudio é identificado pelo conteúdo, e o mesmo arquivo serve aos dois. As duas
+colunas entraram juntas na migration `audio_conferido_e_trechos`, só acrescentando.
+
 ## A gravação do aluno — 7 dias, e só com autorização
 
 `AttemptItem.audioKey` guarda a CHAVE no bucket, não uma URL: o objeto é privado e quem serve é

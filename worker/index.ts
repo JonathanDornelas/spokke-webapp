@@ -22,7 +22,10 @@ import {
 	marcarConviteDeContaEnviado
 } from '../src/lib/server/db/repos/convites-de-conta.ts';
 import { montarRedefinirSenha } from '../src/lib/server/email/redefinir-senha.ts';
-import { getTtsProvider, ttsObjectKey } from '../src/lib/server/tts/index.ts';
+import { getOuvinteDaSintese, getTtsProvider, ttsObjectKey } from '../src/lib/server/tts/index.ts';
+import { sintetizarConferido } from '../src/lib/server/tts/verificacao.ts';
+import { linhaParaGuardar } from '../src/lib/server/tts/linha.ts';
+import { Prisma } from '../generated/prisma/client.ts';
 import { putObject } from '../src/lib/server/storage/index.ts';
 import { avisarAudioQueFalhou } from '../src/lib/server/tts/falha.ts';
 import { processarNotificacao } from '../src/lib/server/billing/mercadopago/sincronizar.ts';
@@ -101,8 +104,14 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
  * mesmo arquivo e atualiza a mesma linha.
  *
  * O áudio de atividade não vence (`server/tts/limpeza.ts`): linha existente é
- * áudio pronto, e o job termina sem sintetizar. Quem quer o arquivo de novo
- * ("Gerar áudio de novo") apaga a linha antes de enfileirar.
+ * áudio pronto, e o job termina sem sintetizar — a não ser que ele venha para
+ * REFAZER o áudio de antes da verificação (`refazer`). Quem quer o arquivo de
+ * novo ("Gerar áudio de novo") apaga a linha antes de enfileirar.
+ *
+ * A síntese é CONFERIDA antes de ir para o bucket (`server/tts/verificacao.ts`):
+ * o reconhecedor de fonemas ouve o arquivo, e a versão devagar que nasceu com
+ * um som a mais é trocada pela normal esticada. Na Pronúncia, o mesmo ouvido
+ * guarda o trecho de cada sílaba.
  */
 async function processTts(payload: unknown): Promise<void> {
 	const job = ttsJobSchema.parse(payload);
@@ -110,17 +119,35 @@ async function processTts(payload: unknown): Promise<void> {
 	const chave = { teacherId_hash: { teacherId: job.teacherId, hash: job.hash } };
 
 	const existente = await prisma.mediaAsset.findUnique({ where: chave });
-	if (existente) return;
+	if (existente && !(job.refazer && existente.qualidade === null)) return;
 
-	const { audio, contentType } = await getTtsProvider().synthesize(job.text, job.voice, job.speed);
-	const url = await putObject(ttsObjectKey(job.teacherId, job.hash), audio, contentType);
+	const conferida = await sintetizarConferido(
+		{ text: job.text, voice: job.voice, speed: job.speed },
+		getTtsProvider(),
+		getOuvinteDaSintese()
+	);
+	if (conferida.qualidade === 'suspeita' || conferida.qualidade === 'esticada') {
+		console.warn(
+			`[tts] ${job.hash.slice(0, 12)} ${conferida.qualidade} (${conferida.motivo ?? 'sem motivo'}): ${JSON.stringify(job.text)} ${job.voice} ${job.speed}x`
+		);
+	}
+	const url = await putObject(
+		ttsObjectKey(job.teacherId, job.hash),
+		conferida.audio,
+		conferida.contentType
+	);
 
+	const dados = {
+		url,
+		qualidade: conferida.qualidade,
+		trechos: conferida.linha ? linhaParaGuardar(conferida.linha) : Prisma.DbNull
+	};
 	await prisma.mediaAsset.upsert({
 		where: chave,
 		// `upsert` e não `create`: dois jobs do mesmo hash podem chegar juntos (o
-		// professor regerou enquanto a fila andava), e o segundo só reescreve a URL.
-		update: { url },
-		create: { hash: job.hash, url, kind: 'audio', teacherId: job.teacherId }
+		// professor regerou enquanto a fila andava), e o segundo só reescreve.
+		update: dados,
+		create: { hash: job.hash, kind: 'audio', teacherId: job.teacherId, ...dados }
 	});
 }
 
@@ -299,16 +326,24 @@ async function processJob(job: ClaimedJob): Promise<void> {
 	}
 }
 
-/** Processa um job e resolve o desfecho dele. Nunca rejeita. */
+/**
+ * Processa um job e resolve o desfecho dele. Nunca rejeita.
+ *
+ * O desfecho é gravado com `updateMany`, e não `update`: o job pode SUMIR
+ * enquanto roda (alguém o apagou), e o `update` de uma linha que não existe
+ * lança — duas vezes, a do sucesso e a do tratamento de erro —, o que derrubava
+ * o processo inteiro com os outros jobs do lote no meio do caminho. Sem a
+ * linha, não há desfecho a marcar.
+ */
 async function executar(job: ClaimedJob): Promise<void> {
 	try {
 		await processJob(job);
-		await prisma.job.update({ where: { id: job.id }, data: { status: 'done' } });
+		await prisma.job.updateMany({ where: { id: job.id }, data: { status: 'done' } });
 	} catch (err) {
 		const attempts = job.attempts + 1;
 		const exhausted = attempts >= MAX_ATTEMPTS;
 
-		await prisma.job.update({
+		await prisma.job.updateMany({
 			where: { id: job.id },
 			data: {
 				status: exhausted ? 'failed' : 'pending',

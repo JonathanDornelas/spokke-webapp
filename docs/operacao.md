@@ -85,7 +85,11 @@ Docker `spokke`, e não pelas portas do host como em desenvolvimento: as portas 
 - **Migrations**: `pnpm db:deploy` (`prisma migrate deploy`) antes de subir a versão nova. Nunca
   `migrate dev` nem `db push` em produção. O Prisma 7 não gera o cliente sozinho: o `postinstall`
   roda `prisma generate`.
-- **Ordem**: migration → worker → web.
+- **Ordem**: migration → worker → áudio que falta → web. O passo do áudio (`pnpm audio:faltando`,
+  `scripts/audio-que-falta.ts`) enfileira a síntese de todo áudio que as atividades pedem e não
+  existe, e com `--esperar <minutos>` acompanha a fila. Serve para quando a identidade do áudio muda
+  de uma vez (a regra da voz trocou): rodado antes do web novo, o áudio novo fica pronto com o
+  site antigo ainda servindo o antigo. `--contar` só diz quanto falta. Não apaga nada.
 - **Bucket**: UMA regra de ciclo de vida — `fala/` (a voz do aluno) expira em **7 dias**. `tts/` (o
   áudio das atividades) NÃO tem prazo: sai quando a atividade é apagada. No lançamento a mídia fica
   no MinIO do próprio servidor, e o container `init` de `docker/minio.yml` escreve a regra; no R2
