@@ -1,4 +1,10 @@
 import { browser } from '$app/environment';
+import {
+	DESCRICAO_DO_IMPEDIMENTO,
+	impedimentoDoErro,
+	nomeDoErro,
+	type ImpedimentoDoMicrofone
+} from './microfone';
 
 /**
  * A captura do microfone para a questão de FALA.
@@ -27,7 +33,25 @@ import { browser } from '$app/environment';
  *
  * **Nada disto pode travar o exercício.** Microfone negado, aparelho sem
  * entrada, aba sem HTTPS — tudo vira uma mensagem e o botão "Pular" continua
- * no rodapé (design-system.md: em `speak` o pular está sempre visível).
+ * no rodapé (design-system.md: em `speak` o pular está sempre visível). Cada
+ * recusa tem o seu estado (`microfone.ts`), porque cada uma pede outra coisa
+ * do aluno.
+ *
+ * **O que muda de um navegador para outro**, e por isso está aqui:
+ *
+ * - O medidor de silêncio (Web Audio) nasce DENTRO do toque, antes do
+ *   `await`. No Safari do iPhone um `AudioContext` criado depois da espera do
+ *   microfone nasce suspenso: o medidor lia zero, ninguém "falava", e a
+ *   gravação cortava aos 4 s no meio da frase. Se mesmo assim ele não estiver
+ *   rodando, a detecção fica desligada e a gravação para pelo toque ou no teto,
+ *   nunca por um silêncio que ninguém mediu.
+ * - O Firefox não recusa quando o aluno fecha o pedido de permissão: a
+ *   promessa fica pendente para sempre, e o botão ficava em "Abrindo o
+ *   microfone…" sem saída. Passados alguns segundos, a tela pede que ele
+ *   permita no aviso do navegador e o toque volta a valer.
+ * - Microfone mudo (a tecla de mudo do notebook, o sistema que entrega
+ *   silêncio) grava um arquivo perfeito de nada. O pico do medidor diz isso
+ *   (`semSom`), e a tela troca o "fale mais perto" por "confira o microfone".
  */
 
 export type EstadoDaGravacao =
@@ -36,8 +60,8 @@ export type EstadoDaGravacao =
 	| 'abrindo'
 	| 'gravando'
 	| 'pronto'
-	| 'negado'
-	| 'indisponivel';
+	/** Não deu para gravar, e o motivo (`microfone.ts` diz o que fazer em cada um). */
+	| ImpedimentoDoMicrofone;
 
 /**
  * `webm/opus` é o que o Chrome e o Firefox produzem; o Safari só faz `mp4`.
@@ -81,6 +105,22 @@ const FATOR_ACIMA_DO_RUIDO = 2.5;
 /** Piso absoluto: num microfone mudo o ruído é ~0, e 2,5× de zero continua zero. */
 const PISO_DE_FALA = 0.012;
 
+/**
+ * Abaixo disto, do começo ao fim, não chegou som nenhum: o microfone está mudo.
+ * Qualquer microfone ligado, numa sala silenciosa, passa disso com folga só com
+ * o próprio chiado; a fala chega a 0,02 ou mais.
+ */
+const PISO_DE_SINAL = 0.0015;
+/** Quanto o medidor precisa ter ouvido para afirmar que não chegou som. */
+const MEDIDO_PARA_AFIRMAR_SILENCIO_MS = 500;
+
+/**
+ * Quanto se espera o microfone abrir antes de dizer ao aluno que o navegador
+ * está pedindo permissão. Com a permissão já dada ele abre em menos de um
+ * segundo; acima disto há um pedido na tela, ou um fechado sem resposta.
+ */
+const ESPERA_PELA_PERMISSAO_MS = 3000;
+
 /** Por que uma gravação terminou. Vai para o diário da tela, que acompanha o relato de problema. */
 type Fim = 'toque' | 'silencio' | 'sem-fala' | 'teto' | 'interrompida';
 
@@ -103,6 +143,10 @@ interface Captura {
 	amostras: Float32Array<ArrayBuffer> | null;
 	relogio: ReturnType<typeof setInterval> | undefined;
 	decorridoMs: number;
+	/** O tempo que o medidor de fato ouviu (com o `AudioContext` rodando). */
+	medidoMs: number;
+	/** O maior nível medido na gravação inteira. */
+	pico: number;
 	ruidoDeFundo: number;
 	amostrasDeCalibragem: number;
 	jaFalou: boolean;
@@ -116,9 +160,37 @@ function soltarMicrofone(stream: MediaStream): void {
 	stream.getTracks().forEach((faixa) => faixa.stop());
 }
 
-/** RMS do quadro atual, de 0 a ~1. `null` quando não há analisador. */
+/** O sistema avisou que a faixa não está entregando som (`muted`, não o mudo do site). */
+function faixaMuda(stream: MediaStream): boolean {
+	return stream.getTracks().some((faixa) => faixa.muted === true);
+}
+
+/**
+ * O `AudioContext` do medidor, criado DENTRO do toque. Fora de um gesto o
+ * Safari o cria suspenso, e o `resume()` também só vale dentro de um.
+ */
+function contextoNoToque(): AudioContext | null {
+	try {
+		const ctx = new AudioContext();
+		if (ctx.state !== 'running') void ctx.resume().catch(() => {});
+		return ctx;
+	} catch {
+		return null;
+	}
+}
+
+function fecharContexto(ctx: AudioContext | null): void {
+	void ctx?.close().catch(() => {});
+}
+
+/**
+ * RMS do quadro atual, de 0 a ~1. `null` quando não há analisador, ou quando o
+ * `AudioContext` não está rodando: suspenso, ele entrega zeros que pareceriam
+ * silêncio.
+ */
 function nivelDe(captura: Captura): number | null {
 	if (!captura.analisador || !captura.amostras) return null;
+	if (captura.ctx?.state !== 'running') return null;
 	captura.analisador.getFloatTimeDomainData(captura.amostras);
 	let soma = 0;
 	for (const amostra of captura.amostras) soma += amostra * amostra;
@@ -133,6 +205,17 @@ export class Gravacao {
 	segundos = $state(0);
 	/** `true` enquanto o nível está acima do limiar. A tela usa para mostrar que está captando. */
 	falando = $state(false);
+	/**
+	 * O microfone está demorando a abrir: há um pedido de permissão na tela (ou
+	 * um que o aluno fechou). A tela diz para permitir, e o toque volta a valer.
+	 */
+	esperandoPermissao = $state(false);
+	/**
+	 * A gravação terminou sem nenhum som do microfone (mudo, coberto, o sistema
+	 * entregando silêncio). Só a mensagem muda: o arquivo continua sendo a
+	 * gravação, e se o serviço entender alguma palavra vale o que ele entendeu.
+	 */
+	semSom = $state(false);
 
 	/**
 	 * Teto duro. Dez segundos é mais do que qualquer frase de exercício, e o
@@ -149,6 +232,11 @@ export class Gravacao {
 	 * vez de ficar aceso sem dono.
 	 */
 	#abertura = 0;
+	/** O medidor criado no toque, à espera do microfone. Passa para a captura quando ele abre. */
+	#contextoDoToque: AudioContext | null = null;
+	#esperaDaPermissao: ReturnType<typeof setTimeout> | undefined;
+	/** O que a Permissions API diz do microfone neste site, quando o navegador a tem. */
+	#permissaoNegada = false;
 	readonly #anotar: ((evento: string) => void) | undefined;
 
 	/**
@@ -158,32 +246,80 @@ export class Gravacao {
 	 */
 	constructor(anotar?: (evento: string) => void) {
 		this.#anotar = anotar;
+		this.#vigiarPermissao();
+	}
+
+	/**
+	 * O microfone já bloqueado para o site aparece ANTES do toque, e a mensagem
+	 * sai sozinha quando o aluno libera nas configurações (o `change` da
+	 * Permissions API), sem recarregar a página. Navegador sem a API (o Firefox
+	 * antigo, o Safari antes do 16) só descobre no toque, como antes.
+	 */
+	#vigiarPermissao(): void {
+		if (!browser || typeof navigator.permissions?.query !== 'function') return;
+		navigator.permissions
+			.query({ name: 'microphone' as PermissionName })
+			.then((status) => {
+				const aplicar = () => {
+					this.#permissaoNegada = status.state === 'denied';
+					if (this.#permissaoNegada && this.estado === 'ocioso') this.estado = 'negado';
+					if (!this.#permissaoNegada && this.estado === 'negado') {
+						this.estado = 'ocioso';
+						this.#anotar?.('o microfone foi liberado nas configurações');
+					}
+				};
+				aplicar();
+				status.addEventListener?.('change', aplicar);
+			})
+			.catch(() => {});
 	}
 
 	get disponivel(): boolean {
-		return browser && !!navigator.mediaDevices && typeof MediaRecorder !== 'undefined';
+		return (
+			browser &&
+			typeof navigator.mediaDevices?.getUserMedia === 'function' &&
+			typeof MediaRecorder !== 'undefined'
+		);
 	}
 
 	async iniciar(): Promise<void> {
 		// A trava vale DESDE O TOQUE, não depois do `await`: o microfone leva de
 		// um instante a mais de um segundo para abrir, e é nesse meio que o
-		// segundo toque acontecia.
-		if (this.estado === 'abrindo' || this.estado === 'gravando') return;
+		// segundo toque acontecia. A exceção é o pedido de permissão parado (ver
+		// `esperandoPermissao`): ali tocar de novo é a saída, e a abertura antiga
+		// vira uma que não vale mais.
+		if (this.estado === 'gravando') return;
+		if (this.estado === 'abrindo' && !this.esperandoPermissao) return;
 		if (!this.disponivel) {
-			this.estado = 'indisponivel';
-			this.#anotar?.('este navegador não grava áudio');
+			// Fora do https o navegador nem oferece o microfone, e "este navegador
+			// não grava" mandaria o aluno trocar de navegador à toa.
+			this.estado = globalThis.isSecureContext === false ? 'inseguro' : 'indisponivel';
+			this.#anotar?.(DESCRICAO_DO_IMPEDIMENTO[this.estado]);
 			return;
 		}
 
 		const abertura = ++this.#abertura;
 		this.estado = 'abrindo';
+		this.esperandoPermissao = false;
 		// A gravação anterior sai já no toque: quem toca para regravar desistiu
 		// dela, e a tela troca o "Entendemos" por "Abrindo o microfone…" na hora.
 		// Sem essa resposta imediata o aluno tocava de novo.
 		this.blob = null;
+		this.semSom = false;
 		this.segundos = 0;
 		this.falando = false;
 		this.#anotar?.('abrindo o microfone');
+
+		// Ainda dentro do toque: o medidor nasce aqui (ver o comentário do topo).
+		fecharContexto(this.#contextoDoToque);
+		const ctx = contextoNoToque();
+		this.#contextoDoToque = ctx;
+		clearTimeout(this.#esperaDaPermissao);
+		this.#esperaDaPermissao = setTimeout(() => {
+			if (abertura !== this.#abertura || this.estado !== 'abrindo') return;
+			this.esperandoPermissao = true;
+			this.#anotar?.('o microfone não abriu em 3 s: esperando a permissão');
+		}, ESPERA_PELA_PERMISSAO_MS);
 
 		let stream: MediaStream;
 		try {
@@ -192,19 +328,29 @@ export class Gravacao {
 				// trinta pessoas. Sem isso o Whisper transcreve o vizinho.
 				audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
 			});
-		} catch {
-			if (abertura !== this.#abertura) return;
-			// `getUserMedia` rejeita tanto para permissão negada quanto para
-			// aparelho sem microfone. Para o aluno as duas coisas são a mesma:
-			// não dá para gravar agora.
-			this.estado = 'negado';
-			this.#anotar?.('o microfone foi negado ou não existe');
+		} catch (erro) {
+			if (abertura !== this.#abertura) {
+				fecharContexto(ctx);
+				return;
+			}
+			this.#encerrarAbertura();
+			const impedimento = impedimentoDoErro(erro);
+			this.estado = impedimento;
+			this.#anotar?.(
+				`o microfone não abriu: ${DESCRICAO_DO_IMPEDIMENTO[impedimento]} (${nomeDoErro(erro)})`
+			);
 			return;
 		}
 		if (abertura !== this.#abertura) {
 			soltarMicrofone(stream);
+			fecharContexto(ctx);
 			return;
 		}
+		// O medidor do toque passa para a captura; a espera da permissão acabou.
+		this.#contextoDoToque = null;
+		clearTimeout(this.#esperaDaPermissao);
+		this.#esperaDaPermissao = undefined;
+		this.esperandoPermissao = false;
 
 		const mimeType = primeiroFormatoSuportado();
 		let recorder: MediaRecorder;
@@ -212,6 +358,7 @@ export class Gravacao {
 			recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 		} catch {
 			soltarMicrofone(stream);
+			fecharContexto(ctx);
 			this.estado = 'indisponivel';
 			this.#anotar?.('o navegador recusou criar o gravador');
 			return;
@@ -222,11 +369,13 @@ export class Gravacao {
 			recorder,
 			tipo: mimeType ?? 'audio/webm',
 			pedacos: [],
-			ctx: null,
+			ctx,
 			analisador: null,
 			amostras: null,
 			relogio: undefined,
 			decorridoMs: 0,
+			medidoMs: 0,
+			pico: 0,
 			ruidoDeFundo: 0,
 			amostrasDeCalibragem: 0,
 			jaFalou: false,
@@ -276,12 +425,17 @@ export class Gravacao {
 			return;
 		}
 
+		// Sem medidor rodando não há silêncio que se possa afirmar: a gravação
+		// para pelo toque ou no teto. E a espera pela fala só conta o tempo que
+		// ele de fato ouviu.
 		const nivel = nivelDe(captura);
 		if (nivel === null) return;
+		captura.medidoMs += INTERVALO_MS;
+		captura.pico = Math.max(captura.pico, nivel);
 
 		// Os primeiros 300 ms são o ambiente, não a resposta: mede-se o ruído de
 		// fundo daquele aluno naquele aparelho para o limiar fazer sentido.
-		if (captura.decorridoMs <= CALIBRAGEM_MS) {
+		if (captura.medidoMs <= CALIBRAGEM_MS) {
 			captura.amostrasDeCalibragem += 1;
 			captura.ruidoDeFundo += (nivel - captura.ruidoDeFundo) / captura.amostrasDeCalibragem;
 			return;
@@ -305,7 +459,7 @@ export class Gravacao {
 			this.#parar(captura, 'silencio');
 			return;
 		}
-		if (!captura.jaFalou && captura.decorridoMs >= ESPERA_PELA_FALA_MS) {
+		if (!captura.jaFalou && captura.medidoMs >= ESPERA_PELA_FALA_MS) {
 			// Ninguém falou. Encerra assim mesmo: o aluno vê "gravado" e decide se
 			// regrava ou pula, em vez de ficar olhando um contador que não anda.
 			this.#parar(captura, 'sem-fala');
@@ -314,7 +468,11 @@ export class Gravacao {
 
 	#ligarMedidor(captura: Captura): void {
 		try {
-			captura.ctx = new AudioContext();
+			// O do toque, quase sempre; criar aqui é a reserva de quem não pôde lá.
+			captura.ctx ??= new AudioContext();
+			// O Safari põe o contexto em `interrupted` quando o microfone abre: o
+			// toque já o destravou, então retomar aqui vale.
+			if (captura.ctx.state !== 'running') void captura.ctx.resume().catch(() => {});
 			const fonte = captura.ctx.createMediaStreamSource(captura.stream);
 			captura.analisador = captura.ctx.createAnalyser();
 			// 1024 amostras a 48 kHz são ~21 ms — resolução de sobra para medir
@@ -355,6 +513,10 @@ export class Gravacao {
 	}
 
 	#terminou(captura: Captura): void {
+		// Antes de desligar: depois do `stop()` da faixa o `muted` não diz mais nada.
+		const mudo =
+			faixaMuda(captura.stream) ||
+			(captura.medidoMs >= MEDIDO_PARA_AFIRMAR_SILENCIO_MS && captura.pico < PISO_DE_SINAL);
 		this.#desligar(captura);
 		// Descartada (troca de questão) ou de uma abertura que já não vale: não
 		// escreve nada. O blob e o estado são da gravação de agora.
@@ -372,18 +534,31 @@ export class Gravacao {
 			return;
 		}
 		this.blob = blob;
+		this.semSom = mudo;
 		this.estado = 'pronto';
 		const segundos = (captura.decorridoMs / 1000).toLocaleString('pt-BR', {
 			maximumFractionDigits: 1
 		});
 		this.#anotar?.(
-			`a gravação terminou: ${DESCRICAO_DO_FIM[captura.fim ?? 'interrompida']} (${segundos} s)`
+			`a gravação terminou: ${DESCRICAO_DO_FIM[captura.fim ?? 'interrompida']} (${segundos} s)` +
+				(mudo ? ', sem som do microfone' : '') +
+				(captura.medidoMs === 0 ? ', sem medidor de silêncio' : '')
 		);
+	}
+
+	/** Fecha o que a abertura de agora deixou pendente: o medidor do toque e a espera. */
+	#encerrarAbertura(): void {
+		fecharContexto(this.#contextoDoToque);
+		this.#contextoDoToque = null;
+		clearTimeout(this.#esperaDaPermissao);
+		this.#esperaDaPermissao = undefined;
+		this.esperandoPermissao = false;
 	}
 
 	/** Zera para a próxima questão. A tela reusa o mesmo componente entre elas. */
 	descartar(): void {
 		this.#abertura += 1;
+		this.#encerrarAbertura();
 		const captura = this.#captura;
 		this.#captura = null;
 		if (captura) {
@@ -398,9 +573,11 @@ export class Gravacao {
 			this.#desligar(captura);
 		}
 		this.blob = null;
+		this.semSom = false;
 		this.segundos = 0;
 		this.falando = false;
-		this.estado = 'ocioso';
+		// O bloqueio do site continua valendo na próxima questão de fala.
+		this.estado = this.#permissaoNegada ? 'negado' : 'ocioso';
 	}
 
 	/**

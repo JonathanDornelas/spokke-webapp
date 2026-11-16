@@ -37,24 +37,48 @@ export async function enfileirarAudioFaltante(params: {
 	// a mesma fala na mesma voz, em dois diálogos, também. `audiosDoItem` já
 	// deixa de fora o idioma sem voz no provedor: um item antigo que escapou não
 	// pode virar um job que falha para sempre e trava a publicação.
-	const pendentes = new Map<string, { text: string; voice: string; speed: number }>();
+	const pendentes = new Map<
+		string,
+		{ text: string; voice: string; speed: number; pronuncia: boolean }
+	>();
 	for (const item of items) {
 		for (const audio of audiosDoItem(item, targetTag)) {
 			for (const { hash, velocidade } of audio.arquivos) {
-				pendentes.set(hash, { text: audio.texto, voice: audio.voz, speed: velocidade });
+				pendentes.set(hash, {
+					text: audio.texto,
+					voice: audio.voz,
+					speed: velocidade,
+					pronuncia: !!audio.sonsDosFonemas
+				});
 			}
 		}
 	}
 	if (pendentes.size === 0) return 0;
 
 	const hashes = [...pendentes.keys()];
-	const prontos = await playerRepo.audiosExistentes(teacherId, hashes);
+	const qualidade = await playerRepo.qualidadeDosAudios(teacherId, hashes);
 	const naFila = await audiosNaFila(teacherId, hashes);
 
 	let enfileirados = 0;
-	for (const [hash, { text, voice, speed }] of pendentes) {
-		if (prontos.has(hash) || naFila.has(hash)) continue;
-		await enqueueTts({ hash, text, voice, speed, teacherId });
+	for (const [hash, pedido] of pendentes) {
+		if (naFila.has(hash)) continue;
+		// O que já existe só volta à fila se é de ANTES da conferência
+		// (`qualidade` nula) e é onde ela importa: a versão devagar, que podia ter
+		// nascido com um som a mais, e a palavra da Pronúncia, que ganha a linha do
+		// tempo de cada som. Refeito uma vez, na mesma chave: o arquivo antigo segue no ar
+		// até o novo chegar, e o link nunca fica sem áudio.
+		const existe = qualidade.has(hash);
+		const refazer =
+			existe && qualidade.get(hash) === null && (pedido.speed < 1 || pedido.pronuncia);
+		if (existe && !refazer) continue;
+		await enqueueTts({
+			hash,
+			teacherId,
+			text: pedido.text,
+			voice: pedido.voice,
+			speed: pedido.speed,
+			...(refazer ? { refazer: true } : {})
+		});
 		enfileirados += 1;
 	}
 	return enfileirados;

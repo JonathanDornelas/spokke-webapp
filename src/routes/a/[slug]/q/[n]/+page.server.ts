@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import type { PageServerLoad } from './$types';
-import { playerRepo } from '$lib/server/db/repos/player';
+import { playerRepo, linhasPorHash } from '$lib/server/db/repos/player';
 import { buildRuntimeItem, itemAudioHashes } from '$lib/server/player/runtime';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
 
@@ -64,7 +64,7 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 		},
 		attemptId: attempt.id,
 		itemId: item.id,
-		item: buildRuntimeItem(item, attempt.seed, audioUrlByHash),
+		item: buildRuntimeItem(item, attempt.seed, audioUrlByHash, linhasPorHash(assets)),
 		answered: respondido
 			? {
 					answer: respondido.answer,

@@ -1056,6 +1056,8 @@
 						recording={gravacao.estado === 'gravando'}
 						ontoggle={alternarGravacao}
 						estado={gravacao.estado}
+						esperandoPermissao={gravacao.esperandoPermissao}
+						semSom={gravacao.semSom}
 						segundos={gravacao.segundos}
 						maxSegundos={gravacao.maxSegundos}
 						{ouvido}

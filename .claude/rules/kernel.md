@@ -453,7 +453,7 @@ type LanguageProfile = {
 	normalizers: Normalizer[]; // ['nfkc', 'lowercase', 'strip-punct']
 	diacritics: 'significant' | 'tolerant';
 	caseSensitive: boolean;
-	tts: { voices: string[]; speeds: number[] };
+	tts: { voices: string[]; referencia?: string; speeds: number[] };
 	asr: { model: string; hints: string[] };
 	equivalences: string[][]; // [['7', 'seven'], ['vai', 'irá'], ['i am', 'im']]
 	input: EntradaDoIdioma; // como o aluno DIGITA neste idioma — ver "Entrada" abaixo
@@ -478,6 +478,16 @@ o professor cadastra.
 escolhe é `vozDoTexto` (`language/voice.ts`), a partir do TEXTO, de forma determinística. Do
 texto e não do material: o áudio é identificado pelo conteúdo (db.md), então a mesma frase é o
 mesmo arquivo venha de onde vier.
+
+**`tts.referencia`, onde existe, é a voz da PALAVRA da questão de Pronúncia, e só dela**
+(`vozDaPronuncia`, pedido do dono do repositório, "pelo menos a princípio"). É a melhor voz do
+idioma, e a razão é a correção: na Pronúncia o aluno imita o que ouviu e é cobrado som a som, às
+vezes com rigor, e o modelo não pode ser uma voz mediana. **Só o `en-US` tem: a `af_heart`, a
+única nota A do Kokoro.** A frase da escuta e a palavra de "ouça e escolha" continuam variando
+(`vozDoTexto`), e o diálogo segue com uma voz por pessoa (`vozDoFalante`) — por isso a mesma palavra
+pode ter dois arquivos, o da escuta e o da Pronúncia. Trocar a referência muda a identidade do
+áudio das palavras da Pronúncia (o hash leva a voz): o que já existe é refeito, e o script de
+atualização adianta isso antes de trocar o web (server.md "TTS").
 
 **A lista é filtrada pela NOTA do modelo, não pelo tamanho do catálogo.** O Kokoro publica um
 grau por voz (VOICES.md) e a maioria é D ou pior — pouco material de treino, som artificial.
@@ -643,6 +653,17 @@ boca (`passosDaBoca`) faz a animação andar no tempo do som.
   o `en-GB` fica sem a questão até ter dicionário próprio.
 - O dicionário é do SERVIDOR (`server/pronuncia`, carregado sob demanda), como o kuromoji. O kernel
   só recebe `foneticaDe(palavra)`, e palavra fora do dicionário não vira questão.
+- **O trecho de cada FONEMA no áudio** sai de `sonsDosFonemas` (os sons de cada fonema do
+  dicionário, em IPA) e de `temposDosFonemas` (`language/sintese.ts`), que os casa com a LINHA DO
+  TEMPO do áudio — os sons que o TTS disse, com o começo e o fim de cada um (server.md "TTS"). O
+  dicionário e o fonemizador do TTS não escrevem igual ("t" e o tepe de "priority", "ɔː" e "ɔ", o "ɚ"
+  que o TTS diz em "ə" + "ɹ"), então os dois são alinhados pela distância fonética: cada fonema fica
+  com o tempo dos sons casados com ele, e o som que sobra vai para o vizinho com que mais se parece
+  (o "ɹ" é do "ɚ"; partido ao meio, a sílaba seguinte começava com meio "r"). O resultado cobre a
+  palavra de ponta a ponta, um trecho por fonema; `null` quando o TTS disse outra palavra. A sílaba
+  é do primeiro fonema dela ao último, e cada passo da boca aponta para o seu fonema
+  (`PassoDaBoca.fonema`). O mesmo alinhamento confere a voz sintetizada (`verificarSintese`):
+  fonética, não regra de idioma.
 
 E as regras de CORRIGIR, que ligam o dicionário aos sons que o reconhecedor de fonemas ouve (o IPA
 do espeak):

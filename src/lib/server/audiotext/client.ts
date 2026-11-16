@@ -10,6 +10,8 @@
  * `server/tts/index.ts`.
  */
 import { z } from 'zod';
+import type { LinhaDoTempo } from '$lib/kernel/language/sintese';
+import { lerLinha } from '$lib/server/tts/linha';
 
 export class AudiotextError extends Error {
 	constructor(
@@ -57,13 +59,25 @@ async function erroDaResposta(resposta: Response): Promise<AudiotextError> {
 	return new AudiotextError(`audiotext ${resposta.status}: ${detalhe}`, resposta.status);
 }
 
-/** Texto → voz. Devolve o arquivo tal como veio; quem grava é o storage. */
+/**
+ * Texto → voz. Devolve o arquivo tal como veio; quem grava é o storage. Junto,
+ * os fonemas que a voz pretendia dizer, em IPA (`X-Phonemes-Ipa`), que a
+ * verificação compara com o que o reconhecedor ouve no arquivo. `esticar` pede a
+ * versão devagar de reserva: a síntese normal esticada (`server/tts/verificacao`).
+ */
 export async function sintetizar(
 	text: string,
 	voice: string,
 	speed: number,
+	opcoes: { esticar?: boolean } = {},
 	timeoutMs = 60_000
-): Promise<{ audio: Uint8Array; contentType: string }> {
+): Promise<{
+	audio: Uint8Array;
+	contentType: string;
+	fonemas?: string;
+	esticada: boolean;
+	linha?: LinhaDoTempo;
+}> {
 	const resposta = await fetch(`${baseUrl()}/v1/tts/speak`, {
 		method: 'POST',
 		headers: { ...authHeaders(), 'content-type': 'application/json' },
@@ -72,15 +86,40 @@ export async function sintetizar(
 		// conferido pelo caminho mais duro que existe: o Whisper transcreve o MP3
 		// palavra por palavra igual ao WAV. Cada questão de escuta são dois
 		// arquivos, servidos a cada aluno que abre o link.
-		body: JSON.stringify({ text, voice, speed, format: 'mp3' }),
+		body: JSON.stringify({
+			text,
+			voice,
+			speed,
+			format: 'mp3',
+			...(opcoes.esticar ? { esticar: true } : {})
+		}),
 		signal: comPrazo(timeoutMs)
 	});
 	if (!resposta.ok) throw await erroDaResposta(resposta);
 
+	// Percent-encoded no serviço: cabeçalho HTTP é latin-1, e IPA não é.
+	const ipa = resposta.headers.get('x-phonemes-ipa');
+	const linha = lerLinhaDoCabecalho(resposta.headers.get('x-phoneme-times'));
 	return {
 		audio: new Uint8Array(await resposta.arrayBuffer()),
-		contentType: resposta.headers.get('content-type') ?? 'audio/mpeg'
+		contentType: resposta.headers.get('content-type') ?? 'audio/mpeg',
+		...(ipa ? { fonemas: decodeURIComponent(ipa) } : {}),
+		esticada: resposta.headers.get('x-stretched') === '1',
+		...(linha ? { linha } : {})
 	};
+}
+
+/**
+ * Onde cada som está no áudio (`X-Phoneme-Times`, JSON percent-encoded). O
+ * serviço antigo não manda; fora do formato, também não há linha.
+ */
+function lerLinhaDoCabecalho(cabecalho: string | null): LinhaDoTempo | null {
+	if (!cabecalho) return null;
+	try {
+		return lerLinha(JSON.parse(decodeURIComponent(cabecalho)));
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -124,11 +163,40 @@ const fonemasSchema = z.object({
 	phonemes: z.array(
 		z.object({
 			symbol: z.string(),
+			start: z.number().default(0),
+			end: z.number().default(0),
 			p: z.number(),
 			alternatives: z.array(z.object({ symbol: z.string(), p: z.number() })).default([])
 		})
-	)
+	),
+	duration: z.number().default(0)
 });
+
+/**
+ * Os sons de um áudio SINTETIZADO, com o tempo de cada um e a duração do arquivo:
+ * é o que a verificação da voz compara com o que ela pretendia dizer, e de onde
+ * sai o trecho de cada sílaba da Pronúncia (`kernel/language/sintese.ts`).
+ */
+export async function ouvirComTempo(
+	audio: Uint8Array,
+	contentType: string,
+	timeoutMs = 20_000
+): Promise<{ sons: { s: string; inicio: number; fim: number }[]; duracao: number }> {
+	const form = new FormData();
+	form.append('file', new Blob([audio as BlobPart], { type: contentType }), 'sintese.mp3');
+	const resposta = await fetch(`${baseUrl()}/v1/asr/phonemes`, {
+		method: 'POST',
+		headers: authHeaders(),
+		body: form,
+		signal: comPrazo(timeoutMs)
+	});
+	if (!resposta.ok) throw await erroDaResposta(resposta);
+	const corpo = fonemasSchema.parse(await resposta.json());
+	return {
+		sons: corpo.phonemes.map((som) => ({ s: som.symbol, inicio: som.start, fim: som.end })),
+		duracao: corpo.duration
+	};
+}
 
 /**
  * Os SONS de uma gravação, fonema a fonema (`/v1/asr/phonemes`, o reconhecedor

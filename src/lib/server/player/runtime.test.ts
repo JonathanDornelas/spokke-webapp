@@ -254,6 +254,39 @@ describe('diálogo e Pronúncia: o que chega ao browser', () => {
 		expect(runtime.pronuncia?.passos.length).toBeGreaterThan(4);
 		expect(runtime.gradingLabel).toBe('pronúncia');
 		expect(audiosDoItem(linha, 'en-US').map((a) => a.papel)).toEqual(['palavra']);
+		// A palavra da Pronúncia sai na voz de referência do inglês (a melhor do
+		// modelo), e não na que o texto sortearia: é o modelo que o aluno imita.
+		expect(audiosDoItem(linha, 'en-US')[0]!.voz).toBe('af_heart');
+
+		// Sem a linha do tempo do áudio, a questão vai sem ela (a boca anda pelo peso).
+		expect(runtime.pronuncia?.linha).toBeUndefined();
+
+		// Com a linha do arquivo normal (a que o serviço de áudio devolveu para
+		// "priority"), cada FONEMA do dicionário ganha o trecho dele; o devagar,
+		// que não tem linha, fica sem. Cada passo da boca aponta para o seu fonema.
+		const [palavra] = audiosDoItem(linha, 'en-US');
+		const normal = palavra!.arquivos[0]!.hash;
+		const sons = [
+			['p', 0, 0.041],
+			['ɹ', 0.041, 0.116],
+			['aɪ', 0.116, 0.191],
+			['ɔ', 0.191, 0.291],
+			['ɹ', 0.291, 0.341],
+			['ə', 0.341, 0.416],
+			['ɾ', 0.416, 0.491],
+			['i', 0.491, 0.674]
+		].map(([s, inicio, fim]) => ({ s: s as string, inicio: inicio as number, fim: fim as number }));
+		const comLinha = buildRuntimeItem(
+			linha,
+			'tentativa',
+			new Map(),
+			new Map([[normal, { fala: [0.03, 0.644] as [number, number], sons }]])
+		);
+		expect(comLinha.pronuncia?.linha?.fones).toHaveLength(8);
+		expect(comLinha.pronuncia?.linha?.fones[3]).toEqual([0.191, 0.291]);
+		expect(comLinha.pronuncia?.linha?.fala).toEqual([0.03, 0.644]);
+		expect(comLinha.pronuncia?.linhaLenta).toBeUndefined();
+		expect(comLinha.pronuncia?.passos.at(-1)?.fonema).toBe(7);
 	});
 
 	it('o rigor da Pronúncia sai do nível da atividade e aparece no rótulo e na dica', () => {

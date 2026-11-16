@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { TtsProvider } from './provider';
+import type { Ouvinte } from './verificacao';
 import { stubTtsProvider } from './stub-provider';
 import { audiotextTtsProvider } from './audiotext-provider';
+import { ouvirComTempo } from '$lib/server/audiotext/client';
 
 /**
  * TTS é gerado na PUBLICAÇÃO, nunca em runtime — ver server.md "TTS". A
@@ -83,4 +85,13 @@ export function getTtsProvider(): TtsProvider {
 	throw new Error(
 		`TTS_PROVIDER="${name ?? ''}" não é um provedor conhecido. Use "audiotext" (o serviço de áudio) ou "stub" (WAV silencioso, só para exercitar a fila em dev).`
 	);
+}
+
+/**
+ * Quem OUVE a síntese para conferi-la (`verificacao.ts`): o reconhecedor de
+ * fonemas do mesmo serviço de áudio que sintetiza. Com o provedor de mentira não
+ * há o que ouvir (ele gera silêncio), e a síntese segue sem verificação.
+ */
+export function getOuvinteDaSintese(): Ouvinte | null {
+	return process.env.TTS_PROVIDER === 'audiotext' ? ouvirComTempo : null;
 }

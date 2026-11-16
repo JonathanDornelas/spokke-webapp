@@ -417,13 +417,13 @@ QUESTÃO, com velocidade alternável, e segue o volume do aparelho. Este rege s�
 - **Os arquivos são baixados no clique de "Verificar"**, não na montagem da tela
   (`som.preparar()`). A correção acontece no servidor, então o áudio viaja em paralelo com a
   ida até lá e já está pronto quando o veredito chega. Baixar os quatro ao montar seriam
-  160 kB adiantados numa superfície cujo orçamento é 4G e celular fraco. No volume 0 nada é
+  190 kB adiantados numa superfície cujo orçamento é 4G e celular fraco. No volume 0 nada é
   baixado.
 - **Web Audio, não `<audio>`.** A versão anterior guardava um `HTMLAudioElement` por som e,
   a cada correção, fazia `currentTime = 0` seguido de `play()`. Isso ESTALA: reposicionar um
   MP3 obriga o decodificador a recomeçar no quadro mais próximo, e o que sai antes de ele
   estabilizar é ruído — era o chiado no começo e no fim de cada efeito. Trocar de arquivo não
-  resolveria; os quatro estão limpos (medidos: silêncio digital nas duas pontas, 192 kbps).
+  resolveria; os quatro estão limpos (medidos: silêncio digital nas duas pontas; 192 kbps, e 320 no de fim).
   Decodificando uma vez para PCM e tocando de um `AudioBufferSourceNode` novo a cada vez, não
   existe reposicionamento — cada toque começa do zero por construção —, e o ganho entra e sai
   por rampa de 4 ms.
@@ -457,10 +457,52 @@ primeiros 300 ms daquele aluno naquele aparelho: um limiar absoluto funciona no 
 escreveu o código e falha numa sala com trinta pessoas, onde o silêncio já está acima dele.
 Encerra com 1,1 s de silêncio depois de ter havido fala, e o teto duro é de **10 s**. O toque
 continua encerrando, como saída manual.
-`SpeakInteraction.svelte` repassa esse estado (`estado`, `segundos`, `maxSegundos`) e mostra o
-contador enquanto grava, o "pronto para enviar" depois, e a mensagem de microfone negado ou de
-navegador sem gravação — cada uma com ícone, nunca cor sozinha. O botão de pular fica **sempre visível** ao lado dele, renderizado
-pela tela: microfone negado ou ambiente barulhento não podem travar a atividade.
+`SpeakInteraction.svelte` repassa esse estado (`estado`, `esperandoPermissao`, `semSom`,
+`segundos`, `maxSegundos`) e mostra o contador enquanto grava, o "pronto para enviar" depois, e,
+quando não dá para gravar, O QUE ACONTECEU E O CAMINHO — cada um com ícone, nunca cor sozinha. O
+botão de pular fica **sempre visível** ao lado dele, renderizado pela tela: microfone negado ou
+ambiente barulhento não podem travar a atividade.
+
+**Cada recusa do microfone é um estado, com a sua frase** (`$lib/client/microfone.ts`, pedido do
+dono do repositório: "se não estiver captando, dizer que precisa habilitar a permissão"). Antes todas
+viravam "não conseguimos usar o microfone", e quem o tinha preso numa chamada ia procurar uma
+permissão que já estava dada. `impedimentoDoErro` lê o erro do `getUserMedia`: bloqueado para o site
+(`negado`), pedido fechado sem resposta (`dispensado`, o "Permission dismissed" do Chrome: basta
+tocar de novo), bloqueado pelo SISTEMA (`negado-sistema`, o "Permission denied by system" de quando
+o Windows, o macOS ou o Android não deixam o navegador), sem microfone, microfone preso em outro
+app (`ocupado`), página fora do https (`inseguro`) e navegador que não grava. `ajudaDoMicrofone` dá
+o título (com "ou pule esta questão") e o CAMINHO DO APARELHO que o aluno tem na mão, lido do
+`userAgent`: o "aA › Ajustes do Site" do Safari no iPhone, "ícone à esquerda do endereço ›
+Permissões" no Android, o microfone riscado do Firefox, os ajustes de privacidade do sistema. No
+navegador de dentro de um app (Instagram, Facebook, TikTok, o WebView do Android) o caminho é sair
+dele, "Abrir no navegador". A mensagem toma o lugar do quadro "Entendemos" e não passa da altura
+dele: a questão continua cabendo na tela (medido em 390×700).
+
+**O que muda de um navegador para outro**, e mora em `Gravacao` (`gravacao.test.ts` tem um caso
+para cada):
+
+- **O medidor de silêncio nasce no toque**, antes do `await` do microfone. No Safari do iPhone o
+  `AudioContext` criado depois da espera nasce suspenso: o medidor lia zero e cortava a gravação aos
+  4 s, no meio da frase. Se mesmo assim ele não roda, a detecção fica desligada e a gravação para
+  pelo toque ou no teto; a espera pela fala conta só o tempo que ele de fato ouviu.
+- **O pedido de permissão parado** (o Firefox não recusa quando o aluno fecha o aviso; a promessa
+  fica pendente para sempre): passados 3 s, `esperandoPermissao` liga, a linha sob o botão diz
+  "Permita o microfone no aviso do navegador. Não apareceu? Toque de novo." e o toque volta a valer.
+  O pedido antigo, se um dia responder, é de uma abertura que não vale mais.
+- **O bloqueio já conhecido aparece antes do toque**: com a Permissions API, o microfone `denied`
+  para o site põe o estado em `negado` sem o aluno tocar em nada, e o `change` o devolve a `ocioso`
+  quando ele libera nas configurações, sem recarregar. Navegador sem a API descobre no toque.
+- **Microfone mudo** (a tecla de mudo, o sistema entregando silêncio, a faixa `muted`): o pico do
+  medidor fica abaixo de `PISO_DE_SINAL` do começo ao fim, e `semSom` liga. O arquivo continua
+  sendo a resposta; só a frase muda — com a transcrição vazia, "Não chegou som do microfone" no
+  lugar de "fale mais perto", que mandaria gritar para um microfone desligado.
+
+O que se conferiu em navegador de verdade (Chromium e Firefox com o microfone falso deles; o WebKit
+do Playwright no Windows não tem `getUserMedia` nem `MediaRecorder`, e foi com um gravador
+simulado): gravar e receber a transcrição, cada recusa, o caminho por aparelho, o pedido parado, o
+mudo e o bloqueio antes do toque. **O Safari de verdade (iPhone e Mac) não foi medido aqui** — o
+medidor no toque e o `audio/mp4` seguem o comportamento conhecido do WebKit, e a conferência é num
+aparelho.
 
 `SpeakInteraction` recebe ainda `ouvido` (o que o serviço entendeu, antes de enviar; texto VAZIO
 quer dizer que ele não reconheceu palavra nenhuma, e a tela diz isso em vez de "pronta"),
@@ -1273,7 +1315,10 @@ na mesma ordem em que o componente os mandou. **As duas colunas dividem as LINHA
 (`grid-rows-subgrid`, cada coluna ocupando todas): a linha tem a altura do cartão mais alto dos
 dois lados. Com uma grade por coluna, "estante de livros" quebrando em duas linhas descia a coluna
 inteira da direita, e os cartões deixavam de ficar lado a lado. Navegador sem `subgrid` volta às
-duas grades soltas. A dica do pé ("Toque numa palavra, depois no sentido") sai depois de responder.
+duas grades soltas. **Tocar num cartão que já está num par desfaz a ligação**, dos dois lados (antes não
+havia como soltar um par, só trocar: no sentido, sem palavra escolhida, o toque não fazia nada). A
+dica do pé ("Toque numa palavra, depois no sentido. Tocar num par desfaz a ligação.") sai depois de
+responder.
 
 `SpeakInteraction.svelte` compõe `Recorder.svelte` (`size="lg"`) em vez de duplicar o botão de
 gravação — mesma lógica de reuso do resto do catálogo. `AssembleInteraction.svelte` usa
@@ -1328,13 +1373,40 @@ balões. O servidor já cortou o que o aluno não pode ver; o componente desenha
 
 ## A Pronúncia — `pronuncia/PronunciaDaPalavra.svelte` + `BocaDaPronuncia.svelte` + `formas.ts`
 
-`PronunciaDaPalavra` — props `{ palavra; silabas: { leitura, tonica }[]; passos: PassoDaBoca[]; audio?; audioSlow?; dir?; compacta? }`.
+`PronunciaDaPalavra` — props `{ palavra; silabas: { leitura, tonica }[]; passos: PassoDaBoca[]; audio?; audioSlow?; linha?; linhaLenta?; dir?; compacta? }`.
 A boca, a palavra, as sílabas como se leem (a tônica em caixa alta, na cor da marca) e "Ouvir" /
-"Devagar". **A boca anda junto do som**: cada passo tem um peso (`passosDaBoca`, do kernel), e a
-fração do tempo do áudio diz em que passo ela está; sem o arquivo (a síntese na fila) ela anda pelo
-peso, num ritmo fixo, para o professor ver na prévia. Tocar numa sílaba mostra a boca dela, parada,
-que é o treino da sílaba que saiu diferente, e um `aria-live` diz o formato. O quadro é cancelado
-num `$effect`: `onDestroy` roda no servidor, onde `cancelAnimationFrame` não existe (era um 500).
+"Devagar". `linha` e `linhaLenta` são a `LinhaDaPalavra` de cada arquivo: o trecho de cada FONEMA
+(server.md "TTS", kernel.md "Pronúncia").
+
+- **A boca anda no tempo de cada som.** O fonema que está soando decide o formato
+  (`passoNoTempo`; no ditongo, cada metade o seu), e antes e depois da fala ela descansa. Andava
+  pelo PESO de cada som espalhado na duração do arquivo, margens de silêncio incluídas, e ficava
+  fora de sincronia. Sem a linha (o áudio de antes dela, ou na fila) ela ainda anda pelo peso.
+- **Tocar numa sílaba toca EXATAMENTE ela**: do começo do primeiro fonema ao fim do último
+  (`trechoDaSilaba`), do arquivo devagar quando ele tem a linha (a átona dura uns 100 ms no normal),
+  com a boca andando pelos sons dela e parando na vogal. A primeira sílaba começa 20 ms antes (a
+  margem é silêncio, e cortar rente come o começo do som) e a última vai até o fim do arquivo, com
+  a cauda da vogal. Sem a linha, a sílaba mostra a boca dela, parada; o `aria-label` diz "Ouvir" ou
+  "Ver a boca", e um `aria-live` diz o formato.
+- **Quem toca é o Web Audio** (`$lib/client/audio-da-pronuncia.ts`), não o `<audio>`: posicionar
+  dentro de um MP3 cai perto, não em cima, e parar dependia de um quadro de animação conferir a
+  hora e cortar seco no meio do som — o "corte abrupto" do retorno do dono do repositório. Aqui o
+  trecho começa e termina na amostra certa, agendado pelo relógio do áudio, com uma rampa de 6 ms
+  na entrada e de 12 ms na saída que termina NO limite. A boca segue o que se OUVE: o relógio do
+  áudio menos a latência da saída (um fone Bluetooth chega a 200 ms).
+- **Os dois arquivos baixam ao abrir a questão** (uma palavra são poucos kB), e o primeiro toque sai
+  na hora. Baixar pelo `fetch` pede CORS no bucket: o MinIO responde com ele de fábrica; **no R2 é
+  uma regra a criar** (docs/deploy.md).
+- **O atraso do decodificador é medido, não suposto**: a linha diz onde a fala começa (`fala`), a
+  tela mede o mesmo no que decodificou, e a diferença desloca todo trecho. Chromium e Firefox dão
+  zero; a conta existe para o navegador que deixa o enchimento do MP3 na frente.
+- **A reserva é o `<audio>`**, com o mesmo trecho e a mesma boca (só o corte é o de antes): sem CORS,
+  sem Web Audio, e **no iPhone sem a Audio Session API** (antes do Safari 17) — ali o Web Audio
+  obedece à chave de silencioso, e "Ouvir" ficaria mudo com o resto da atividade tocando. Com a
+  API, a sessão vai para "reprodução", como a do `<audio>`.
+- O laço da boca confere a VEZ do toque a cada quadro e acaba com ela (toque novo, fim do som,
+  saída da tela). É num `$effect`, não em `onDestroy`: este roda no servidor, onde
+  `cancelAnimationFrame` não existe (era um 500).
 
 `BocaDaPronuncia` — props `{ visema; tamanho?; decorativa? }`. A boca de FRENTE num dos quinze
 visemas, **desenhada por dado** (`formas.ts`: largura, abertura, quanto os lábios arredondam, quanto

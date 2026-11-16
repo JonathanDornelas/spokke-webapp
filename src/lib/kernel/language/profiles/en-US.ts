@@ -27,8 +27,14 @@ export const enUS: LanguageProfile = {
 	 *
 	 * Seis femininas e três masculinas porque o Kokoro não tem voz masculina
 	 * americana acima de C+ — é limite do modelo, não escolha.
+	 *
+	 * **`referencia` é a `af_heart`, a única nota A**: é nela que sai a palavra
+	 * da questão de Pronúncia (`vozDaPronuncia`), pedido do dono do repositório —
+	 * a correção ali é som a som, e o modelo que o aluno imita tem de ser o
+	 * melhor. A escuta e os diálogos continuam variando entre as nove.
 	 */
 	tts: {
+		referencia: 'af_heart',
 		voices: [
 			'af_heart', // A
 			'af_bella', // A-

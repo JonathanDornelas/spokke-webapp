@@ -8,6 +8,13 @@
 # porque tipo de job que ele não conhece vai para `failed`, e o web novo pode
 # enfileirar um tipo novo no primeiro minuto.
 #
+# Entre os dois, o áudio que falta: quando a versão nova muda a IDENTIDADE do
+# áudio (a regra da voz trocou), as atividades publicadas passam a pedir
+# arquivos que ainda não existem, e o link fecharia em "áudio sendo gerado" na
+# primeira abertura. Aqui o worker NOVO os sintetiza com o web ANTIGO ainda no
+# ar, servindo o áudio antigo. No dia a dia não há nada a gerar e o passo sai na
+# hora; ele nunca trava a atualização.
+#
 # A imagem que estava no ar é guardada como `spokke-service:anterior` antes do
 # build — é ela que `voltar.sh` põe de volta. O banco não volta: migration é só
 # para a frente, então volte só para uma versão que entenda o banco atual.
@@ -29,8 +36,14 @@ fi
 echo "== migrations"
 "${COMPOSE[@]}" run --rm --no-deps web ./node_modules/.bin/prisma migrate deploy
 
-echo "== worker, depois web"
+echo "== worker"
 "${COMPOSE[@]}" up -d --no-deps worker
+
+echo "== áudio que falta (espera até 20 min, com o web antigo no ar)"
+"${COMPOSE[@]}" run --rm --no-deps worker ./node_modules/.bin/tsx scripts/audio-que-falta.ts --esperar 20 ||
+	echo "aviso: não deu para adiantar o áudio; o que faltar é gerado quando a atividade for aberta"
+
+echo "== web"
 "${COMPOSE[@]}" up -d --no-deps web
 
 echo "== esperando o web responder"

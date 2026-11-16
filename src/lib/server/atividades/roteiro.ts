@@ -1,4 +1,5 @@
 import { buildRuntimeItem, itemAudioHashes, type StoredItemRow } from '$lib/server/player/runtime';
+import type { LinhaDoTempo } from '$lib/kernel/language/sintese';
 import { parseContentUnit } from '$lib/kernel/content/parse';
 import type { ContentUnitKind } from '$lib/kernel/content/types';
 import { interactionSchema, promptSchema } from '$lib/kernel/item';
@@ -62,6 +63,8 @@ export function questoesDoRoteiro(
 		/** A seed do runtime: a mesma que quem corrige vai usar. */
 		semente: string;
 		urlByHash: Map<string, string>;
+		/** Onde cada som está em cada áudio, pelo hash (`linhasPorHash`). */
+		linhasByHash?: Map<string, LinhaDoTempo>;
 		materialPorId: Map<string, MaterialDaQuestao>;
 	}
 ) {
@@ -91,7 +94,7 @@ export function questoesDoRoteiro(
 
 		let runtime: RuntimeDaQuestao | null;
 		try {
-			runtime = buildRuntimeItem(item, contexto.semente, contexto.urlByHash);
+			runtime = buildRuntimeItem(item, contexto.semente, contexto.urlByHash, contexto.linhasByHash);
 		} catch {
 			runtime = null;
 		}

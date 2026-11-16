@@ -1,10 +1,20 @@
-import { vozDoFalante, vozDoTexto } from '$lib/kernel/language/voice';
+import { vozDaPronuncia, vozDoFalante, vozDoTexto } from '$lib/kernel/language/voice';
 import { getProfile, labelForTag } from '$lib/kernel/language/profiles';
 import { gradingSchema, interactionSchema, localeSchema, promptSchema } from '$lib/kernel/item';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { habilidadePrincipal } from '$lib/kernel/interactions/skills';
 import { speakAuthoringSchema } from '$lib/kernel/interactions/speak';
-import { passosDaBoca, pronunciaDe, type RigorDaPronuncia } from '$lib/kernel/language/pronuncia';
+import {
+	passosDaBoca,
+	pronunciaDe,
+	sonsDosFonemas,
+	type RigorDaPronuncia
+} from '$lib/kernel/language/pronuncia';
+import {
+	temposDosFonemas,
+	type LinhaDaPalavra,
+	type LinhaDoTempo
+} from '$lib/kernel/language/sintese';
 import type {
 	ContextoDoPrompt,
 	GradingMode,
@@ -192,6 +202,12 @@ export interface AudioDoItem {
 	texto: string;
 	voz: string;
 	arquivos: { hash: string; velocidade: number }[];
+	/**
+	 * Na palavra da Pronúncia: os sons de cada fonema, em IPA (`sonsDosFonemas`).
+	 * É com eles que a linha do tempo do áudio vira o trecho de cada fonema
+	 * (`temposDosFonemas`), e o que marca o áudio que precisa dela.
+	 */
+	sonsDosFonemas?: string[][];
 }
 
 /**
@@ -206,8 +222,9 @@ export interface AudioDoItem {
  * - **As falas do diálogo** que o aluno OUVE (as anteriores à parada; todas na
  *   pergunta de compreensão), cada uma na voz da pessoa que fala
  *   (`vozDoFalante`). O diálogo só em texto não tem áudio.
- * - **A palavra da Pronúncia**, na voz do texto: o modelo que o aluno ouve antes
- *   de falar, e o que move a boca.
+ * - **A palavra da Pronúncia**, na voz de referência do idioma quando ele tem uma
+ *   (`vozDaPronuncia`: a melhor voz, porque é o modelo que o aluno imita), senão
+ *   na do texto. É o que ele ouve antes de falar, e o que move a boca.
  *
  * Vazio quando a questão não tem áudio, ou o idioma alvo não tem voz no
  * provedor (árabe hoje) — nenhum dos dois é erro.
@@ -253,13 +270,16 @@ export function audiosDoItem(
 	if (interaction.type === 'speak') {
 		const fala = speakAuthoringSchema.safeParse(interaction.payload);
 		if (fala.success && fala.data.pronuncia) {
-			const voz = vozDoTexto(profile, fala.data.target);
+			const voz = vozDaPronuncia(profile, fala.data.target);
 			if (voz) {
 				audios.push({
 					papel: 'palavra',
 					texto: fala.data.target,
 					voz,
-					arquivos: arquivos(fala.data.target, voz)
+					arquivos: arquivos(fala.data.target, voz),
+					...(profile.pronuncia
+						? { sonsDosFonemas: sonsDosFonemas(fala.data.pronuncia, profile.pronuncia) }
+						: {})
 				});
 			}
 		}
@@ -310,10 +330,37 @@ function contextoNoRuntime(
 	};
 }
 
+/**
+ * Onde cada fonema da palavra está nos dois arquivos dela (normal e devagar),
+ * da linha do tempo que o serviço de áudio devolveu ao sintetizar. Cada arquivo
+ * tem a sua: a versão devagar é mais longa, e a esticada tem a dela.
+ */
+function linhasDaPalavra(
+	palavra: AudioDoItem | undefined,
+	linhasByHash: Map<string, LinhaDoTempo>
+): Pick<PronunciaNoRuntime, 'linha' | 'linhaLenta'> {
+	const sons = palavra?.sonsDosFonemas;
+	const doArquivo = (i: number): LinhaDaPalavra | undefined => {
+		const hash = palavra?.arquivos[i]?.hash;
+		const linha = hash ? linhasByHash.get(hash) : undefined;
+		const fones = sons && linha ? temposDosFonemas(sons, linha.sons) : null;
+		return fones ? { fones, fala: linha?.fala ?? null } : undefined;
+	};
+	const normal = doArquivo(0);
+	const lenta = doArquivo(1);
+	return { ...(normal ? { linha: normal } : {}), ...(lenta ? { linhaLenta: lenta } : {}) };
+}
+
 export function buildRuntimeItem(
 	row: StoredItemRow,
 	seed: string,
-	audioUrlByHash: Map<string, string>
+	audioUrlByHash: Map<string, string>,
+	/**
+	 * Onde cada som está em cada áudio, pelo hash (`MediaAsset.trechos`). Na
+	 * Pronúncia é o que toca uma sílaba só e anda a boca no tempo do som; sem ele,
+	 * a sílaba só mostra a boca.
+	 */
+	linhasByHash: Map<string, LinhaDoTempo> = new Map()
 ): RuntimeItem {
 	const prompt = promptSchema.parse(row.prompt);
 	const interaction = interactionSchema.parse(row.interaction);
@@ -372,7 +419,8 @@ export function buildRuntimeItem(
 						targetProfile.pronuncia
 					),
 					audio: url(daPalavra, 0),
-					audioSlow: url(daPalavra, 1)
+					audioSlow: url(daPalavra, 1),
+					...linhasDaPalavra(daPalavra, linhasByHash)
 				}
 			: undefined;
 

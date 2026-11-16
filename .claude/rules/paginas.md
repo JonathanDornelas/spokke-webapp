@@ -524,8 +524,15 @@ desabilitado — foi um bug real. Três merecem nota:
   **Quem fala com o `MediaRecorder` é a TELA** (`client/gravacao.svelte.ts`), porque o
   `Recorder` é controlado por desenho — o componente recebe estado e um `ontoggle`. A gravação
   para sozinha no silêncio depois da fala ou aos 10 s, e o contador fica na tela: sem ele o
-  aluno é cortado no meio da frase sem entender por quê. Microfone negado, aparelho sem entrada
-  e navegador que não grava têm cada um a sua mensagem, e nenhuma delas trava o exercício. **O
+  aluno é cortado no meio da frase sem entender por quê. **Quando não dá para gravar, a tela diz
+  por quê e COMO LIBERAR, no aparelho dele**: bloqueado para o site, bloqueado pelo sistema,
+  pedido fechado, sem microfone, microfone preso em outro app, fora do https, navegador que não
+  grava, e o navegador de dentro de um app (o caminho é "Abrir no navegador"). O caminho da
+  permissão é o do navegador que ele tem na mão (o "aA" do Safari no iPhone, as Permissões do
+  Chrome no Android), o bloqueio já conhecido aparece antes do toque e some quando ele libera, o
+  pedido de permissão parado vira instrução, e a gravação que chega sem som nenhum diz para
+  conferir o microfone em vez de "fale mais perto" (components.md "Gravação"). Nenhuma delas
+  trava o exercício. **O
   servidor que não consegue ouvir também se explica**: fila do serviço de áudio cheia (503),
   gravação vazia ou sem conexão viram uma frase sob o microfone, no lugar do "pronta para
   enviar", tanto na prévia quanto no "Verificar". Respondida a questão, o microfone sai.
@@ -577,7 +584,10 @@ rótulo diz o rigor ("Fala · pronúncia leve", "Fala · pronúncia", "Fala · p
 `hint` diz o que ele aceita. Gravada a palavra, o quadro sob o microfone é **"Ouvimos"**, com os SONS
 que o reconhecedor ouviu na escrita das sílabas ("prai · aw · huh · tee", em mono como elas), e não
 "Entendemos" com uma palavra: é isso que deixa o aluno ver o "r" de "rato" antes de enviar. O
-veredito grifa a sílaba que saiu diferente e repete o "Ouvimos" (kernel.md "Correção").
+veredito grifa a sílaba que saiu diferente e repete o "Ouvimos" (kernel.md "Correção"). **Tocar numa
+sílaba toca só ela**, exatamente o trecho dela no áudio da palavra, com a boca andando no tempo de
+cada som (pedido do dono do repositório; o tempo de cada fonema vem do serviço de áudio, server.md
+"TTS", e quem toca é o Web Audio, components.md "A Pronúncia").
 
 Não existe um 9º tipo de interação "escrita longa": é `type` com `grading.mode === 'rubric'`
 (exposto ao Player como `item.gradedLater`), renderizado por `WritingInteraction.svelte` em vez

@@ -24,6 +24,11 @@ export interface LanguageProfile {
 	 * para chegar sem gravar gente de verdade. Qual voz cada frase usa é
 	 * decidido por `vozDoTexto` (`language/voice.ts`), de forma determinística.
 	 *
+	 * **`referencia`, quando existe, é a voz da PALAVRA da questão de Pronúncia**
+	 * (`vozDaPronuncia`), e só dela: a melhor voz do idioma, porque ali o aluno
+	 * imita o que ouviu e é corrigido som a som — o modelo não pode ser uma voz
+	 * mediana. A escuta e o diálogo continuam saindo da lista.
+	 *
 	 * **Lista vazia significa SEM ÁUDIO neste idioma** — o gerador não produz
 	 * item de escuta, em vez de enfileirar um TTS que o provedor vai recusar e
 	 * deixar a publicação travada para sempre.
@@ -32,7 +37,7 @@ export interface LanguageProfile {
 	 * degraus intermediários do player saem de `playbackRate` — ver
 	 * `AudioPlayer.svelte`.
 	 */
-	tts: { voices: string[]; speeds: number[] };
+	tts: { voices: string[]; referencia?: string; speeds: number[] };
 	asr: { model: string; hints: string[] };
 	/**
 	 * Como o aluno DIGITA neste idioma — ver `teclado.ts` para os quatro modos.

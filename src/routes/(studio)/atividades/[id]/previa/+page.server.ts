@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { versaoDaPrevia } from '$lib/server/atividades/previa';
-import { playerRepo } from '$lib/server/db/repos/player';
+import { playerRepo, linhasPorHash } from '$lib/server/db/repos/player';
 import { buildRuntimeItem, itemAudioHashes } from '$lib/server/player/runtime';
 import { rotuloDoItem } from '$lib/server/player/rotulo';
 import { gradingSchema, interactionSchema, promptSchema } from '$lib/kernel/item';
@@ -40,7 +40,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			return {
 				id: linha.id,
 				rotulo: rotuloDoItem(prompt, interaction.type, grading.mode),
-				item: buildRuntimeItem(linha, semente, urlByHash)
+				item: buildRuntimeItem(linha, semente, urlByHash, linhasPorHash(assets))
 			};
 		} catch {
 			return { id: linha.id, rotulo: 'questão incompleta', item: null };

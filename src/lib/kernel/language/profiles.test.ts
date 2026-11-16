@@ -192,6 +192,16 @@ describe('vozes de cada idioma', () => {
 		expect(profile.tts.voices).toHaveLength(new Set(profile.tts.voices).size);
 	});
 
+	// A voz de referência (a da palavra da Pronúncia) tem de ser uma das vozes do
+	// idioma: uma de outro idioma sintetiza, com o sotaque errado.
+	it('a voz de referência, onde há, é uma voz do próprio idioma', () => {
+		const comReferencia = entradas.filter(([, profile]) => profile.tts.referencia);
+		expect(comReferencia.map(([tag]) => tag)).toEqual(['en-US']);
+		for (const [, profile] of comReferencia) {
+			expect(profile.tts.voices).toContain(profile.tts.referencia);
+		}
+	});
+
 	// `speeds` são os ARQUIVOS sintetizados — normal e reduzida (server.md "TTS").
 	// Uma velocidade a mais é um arquivo a mais por frase no bucket.
 	it.each(entradas)('%s: sintetiza a velocidade normal e uma reduzida', (_tag, profile) => {
