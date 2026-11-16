@@ -2,13 +2,9 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { corrigirNaPrevia, versaoDaPrevia } from '$lib/server/atividades/previa';
-import { transcreverNoIdioma } from '$lib/server/asr/audiotext-provider';
-import {
-	guardarTranscricao,
-	hashDoAudio,
-	transcricaoGuardada
-} from '$lib/server/asr/pre-transcricao';
+import { guardarResposta, hashDoAudio, respostaGuardada } from '$lib/server/asr/pre-transcricao';
 import { vocabulario } from '$lib/server/asr/vocabulario';
+import { ouvirFala } from '$lib/server/pronuncia';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { getProfile } from '$lib/kernel/language/profiles';
 import { gradingSchema, interactionSchema, localeSchema } from '$lib/kernel/item';
@@ -56,28 +52,29 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 	const bytes = new Uint8Array(await arquivo.arrayBuffer());
 	const hash = hashDoAudio(bytes);
-	// O "Verificar" chega com os mesmos bytes do "ouvir": o Whisper roda uma vez.
+	// O "Verificar" chega com os mesmos bytes do "ouvir": o modelo roda uma vez.
 	const chave = `previa:${teacher.id}`;
-	let transcript = transcricaoGuardada(chave, itemId, hash);
-	if (transcript === null) {
+	let resposta = respostaGuardada(chave, itemId, hash);
+	if (resposta === null) {
 		try {
-			const resultado = await transcreverNoIdioma(
+			resposta = await ouvirFala({
+				payload: interaction.payload,
 				bytes,
-				profile.asr.model,
-				hints,
-				arquivo.type || 'audio/webm'
-			);
-			transcript = resultado.text;
+				contentType: arquivo.type || 'audio/webm',
+				profile,
+				hints
+			});
 		} catch (erro) {
 			console.error('[previa/fala] transcrição falhou', erro);
 			error(503, 'não conseguimos ouvir a gravação agora — pule esta questão e siga em frente');
 		}
-		guardarTranscricao(chave, itemId, hash, transcript);
+		guardarResposta(chave, itemId, hash, resposta);
 	}
+	const transcript = resposta.transcript;
 
 	if (somenteOuvir) return json({ transcript });
 
-	const correcao = await corrigirNaPrevia(versao, linha, { transcript });
+	const correcao = await corrigirNaPrevia(versao, linha, resposta);
 	if (!correcao.ok) error(400, correcao.erro);
 	return json({ ...correcao.correcao, transcript });
 };

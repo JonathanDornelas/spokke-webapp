@@ -435,6 +435,19 @@ export function atividades(teacher: TeacherScope, db: Db = prisma) {
 			return true;
 		},
 
+		/**
+		 * Troca o título, pela tela da atividade, sem passar pelo wizard. O título
+		 * mora na ATIVIDADE, não na versão: muda no que está no ar sem republicar,
+		 * como o nível. Devolve se era dele.
+		 */
+		async renomear(id: string, title: string): Promise<boolean> {
+			const { count } = await db.activity.updateMany({
+				where: { id, teacherId: teacher.id },
+				data: { title }
+			});
+			return count > 0;
+		},
+
 		/** Troca o nível (rótulo). Nulo = sem nível. Quem chama já validou contra a escala. */
 		async definirNivel(id: string, level: string | null): Promise<boolean> {
 			const { count } = await db.activity.updateMany({

@@ -1,19 +1,24 @@
 import type { z } from 'zod';
 import { gradingSchema, interactionSchema, promptSchema } from '$lib/kernel/item';
-import type { InteractionKind } from '$lib/kernel/interactions/types';
+import type { ContextoDoPrompt, InteractionKind } from '$lib/kernel/interactions/types';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import type { LanguageProfile } from '$lib/kernel/language/profile';
 import { normalize } from '$lib/kernel/language/normalize';
 import { segmentosDePalavra, tokenize } from '$lib/kernel/language/tokenize';
 import { assembleAuthoringSchema } from '$lib/kernel/interactions/assemble';
 import { speakAuthoringSchema } from '$lib/kernel/interactions/speak';
+import { pronunciaDe } from '$lib/kernel/language/pronuncia';
 import { instructionText } from '$lib/atividades/enunciados';
 import {
 	FORMATOS_DO_TIPO,
 	MAX_PARES_DA_QUESTAO,
+	chaveDoContexto,
 	chaveDoEnunciado,
+	formatoUsaContexto,
+	mostraDoPrompt,
 	tipoDaQuestao,
 	type CamposDaQuestao,
+	type ContextoNaQuestao,
 	type Questao,
 	type QuestaoGravada
 } from '$lib/atividades/questao';
@@ -56,6 +61,11 @@ export interface ContextoDaQuestao {
 	capacidades: { tts: boolean; asr: boolean };
 	/** A questão como está gravada. Ausente quando ela é criada do zero. */
 	atual?: { prompt: unknown; interaction: unknown; grading: unknown };
+	/**
+	 * A pronúncia de uma palavra, do dicionário do servidor (`server/pronuncia`):
+	 * a questão de Pronúncia acompanha a palavra quando o professor a troca.
+	 */
+	foneticaDe?: (palavra: string) => string[] | null;
 }
 
 /** JSON não guarda `undefined`; tirar as chaves vazias evita um `"text": null` no banco. */
@@ -257,16 +267,40 @@ function payloadDe(
 				? speakAuthoringSchema.safeParse(gravada?.interaction.payload)
 				: null;
 			const mesma = anterior?.success && anterior.data.target === frase;
+			// A questão de Pronúncia continua sendo de Pronúncia (era uma fala comum
+			// depois de salvar, sem a boca e sem a correção por sílaba), com o rigor
+			// que o professor escolheu — ou o que ela já tinha.
+			const pronuncia =
+				anterior?.success && anterior.data.pronuncia
+					? mesma
+						? anterior.data.pronuncia
+						: pronunciaDaPalavra(frase, ctx)
+					: undefined;
+			const rigor =
+				campos.rigor ?? (anterior?.success ? anterior.data.pronuncia?.rigor : undefined);
 			return {
 				ok: true,
 				payload: semVazios({
 					target: frase,
 					hints: mesma && anterior?.success ? anterior.data.hints : [],
-					ipa: mesma && anterior?.success ? anterior.data.ipa : undefined
+					ipa: mesma && anterior?.success ? anterior.data.ipa : undefined,
+					pronuncia: pronuncia ? { ...pronuncia, ...(rigor ? { rigor } : {}) } : undefined
 				})
 			};
 		}
 	}
+}
+
+/**
+ * A pronúncia da palavra NOVA, quando o professor troca a palavra de uma questão de
+ * Pronúncia: lida de novo no dicionário, como na geração (`vocab-pronuncia`). Mais
+ * de uma palavra, ou uma fora do dicionário, volta a ser uma fala comum.
+ */
+function pronunciaDaPalavra(frase: string, ctx: ContextoDaQuestao) {
+	const regras = ctx.alvo.pronuncia;
+	if (!regras || !ctx.foneticaDe || tokenize(frase, ctx.alvo).length !== 1) return undefined;
+	const fonemas = ctx.foneticaDe(frase);
+	return fonemas && fonemas.length > 0 ? pronunciaDe(fonemas, regras) : undefined;
 }
 
 function gradingDe(campos: CamposDaQuestao, gravada: Gravada | null): Grading {
@@ -309,6 +343,12 @@ export function montarQuestao(questao: Questao, ctx: ContextoDaQuestao): Questao
 		return falha('Esse formato não existe para este tipo de questão.');
 	}
 
+	// A questão com contexto (o trecho, o diálogo) é montada à parte: o prompt é
+	// `composite` e o áudio, quando há, sai das falas — não de uma frase.
+	if (questao.contexto && formatoUsaContexto(questao.contexto, campos.interacao)) {
+		return montarComContexto(questao, questao.contexto, ctx, gravada);
+	}
+
 	const texto = questao.texto.trim();
 	const kind = tipo === 'escuta' ? 'audio' : 'text';
 	if (kind === 'audio' && !texto) {
@@ -345,7 +385,11 @@ export function montarQuestao(questao: Questao, ctx: ContextoDaQuestao): Questao
 	// enunciado do formato antigo ("Ouça e escreva" numa lacuna).
 	const anterior: QuestaoGravada | undefined = gravada
 		? {
-				tipo: tipoDaQuestao(gravada.prompt.kind, gravada.interaction.type),
+				tipo: tipoDaQuestao(
+					gravada.prompt.kind,
+					gravada.interaction.type,
+					mostraDoPrompt(gravada.prompt)
+				),
 				interacao: gravada.interaction.type,
 				chave: gravada.prompt.instructionKey,
 				answerLang: gravada.grading.answerLang
@@ -381,6 +425,104 @@ export function montarQuestao(questao: Questao, ctx: ContextoDaQuestao): Questao
 }
 
 /**
+ * A questão com CONTEXTO: a pergunta sobre um texto ou um diálogo, e a próxima
+ * fala. O prompt é `composite` com o contexto dentro (a versão publicada não
+ * depende do material), e na próxima fala a fala da vez é a RESPOSTA: o que o
+ * professor escreve nos campos vira o texto dela no diálogo, para o roteiro e o
+ * cartão mostrarem a mesma coisa.
+ */
+function montarComContexto(
+	questao: Questao,
+	contexto: ContextoNaQuestao,
+	ctx: ContextoDaQuestao,
+	gravada: Gravada | null
+): QuestaoMontada {
+	const { campos } = questao;
+	const texto = questao.texto.trim();
+	const pergunta = contexto.tipo === 'texto' || contexto.ate === null;
+	if (pergunta && !texto) {
+		return falha(
+			contexto.tipo === 'texto'
+				? 'Escreva a pergunta sobre o texto.'
+				: 'Escreva a pergunta sobre o diálogo.'
+		);
+	}
+	if (
+		campos.interacao === 'speak' &&
+		gravada?.interaction.type !== 'speak' &&
+		!ctx.capacidades.asr
+	) {
+		return falha(
+			'A transcrição de fala está desligada: questão de fala não teria como ser corrigida.'
+		);
+	}
+
+	let promptContexto: ContextoDoPrompt;
+	if (contexto.tipo === 'texto') {
+		const trecho = contexto.texto.trim();
+		if (!trecho) return falha('O trecho do texto está vazio.');
+		promptContexto = { tipo: 'texto', texto: trecho };
+	} else {
+		const falas = contexto.falas
+			.map((f) => ({ falante: f.falante.trim() || 'A', texto: f.texto.trim() }))
+			.filter((f) => f.texto);
+		if (falas.length < 2) return falha('O diálogo precisa de pelo menos duas falas.');
+		if (contexto.ate !== null && (contexto.ate < 1 || contexto.ate >= falas.length)) {
+			return falha('Escolha qual fala é a vez do aluno.');
+		}
+		if (contexto.mostra !== 'texto' && (!ctx.capacidades.tts || ctx.alvo.tts.voices.length === 0)) {
+			return falha(
+				'Sem voz para este idioma agora: o aluno receberia um diálogo mudo. Escolha "Só texto".'
+			);
+		}
+		if (contexto.ate !== null) {
+			const resposta =
+				campos.interacao === 'choice'
+					? (campos.opcoes[campos.certa] ?? '').trim()
+					: 'frase' in campos
+						? campos.frase.trim()
+						: '';
+			if (resposta) falas[contexto.ate] = { ...falas[contexto.ate]!, texto: resposta };
+		}
+		promptContexto = {
+			tipo: 'dialogo',
+			falas,
+			ate: contexto.ate ?? undefined,
+			mostra: contexto.mostra
+		};
+	}
+
+	// A escuta de um diálogo é das FALAS: a resposta não é "a frase do áudio", que
+	// é a regra da escuta de uma frase só (`payloadDe`).
+	const montado = payloadDe(
+		questao.tipo === 'escuta' ? { ...questao, tipo: 'leitura' } : questao,
+		campos,
+		ctx,
+		gravada
+	);
+	if (!montado.ok) return montado;
+	const validado = getInteraction(campos.interacao).authoringSchema.safeParse(montado.payload);
+	if (!validado.success) return falha('Os campos desta questão não formam um exercício ainda.');
+
+	const chave = chaveDoContexto(contexto, campos.interacao);
+	const padrao = instructionText(chave);
+	const escrito = questao.enunciado.trim();
+	return {
+		ok: true,
+		prompt: semVazios({
+			kind: 'composite' as const,
+			text: pergunta ? texto : undefined,
+			instructionKey: chave,
+			instruction: escrito && escrito !== padrao ? escrito : undefined,
+			contexto: promptContexto
+		}),
+		interaction: { type: campos.interacao, payload: validado.data },
+		grading: semVazios(gradingDe(campos, gravada)),
+		audioMudou: false
+	};
+}
+
+/**
  * O caminho inverso: a questão gravada como o editor a abre. É a tela do
  * PROFESSOR, atrás do guard — o gabarito vem junto, na moldura âmbar.
  *
@@ -395,9 +537,28 @@ export function questaoDoItem(
 	const prompt = promptSchema.parse(item.prompt);
 	const interaction = interactionSchema.parse(item.interaction);
 	const grading = gradingSchema.parse(item.grading);
-	const tipo = tipoDaQuestao(prompt.kind, interaction.type);
+	const tipo = tipoDaQuestao(prompt.kind, interaction.type, mostraDoPrompt(prompt));
 	const enunciado = prompt.instruction?.trim() || instructionText(prompt.instructionKey);
-	const base = { tipo, enunciado, texto: prompt.text ?? '' };
+	// O contexto (o trecho, o diálogo) abre junto, para salvar não o perder.
+	const contexto: ContextoNaQuestao | undefined =
+		prompt.kind !== 'composite' || !prompt.contexto
+			? undefined
+			: prompt.contexto.tipo === 'texto'
+				? { tipo: 'texto', texto: prompt.contexto.texto }
+				: {
+						tipo: 'dialogo',
+						falas: prompt.contexto.falas.map((f) => ({ falante: f.falante, texto: f.texto })),
+						ate: prompt.contexto.ate ?? null,
+						mostra: prompt.contexto.mostra
+					};
+	// Na próxima fala, a frase do "montar" é a fala da vez (o item guarda só as peças).
+	const falaDaVez =
+		contexto?.tipo === 'dialogo' && contexto.ate !== null
+			? contexto.falas[contexto.ate]?.texto
+			: undefined;
+	const base = { tipo, enunciado, texto: prompt.text ?? '', ...(contexto ? { contexto } : {}) };
+	if (falaDaVez && interaction.type === 'assemble')
+		extra = { ...extra, fraseDoMaterial: falaDaVez };
 	const validado = getInteraction(interaction.type).authoringSchema.safeParse(interaction.payload);
 	const payload: Record<string, unknown> = validado.success
 		? (validado.data as Record<string, unknown>)
@@ -475,13 +636,18 @@ export function questaoDoItem(
 				}
 			};
 		}
-		case 'speak':
+		case 'speak': {
+			// A Pronúncia abre com o rigor dela: é o que mostra o seletor no formulário.
+			const fala = speakAuthoringSchema.safeParse(interaction.payload);
+			const pronuncia = fala.success ? fala.data.pronuncia : undefined;
 			return {
 				...base,
 				campos: {
 					interacao: 'speak',
-					frase: typeof payload.target === 'string' ? payload.target : ''
+					frase: typeof payload.target === 'string' ? payload.target : '',
+					...(pronuncia ? { rigor: pronuncia.rigor ?? 'normal' } : {})
 				}
 			};
+		}
 	}
 }

@@ -20,6 +20,7 @@
 	import { som } from '$lib/client/sons.svelte';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import AnswerFeedback from '$lib/components/interactions/AnswerFeedback.svelte';
+	import ContextoDaQuestao from '$lib/components/ContextoDaQuestao.svelte';
 	import AudioPlayer from '$lib/components/AudioPlayer.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import Loading from '$lib/components/Loading.svelte';
@@ -58,6 +59,8 @@
 	const atual = $derived(respostas[indice] ?? null);
 	const item = $derived(atual?.questao.item ?? null);
 	const ultima = $derived(indice >= total - 1);
+	/** Diálogo ou texto antes da pergunta: o bloco que rola por dentro, como na `/q/[n]`. */
+	const temBloco = $derived(!!item?.contexto);
 	let comecouEm = $state(0);
 	let terminouEm = $state(0);
 
@@ -245,7 +248,8 @@
 	     que o aluno vê, e o que está fora é do professor — sair, e saber que nada
 	     do que ele responder aqui fica salvo. -->
 	<div
-		class="flex shrink-0 items-center gap-3 border-b border-line bg-base-200 px-4 py-2 lg:border-0 lg:px-8 lg:pt-4 lg:pb-3"
+		class="flex shrink-0 items-center gap-3 border-b border-line bg-base-200 px-4 py-2 lg:border-0 lg:px-8 lg:pt-4 lg:pb-3
+		       lg:baixa:pt-2.5 lg:baixa:pb-2"
 	>
 		<a
 			href={fechar}
@@ -281,8 +285,8 @@
 	</div>
 
 	<div
-		class="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:mb-8 lg:max-w-[1100px] lg:rounded-[20px]
-		       lg:border lg:border-line lg:bg-base-100 lg:shadow-[0_24px_56px_-40px_rgb(var(--shadow)/0.4)]"
+		class="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:mb-8 lg:max-w-[1100px] lg:rounded-[20px] lg:border
+		       lg:border-line lg:bg-base-100 lg:shadow-[0_24px_56px_-40px_rgb(var(--shadow)/0.4)] lg:baixa:mb-4"
 	>
 		{#if etapa === 'fim'}
 			<ResultadoDaPrevia
@@ -297,7 +301,8 @@
 			/>
 		{:else if atual}
 			<header
-				class="flex items-center gap-3 px-4 pt-4 pb-3 lg:gap-[18px] lg:border-b lg:border-line lg:px-10 lg:py-4"
+				class="flex items-center gap-3 px-4 pt-4 pb-3 lg:gap-[18px] lg:border-b
+				       lg:border-line lg:px-10 lg:py-4 max-lg:baixa:pt-2.5 max-lg:baixa:pb-2 lg:baixa:py-2.5"
 			>
 				{#if indice > 0}
 					<button
@@ -352,24 +357,33 @@
 			</header>
 
 			<form onsubmit={verificar} class="flex min-h-0 flex-1 flex-col">
-				<!-- É ESTE o container que rola, com `safe center` (design-system.md
-				     "Dois contextos"): o mesmo da `/q/[n]`. -->
+				<!-- A área da questão, a mesma da `/q/[n]`: a questão cabe nela sem
+				     rolar, e quem não cabe é o bloco do diálogo ou do texto
+				     (design-system.md "Player numa tela só"). -->
 				<div
 					bind:this={area}
 					tabindex="-1"
-					class="relative flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-5 py-[18px] outline-none
-					       lg:grid lg:grid-cols-2 lg:[align-content:safe_center] lg:items-center lg:gap-14 lg:px-16
-					       {gradeNaTela && tecladoAberto ? 'lg:py-6' : 'lg:py-13'}"
+					class="relative flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-5 py-[18px] outline-none lg:grid
+					       lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)] lg:[align-items:safe_center] lg:gap-14 lg:px-16 max-lg:baixa:py-3 max-lg:muito-baixa:py-2.5
+					       {gradeNaTela && tecladoAberto
+						? 'lg:py-6'
+						: 'lg:py-[clamp(1.25rem,5vh,3.25rem)] lg:baixa:py-5'}"
 				>
 					<!-- No celular a questão começa colada no topo: a faixa de cima cairia
 					     atrás do rótulo e do enunciado (a mesma da `/q/[n]`). -->
 					<AmbientShapes edges="both" edgesNoCelular="bottom" />
 
 					{#key indice}
-						<div class="relative z-1 min-w-0 {movimento}" style="--q-shift: {deslocamento}">
+						<!-- Com um bloco, a coluna é flex e ele fica com a sobra (a `/q/[n]`). -->
+						<div
+							class="relative z-1 min-w-0 {temBloco
+								? 'flex grow flex-col lg:max-h-full lg:min-h-0'
+								: ''} {movimento}"
+							style="--q-shift: {deslocamento}"
+						>
 							{#if item}
 								<p
-									class="mb-3 flex items-center gap-[9px] text-[11.5px] font-bold tracking-[0.08em] uppercase lg:mb-[15px] lg:text-xs
+									class="mb-3 flex shrink-0 items-center gap-[9px] text-[11.5px] font-bold tracking-[0.08em] uppercase lg:mb-[15px] lg:text-xs baixa:mb-2 lg:baixa:mb-2.5
 								       {item.skill === 'listening' || item.skill === 'speaking' ? 'text-accent' : 'text-primary'}"
 								>
 									<svg
@@ -389,19 +403,22 @@
 									{item.skillLabel}{item.gradingLabel ? ` · ${item.gradingLabel}` : ''}
 								</p>
 								<h1
-									class="mb-3.5 font-display text-title font-semibold tracking-[-0.025em] text-pretty lg:mb-3.5"
+									class="mb-3.5 shrink-0 font-display text-title font-semibold tracking-[-0.025em] text-pretty
+									       baixa:mb-2.5 baixa:text-[clamp(1.375rem,1rem+1vw,1.75rem)]"
 								>
 									{item.prompt}
 								</h1>
 
 								{#if item.hint}
-									<p class="mb-7 hidden text-[15px] leading-[1.6] text-base-content/65 lg:block">
+									<p
+										class="mb-7 hidden shrink-0 text-[15px] leading-[1.6] text-base-content/65 lg:block baixa:mb-4"
+									>
 										{item.hint}
 									</p>
 								{/if}
 
 								{#if item.audio}
-									<div class="mb-[18px] lg:mt-7 lg:mb-0">
+									<div class="mb-[18px] shrink-0 lg:mt-7 lg:mb-0 max-lg:baixa:mb-3 lg:baixa:mt-4">
 										<AudioPlayer
 											src={item.audio}
 											srcSlow={item.audioSlow}
@@ -409,14 +426,16 @@
 											onplay={() => atual && atual.plays++}
 										/>
 										{#if viewport.desktop}
-											<p class="mt-5 flex items-center gap-2.5 text-[12.5px] text-base-content/65">
+											<p
+												class="mt-5 flex items-center gap-2.5 text-[12.5px] text-base-content/65 baixa:mt-3"
+											>
 												<span class={kbd}>Espaço</span> tocar de novo
 											</p>
 										{/if}
 									</div>
-								{:else if item.skill === 'listening'}
+								{:else if item.skill === 'listening' && !item.contexto}
 									<!-- Só a prévia vê isto: com áudio faltando, o link nem abre para o
-									     aluno (server.md "TTS"). -->
+									     aluno (server.md "TTS"). O diálogo avisa no próprio diálogo. -->
 									<p
 										class="mb-[18px] flex items-start gap-2.5 rounded-box border border-line bg-base-200 px-4 py-3 text-[13.5px] leading-snug text-base-content/70 lg:mt-7 lg:mb-0"
 									>
@@ -447,7 +466,9 @@
 											Em {item.sourceLabel}
 										</p>
 									{/if}
-									<div class="mb-5 rounded-box border border-line bg-base-200 p-4">
+									<div
+										class="mb-5 rounded-box border border-line bg-base-200 p-4 baixa:mb-3 baixa:p-3.5"
+									>
 										<p
 											dir={item.interaction === 'assemble' ? item.sourceDir : item.dir}
 											class="font-content text-[17px] leading-[1.65]"
@@ -455,6 +476,11 @@
 											{item.passage}
 										</p>
 									</div>
+								{/if}
+
+								<!-- O trecho ou o diálogo antes da pergunta, como na `/q/[n]`. -->
+								{#if item.contexto}
+									<ContextoDaQuestao contexto={item.contexto} dir={item.dir} ajustavel />
 								{/if}
 							{:else}
 								<!-- A questão cujos campos não formam um exercício: o aluno não a
@@ -479,9 +505,20 @@
 
 					{#key indice}
 						<div
-							class="relative z-1 flex min-w-0 flex-1 flex-col {movimento}"
+							class="relative z-1 flex min-w-0 flex-1 flex-col {temBloco
+								? 'max-lg:grow-0'
+								: ''} {movimento}"
 							style="--q-shift: {deslocamento}"
 						>
+							<!-- A pergunta abre a coluna da resposta, como na `/q/[n]`. -->
+							{#if item?.pergunta}
+								<p
+									dir={item.dir}
+									class="mb-5 font-content text-[19px] leading-snug font-semibold baixa:mb-3 baixa:text-[17px]"
+								>
+									{item.pergunta}
+								</p>
+							{/if}
 							{#if !item}
 								<a
 									href={resolve('/(studio)/atividades/[id]/itens/[itemId]', {
@@ -493,8 +530,10 @@
 								>
 							{:else if item.interaction === 'choice'}
 								<ChoiceInteraction {item} bind:value={atual.escolha} desktop={viewport.desktop} />
-								{#if viewport.desktop}
-									<p class="mt-3.5 flex items-center gap-2.5 text-[12.5px] text-base-content/65">
+								{#if viewport.desktop && !atual.respondida}
+									<p
+										class="mt-3.5 flex items-center gap-2.5 text-[12.5px] text-base-content/65 baixa:mt-2.5"
+									>
 										{#each item.options as opt, i (opt.id)}<span class={kbd}>{i + 1}</span>{/each} escolher
 										pelo número
 									</p>
@@ -523,7 +562,13 @@
 									tecladoNaTela
 								/>
 							{:else if item.interaction === 'assemble'}
-								<AssembleInteraction {item} bind:chosen={atual.montagem} />
+								<AssembleInteraction
+									{item}
+									bind:chosen={atual.montagem}
+									dicaDeTeclado={viewport.desktop}
+									corrigida={atual.respondida}
+									feedback={atual.feedback}
+								/>
 							{:else if item.interaction === 'select'}
 								<SelectInteraction {item} bind:value={atual.selecao} />
 							{:else if item.interaction === 'match'}
@@ -535,7 +580,7 @@
 									feedback={atual.feedback}
 								/>
 							{:else if item.interaction === 'order'}
-								<OrderInteraction {item} bind:order={atual.ordem} />
+								<OrderInteraction {item} bind:order={atual.ordem} feedback={atual.feedback} />
 							{:else if item.interaction === 'speak'}
 								<SpeakInteraction
 									{item}
@@ -555,10 +600,17 @@
 								<AnswerFeedback
 									state={atual.feedback.state}
 									hint={atual.feedback.hint}
-									marks={item.interaction === 'match' ? undefined : atual.feedback.marks}
-									expected={item.interaction === 'match' ? undefined : atual.feedback.expected}
+									marks={item.interaction === 'assemble' ||
+									item.interaction === 'match' ||
+									item.interaction === 'order'
+										? undefined
+										: atual.feedback.marks}
+									expected={item.interaction === 'match' || item.interaction === 'order'
+										? undefined
+										: atual.feedback.expected}
 									heard={atual.feedback.heard}
 									dir={item.dir}
+									porSilaba={Array.isArray(item.silabas)}
 								/>
 							{/if}
 							{#if atual.erro}
@@ -602,7 +654,8 @@
 				{/if}
 
 				<footer
-					class="flex items-center gap-2.5 border-t border-line px-5 pt-3.5 pb-[22px] lg:gap-4 lg:px-16 lg:pt-5 lg:pb-[26px]"
+					class="flex items-center gap-2.5 border-t border-line px-5 pt-3.5 pb-[22px] lg:gap-4 lg:px-16
+					       lg:pt-5 lg:pb-[26px] max-lg:baixa:pt-3 max-lg:baixa:pb-3.5 lg:baixa:pt-3.5 lg:baixa:pb-4"
 				>
 					{#if gradeNaTela && !atual.respondida && !tecladoAberto}
 						<button

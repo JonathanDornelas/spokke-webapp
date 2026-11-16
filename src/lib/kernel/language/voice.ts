@@ -29,6 +29,46 @@ export function vozDoTexto(profile: LanguageProfile, texto: string): string | nu
 }
 
 /**
+ * Qual voz fala por uma PESSOA de um diálogo.
+ *
+ * No diálogo a voz sai do falante, e não do texto: com `vozDoTexto` cada fala
+ * de "Ana" sairia num timbre, e o aluno não acompanharia quem diz o quê.
+ * Duas pessoas nunca dividem a voz enquanto o idioma tiver vozes para todas:
+ * o elenco inteiro (na ordem em que aparece) escolhe um ponto de partida, e
+ * cada pessoa anda um passo primo com o total de vozes a partir dele. O passo
+ * é perto da metade da lista porque as listas vêm agrupadas por timbre
+ * (as femininas, depois as masculinas): duas pessoas tendem a soar diferentes.
+ *
+ * Determinística como a outra: o mesmo diálogo dá as mesmas vozes no
+ * servidor, no worker e no Player, e a mesma fala na mesma voz é o mesmo
+ * arquivo (db.md "MediaAsset").
+ */
+export function vozDoFalante(
+	profile: LanguageProfile,
+	falantes: string[],
+	falante: string
+): string | null {
+	const vozes = profile.tts.voices;
+	if (vozes.length === 0) return null;
+	const elenco = [...new Set(falantes.map((f) => f.trim()))];
+	const posicao = Math.max(0, elenco.indexOf(falante.trim()));
+	const n = vozes.length;
+	const partida = indiceEstavel(elenco.join('|'), n);
+	return vozes[(partida + posicao * passoPrimo(n)) % n]!;
+}
+
+function passoPrimo(n: number): number {
+	if (n <= 2) return 1;
+	let passo = Math.floor(n / 2);
+	while (mdc(passo, n) !== 1) passo += 1;
+	return passo;
+}
+
+function mdc(a: number, b: number): number {
+	return b === 0 ? a : mdc(b, a % b);
+}
+
+/**
  * Um índice estável a partir de uma string. FNV-1a de 32 bits: pequeno,
  * síncrono e isomórfico — o kernel não importa `node:crypto`, e um `hash`
  * assíncrono aqui contaminaria todo o caminho de montagem do item.

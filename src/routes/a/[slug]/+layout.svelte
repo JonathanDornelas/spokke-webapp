@@ -23,7 +23,7 @@
      para fora da tela e o botão de verificar ficava abaixo da dobra.
      `min-h-0` no cartão porque item de flex não encolhe abaixo do conteúdo sem
      ele, e a área rolável nunca chegava a existir. -->
-<div class="flex h-dvh flex-col overflow-hidden bg-base-100 lg:bg-base-200 lg:py-8">
+<div class="flex h-dvh flex-col overflow-hidden bg-base-100 lg:bg-base-200 lg:py-8 lg:baixa:py-4">
 	<div
 		class="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden lg:max-w-[1100px] lg:rounded-[20px]
 		       lg:border lg:border-line lg:bg-base-100 lg:shadow-[0_24px_56px_-40px_rgb(var(--shadow)/0.4)]"

@@ -387,8 +387,10 @@ recarregar a página. Arquivo lento que não carregou (síntese na fila, job que
 a tentativa — quem instrumenta isso é o `onplay` que a tela passa.
 
 No celular as pílulas de velocidade descem para uma linha própria rotulada "Velocidade": em
-largura de telefone elas espremem a onda contra o botão de tocar. **`emLinha` desliga isso**: tocar,
-onda e velocidade numa linha só em QUALQUER tela. É o celular da home — ele tem sempre a largura de
+largura de telefone elas espremem a onda contra o botão de tocar. **Na tela baixa (`baixa:`) ela
+volta para a linha do tocar**, sem o rótulo: a segunda linha custava uns 70px, a diferença entre
+a questão de escuta caber ou rolar (design-system.md "Player numa tela só"). **`emLinha` faz o
+mesmo em QUALQUER tela**: tocar, onda e velocidade numa linha só. É o celular da home — ele tem sempre a largura de
 um telefone, mas quem decide o breakpoint é a tela de quem o vê, e no celular de verdade a segunda
 linha empurrava a questão para fora da tela do aparelho.
 
@@ -489,6 +491,7 @@ microfone está captando, não decoração — centrada ela pulsa para os dois l
 carregamento.
 `size="lg"` (108px em vez de 96px) é o que `player/SpeakInteraction.svelte` usa — é o único lugar
 que precisa do botão maior; em qualquer outro contexto (catálogo, demo) o padrão `md` está certo.
+Na tela baixa o `lg` volta aos 96px, com menos vão até a linha de baixo.
 
 ---
 
@@ -1122,7 +1125,8 @@ Props: `{ questao: QuestaoResumida; dir?; lang?; tamanho?: 'normal' | 'pequena';
 O cartão do Claude Design que mostra uma questão em miniatura, do jeito que o aluno a vê: o rótulo da
 habilidade com o ícone, o miolo e a legenda do que ele faz ("Ouve e escolhe a frase"). Um desenho
 por forma de questão (`$lib/atividades/questao-resumida.ts`: ouvir e escolher, montar ou digitar;
-falar; ler e escolher; lacuna; montar; digitar; ordenar; associar; tocar na palavra), todos no mesmo
+falar; ler e escolher; lacuna; montar; digitar; ordenar; associar; tocar na palavra; a conversa, com as duas últimas falas antes da vez e a pergunta ou o "sua vez";
+a pronúncia, com a boca pequena, a palavra e as sílabas), todos no mesmo
 vocabulário — o círculo de tocar e a onda na cor do áudio, a alternativa certa com a borda da marca
 (tela do professor), a lacuna sublinhada.
 
@@ -1235,10 +1239,12 @@ Cada interação abre com um RÓTULO do que se espera ("Escolha uma resposta", "
 coluna da direita é um campo solto sem pergunta. Em `match` os cabeçalhos das colunas são os
 nomes dos idiomas, que chegam pelo runtime (`sourceLabel`/`targetLabel`) — não são gabarito.
 
-O celular da home passa três props que só ele usa (paginas.md "Exemplo"): `dicaDeTeclado={false}` no
-`AssembleInteraction`, e `corrigida` no `AssembleInteraction` (as peças que sobraram saem) e no
-`SpeakInteraction` (o microfone e o "Entendemos" saem — o veredito já diz o que se ouviu). Ali a
-questão inteira tem de caber na tela do aparelho; no Player elas ficam no padrão.
+Respondida a questão, a tela passa `corrigida` ao `AssembleInteraction` (as peças que sobraram
+saem, as montadas param de se mexer e as fora do lugar ficam grifadas pelo `feedback`) e ao
+`SpeakInteraction` (o microfone e o "Entendemos" saem — o veredito já diz o que se ouviu). A dica
+de teclado do montar (`dicaDeTeclado`) só existe no desktop do Player; o celular da home a tira
+sempre. É o que deixa a questão e o veredito caberem na tela sem rolar (design-system.md "Player
+numa tela só").
 
 `AssembleInteraction` ignora um id já escolhido: duplo clique rápido chega duas vezes antes do
 re-render tirar o token do banco, e o mesmo id duas vezes rebenta o `{#each}` com chave.
@@ -1247,7 +1253,18 @@ re-render tirar o token do banco, e o mesmo id duas vezes rebenta o `{#each}` co
 arrastar. Não é redundância: arrastar é o gesto natural de reordenar, as setas são o caminho
 do teclado, do leitor de tela e de quem tem dificuldade motora — e, ao contrário de um alvo
 arrastável, elas dizem o que fazem. Quem arrasta é a linha inteira; a alça de pontinhos é
-decorativa (`aria-hidden`), porque sozinha ela seria um alvo de 20px no celular.
+decorativa (`aria-hidden`), porque sozinha ela seria um alvo de 20px no celular — e no celular ela
+sai, porque cada pixel de largura ali é uma linha de texto a menos. A instrução é UMA linha
+("Arraste as falas ou use as setas"): o título já diz o que fazer.
+**Recebe o `feedback`, como o `MatchInteraction`**: respondida, as falas travam (sem arrastar e
+sem setas) e cada uma diz se está no lugar (o check) ou qual é o lugar dela ("é a 3ª", com o X e a
+borda vermelha), com o texto para o leitor de tela. A posição certa sai de `feedback.expected`,
+procurando o texto da fala; fala repetida fica com a primeira posição livre. O veredito de fora fica
+só com a linha de estado.
+
+`AssembleInteraction` também recebe o `feedback`: corrigida, a peça fora do lugar é grifada NA
+FRASE MONTADA (sublinhado ondulado, borda e "(fora do lugar)" para o leitor de tela), e o veredito
+de fora traz só a frase certa — antes ele repetia a frase do aluno inteira para grifar.
 
 `MatchInteraction` recebe o `feedback` e é ELE quem mostra a correção: ligação errada pinta os
 dois cartões de vermelho, e o veredito de fora fica só com a linha de estado — ver paginas.md
@@ -1256,7 +1273,7 @@ na mesma ordem em que o componente os mandou. **As duas colunas dividem as LINHA
 (`grid-rows-subgrid`, cada coluna ocupando todas): a linha tem a altura do cartão mais alto dos
 dois lados. Com uma grade por coluna, "estante de livros" quebrando em duas linhas descia a coluna
 inteira da direita, e os cartões deixavam de ficar lado a lado. Navegador sem `subgrid` volta às
-duas grades soltas.
+duas grades soltas. A dica do pé ("Toque numa palavra, depois no sentido") sai depois de responder.
 
 `SpeakInteraction.svelte` compõe `Recorder.svelte` (`size="lg"`) em vez de duplicar o botão de
 gravação — mesma lógica de reuso do resto do catálogo. `AssembleInteraction.svelte` usa
@@ -1282,6 +1299,70 @@ corrigir** (o palco da revisão), `resposta()` devolve a resposta no formato do 
 interação — nula quando ainda não há o que corrigir, e na fala e na escrita livre — e `veredito`,
 o que o servidor respondeu, aparece embaixo como no Player (a lacuna e o associar também o usam
 para pintar a própria resposta).
+
+## O diálogo e o trecho antes da pergunta — `ContextoDaQuestao.svelte`
+
+Props: `{ contexto: ContextoNoRuntime; dir?; lang?; compacta?; ajustavel? }`. O que vem ANTES da pergunta num
+`composite` (kernel.md "O contexto do prompt"): o trecho de um texto numa caixa, ou o diálogo em
+balões. O servidor já cortou o que o aluno não pode ver; o componente desenha o que chegou.
+
+- **Um balão por fala, um lado por pessoa** (a primeira à esquerda, a segunda à direita: `lado`), com
+  o nome em cima. Em "só áudio" o balão é uma onda, e o leitor de tela ouve "Fala de Sam, só em
+  áudio."
+- **"Sua vez"** é o balão tracejado na cor da marca, do lado de quem fala: a vez do aluno.
+- **"Ouvir o diálogo" toca inteiro**, uma fala depois da outra, com o balão de quem fala aceso, e cada
+  balão repete a sua. "Normal" / "Devagar" troca para os arquivos lentos. Sem autoplay.
+- Sem áudio ainda (a síntese na fila), uma linha diz isso no lugar dos botões, e o palco e a prévia
+  não repetem o aviso embaixo.
+- **A pergunta não mora aqui**: ela abre a coluna da RESPOSTA, na `/q/[n]` e na prévia. No desktop
+  fica ao lado das alternativas; no pé de um diálogo longo, ficava fora da vista.
+- **`ajustavel`** (a `/q/[n]` e a prévia do aluno): os balões, ou o texto, ficam com a altura que
+  SOBRA na coluna e rolam por dentro — no celular a área nasce com 5,5rem e cresce com a sobra, no
+  desktop tem a altura do conteúdo e encolhe até caber (design-system.md "Player numa tela só").
+  A área é uma região focável ("O diálogo", "O texto"), para o teclado rolar também; o texto curto
+  não estica a caixa (a caixa vai dentro da área transparente). **Na próxima fala ela abre no FIM**,
+  com o "Sua vez" à vista, e fica lá enquanto o tamanho muda (um `ResizeObserver`), até o aluno
+  rolar por conta própria; tocando o diálogo inteiro, o balão de quem fala entra na vista. Fora
+  do Player (o celular do Studio, a home) o bloco tem a altura do conteúdo.
+- O áudio é parado num `$effect`, não em `onDestroy`, que roda também no servidor.
+
+## A Pronúncia — `pronuncia/PronunciaDaPalavra.svelte` + `BocaDaPronuncia.svelte` + `formas.ts`
+
+`PronunciaDaPalavra` — props `{ palavra; silabas: { leitura, tonica }[]; passos: PassoDaBoca[]; audio?; audioSlow?; dir?; compacta? }`.
+A boca, a palavra, as sílabas como se leem (a tônica em caixa alta, na cor da marca) e "Ouvir" /
+"Devagar". **A boca anda junto do som**: cada passo tem um peso (`passosDaBoca`, do kernel), e a
+fração do tempo do áudio diz em que passo ela está; sem o arquivo (a síntese na fila) ela anda pelo
+peso, num ritmo fixo, para o professor ver na prévia. Tocar numa sílaba mostra a boca dela, parada,
+que é o treino da sílaba que saiu diferente, e um `aria-live` diz o formato. O quadro é cancelado
+num `$effect`: `onDestroy` roda no servidor, onde `cancelAnimationFrame` não existe (era um 500).
+
+`BocaDaPronuncia` — props `{ visema; tamanho?; decorativa? }`. A boca de FRENTE num dos quinze
+visemas, **desenhada por dado** (`formas.ts`: largura, abertura, quanto os lábios arredondam, quanto
+dos dentes aparece, onde está a língua; `desenharBoca` faz os traços). É o PLACEHOLDER da arte
+final, no estilo da referência que o dono do repositório escolheu (ilustração plana, fundo
+azul-claro, contorno na cor da marca, a boca escura com os dentes brancos); o traçado é nosso, e
+trocar a arte é trocar `formas.ts`. As cores são da ILUSTRAÇÃO (`--color-boca-*`, design-system.md
+"Tema"), iguais nos dois temas. Animando ela é `decorativa`, porque o nome mudaria a cada som;
+parada, é um `img` com o nome do formato ("lábios em bico, abertura pequena e redonda").
+**Os pares que a questão existe para separar precisam se ver diferentes**, e foi o que a revisão
+dos quadros acertou: no th a língua fica NA FRENTE, maior, entre as duas fileiras de dentes (as de
+baixo à mostra); no t, d, n e l ela sai de TRÁS dos dentes de cima, que cobrem a ponta
+(`lingua.atras`) — antes os dois quadros eram iguais, e "think" dito "tink" é o erro mais comum. No
+f e no v o lábio de baixo sobe por dentro e encosta nos dentes de cima (`labioNoDente`, no azul do
+quadro para não se fundir com o branco dos dentes), em vez do vão escuro de uma boca entreaberta —
+é o contato que separa o f do p.
+
+`AnswerFeedback` ganha `porSilaba`: na Pronúncia o veredito mostra as sílabas com a que saiu
+diferente grifada (e uma linha `sr-only` dizendo quais), e some quando todas bateram; o "Ouvimos"
+dele vai em mono, porque ali são os SONS na escrita das sílabas ("prai · aw · huh · tee"). Os
+rótulos "Ouvimos:" e "O certo era:" vão na linha do conteúdo, e os pedaços da resposta certa se
+separam por margem, nunca por um espaço no texto (regra nº 5). Na tela de verdade as marcas de
+montar, associar e ordenar não chegam a ele: ficam na interação.
+
+Na tela baixa a boca da `PronunciaDaPalavra` desce de 124 para 96px e a palavra, de 30 para 26.
+`SpeakInteraction` desenha a `PronunciaDaPalavra` acima do microfone quando o item tem sílabas, e o
+quadro de antes de enviar vira "Ouvimos" (os sons, em mono) no lugar de "Entendemos" (uma frase).
+Catálogo: `/dev/components#pronuncia` (os quinze visemas e "priority").
 
 ## Nomes em português — habilidade e tipo de questão
 

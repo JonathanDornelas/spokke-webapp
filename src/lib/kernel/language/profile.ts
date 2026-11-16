@@ -6,6 +6,7 @@
  */
 
 import type { EntradaDoIdioma } from './teclado';
+import type { RegrasDePronuncia } from './pronuncia';
 
 export type Normalizer = 'nfkc' | 'lowercase' | 'strip-punct' | 'strip-space';
 
@@ -92,4 +93,12 @@ export interface LanguageProfile {
 	 *   que mantém o sentido (`server/atividades/variantes-aceitas.ts`).
 	 */
 	sujeitoOmitivel?: { pronomes: string[]; conjuncoes: string[] };
+	/**
+	 * A PRONÚNCIA de palavra (`language/pronuncia.ts`): o alfabeto de fonemas do
+	 * dicionário do servidor, quais são vogais (o núcleo de cada sílaba), os
+	 * ataques de sílaba que o idioma permite, como cada fonema se escreve para o
+	 * aluno ler ("aw", "ruh") e o formato da boca de cada um. Sem ela, o idioma
+	 * não tem a questão de Pronúncia — nenhum `if` de idioma decide isso.
+	 */
+	pronuncia?: RegrasDePronuncia;
 }

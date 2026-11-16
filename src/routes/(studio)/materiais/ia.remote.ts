@@ -61,7 +61,8 @@ export const gerarPropostasIa = command(
 			pedido,
 			quantos,
 			idiomaAlvo: labelForTag(idiomas.alvo),
-			idiomaOrigem: labelForTag(idiomas.origem)
+			idiomaOrigem: labelForTag(idiomas.origem),
+			tags: idiomas
 		});
 	}
 );
@@ -83,11 +84,14 @@ export const aceitarPropostasIa = command(
 	}),
 	async ({ kind, propostas, activityId, idioma }) => {
 		const teacher = teacherOf();
-		if (activityId && !(await atividades(teacher).byId(activityId))) {
-			error(404, 'Atividade não encontrada');
-		}
+		const atividade = activityId ? await atividades(teacher).byId(activityId) : null;
+		if (activityId && !atividade) error(404, 'Atividade não encontrada');
+		// A mesma regra do vocabulário da geração: a proposta volta do browser.
+		const tags = atividade
+			? { alvo: atividade.targetLang, origem: atividade.sourceLang }
+			: { alvo: idioma ?? 'und', origem: 'und' };
 		const unidades = propostas
-			.map((p) => validarProposta(kind, p))
+			.map((p) => validarProposta(kind, p, tags))
 			.filter((d): d is NonNullable<typeof d> => d !== null);
 		if (unidades.length === 0) {
 			return { ok: false as const, error: 'Nenhuma proposta marcada está completa.' };

@@ -203,7 +203,7 @@ export function sequenceScore<T>(
 		value: bestRatio > 0 ? Math.min(bestRatio, 0.9) : 0,
 		// Sem os rótulos não há o que grifar, então resta dizer em texto que a
 		// ordem é o problema — nunca devolver a nota sozinha, que era o bug.
-		feedback: marks ? 'Confira o que está fora de lugar:' : 'A ordem não está certa.',
+		feedback: marks ? 'Confira o que está fora de lugar.' : 'A ordem não está certa.',
 		marks,
 		expected: esperado
 	};

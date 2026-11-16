@@ -94,7 +94,9 @@ Os que vieram com planos, módulos e escola, cada um com o seu guard:
   passa pelo hook): ativar plano, trial, cancelar, atender pedido, créditos de cortesia, escolas,
   reenfileirar job.
 - `atividades.remote.ts` ganhou `arquivarAtividade`, `desarquivarAtividade` (dentro da cota),
-  `apagarAtividade` (confere o título digitado) e `definirNivel` — e as versões EM MASSA da lista:
+  `apagarAtividade` (confere o título digitado), `definirNivel` e `renomearAtividade` (o título,
+  editado no lugar na tela da atividade; `atividades(teacher).renomear`, que só toca a do
+  professor) — e as versões EM MASSA da lista:
   `arquivarAtividades`, `desarquivarAtividades` (todas cabem na cota, ou nenhuma muda) e
   `apagarAtividades` (confere "apagar" digitado). `materiais.remote.ts`, o mesmo para a biblioteca:
   `apagarMateriais`, `arquivarMateriais` e `desarquivarMateriais` (dentro da cota). Os ids vêm da
@@ -281,6 +283,16 @@ calculável no servidor, no worker e ao montar a questão. Uma atividade inteira
 treina o aluno a entender aquela pessoa, não o idioma. Saindo do texto, a frase soa igual toda
 vez que ele a encontra e o arquivo continua sendo um só.
 
+**No diálogo a voz é de QUEM FALA** (`vozDoFalante`): o elenco, na ordem em que entra, anda pela
+lista de vozes com um passo primo a partir de um ponto que sai das falas. Cada pessoa tem uma voz, a
+mesma em todas as questões daquele diálogo, e duas pessoas só dividem voz quando o idioma tem menos
+vozes que o elenco.
+
+**Os arquivos de uma questão são de três tipos** (`audiosDoItem`, `server/player/runtime.ts`): a
+frase de um prompt de áudio, cada fala de um diálogo com áudio e a palavra da Pronúncia, sempre nas
+duas velocidades. `itemAudioHashes` é a lista achatada, e é ela que a fila, a etapa 4, a limpeza e o
+envio contam: uma questão de diálogo só fica pronta com todas as falas sintetizadas.
+
 **Lista de vozes vazia = sem item de escuta naquele idioma.** É o caso do árabe hoje: o modelo
 não fala. Sem esse corte o gerador produzia item de escuta cujo TTS o provedor recusa, e a
 publicação ficava travada em "gerando áudio" para sempre.
@@ -430,6 +442,25 @@ exercício: `speak` nunca reprova de forma dura (kernel.md) e o "Pular" do rodap
 
 `ASR_PROVIDER` vazio significa **sem item de fala** — o gerador nem produz.
 
+**Na Pronúncia quem ouve é o RECONHECEDOR DE FONEMAS, não o Whisper** (`ouvirFala`,
+`server/pronuncia`, o caminho único do Player e da prévia). O Whisper é modelo de língua e devolve a
+palavra certa de uma pronúncia torta; o reconhecedor (`POST /v1/asr/phonemes` do serviço de áudio,
+um wav2vec2 afinado para fonemas) devolve os SONS, cada um com a certeza e as alternativas que ele
+considerou (`reconhecerFonemas`, `server/audiotext/client.ts`). A resposta vira
+`{ transcript, sons }`, e o `transcript` é a leitura desses sons no rigor da questão ("prai · aw ·
+huh · tee", `compararSons`) — é o que a tela mostra como "Ouvimos" antes do "Verificar". E é mais
+barato: ~0,2 s por palavra, contra ~1,4 s do Whisper, que processa sempre uma janela de 30 s.
+
+- **O que se ouviu é guardado INTEIRO na pré-transcrição** (`pre-transcricao.ts` guarda a resposta,
+  não só o texto): o "Verificar" corrige exatamente o que a tela mostrou, sem rodar modelo de novo.
+- **Sem o reconhecedor, a reserva é a de antes**: um 503 (motor desligado, carregando) ou 404
+  (serviço anterior a ele) põe a Pronúncia na transcrição do Whisper por um minuto
+  (`reconhecedorForaAte`), com os fonemas do dicionário por cima (`respostaDeFala`, a resposta
+  `{ transcript, fonemas }`). Palavra fora do dicionário fica sem fonemas, e a correção diz que ouviu
+  outra palavra. O dicionário (o CMU Pronouncing Dictionary) é carregado sob demanda, na primeira
+  geração ou correção que precisa dele, e nunca vai para o browser.
+- O reconhecedor não recebe dica nem idioma: ele não tem vocabulário, e é por isso que serve.
+
 ## A fila do serviço de áudio
 
 **Serializar não é limitar, e essa era a lacuna.** O semáforo dentro de cada motor já impedia
@@ -444,7 +475,8 @@ browser dele já desistiu, mas o servidor continua trabalhando para ninguém.
 "está devolvendo 503 porque caiu ou porque está cheio?" sem abrir o log.
 
 Do lado de cá o 503 já tem tratamento: em `speak` ele vira a mensagem de pular a questão, e o
-worker da publicação tenta de novo com backoff.
+worker da publicação tenta de novo com backoff. O reconhecedor de fonemas tem a fila dele
+(`fonemas`), com o mesmo teto do ASR: uma turma inteira gravando a mesma palavra ao mesmo tempo.
 
 ## IA — "Gerar com IA" (Gemini)
 

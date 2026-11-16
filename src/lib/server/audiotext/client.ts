@@ -120,6 +120,53 @@ export async function transcrever(
 	};
 }
 
+const fonemasSchema = z.object({
+	phonemes: z.array(
+		z.object({
+			symbol: z.string(),
+			p: z.number(),
+			alternatives: z.array(z.object({ symbol: z.string(), p: z.number() })).default([])
+		})
+	)
+});
+
+/**
+ * Os SONS de uma gravação, fonema a fonema (`/v1/asr/phonemes`, o reconhecedor
+ * de fonemas do serviço): o que corrige a questão de Pronúncia. Volta no
+ * formato que a resposta do aluno guarda (`SomOuvido`, chaves curtas), e
+ * recusa resposta fora do contrato — o serviço é outro processo, outro repositório.
+ *
+ * O prazo é curto: a inferência leva uns 0,2 s por palavra, e o aluno espera
+ * o veredito com a questão aberta.
+ */
+export async function reconhecerFonemas(
+	audio: Uint8Array,
+	opcoes: { contentType?: string } = {},
+	timeoutMs = 20_000
+): Promise<{ s: string; p: number; alt?: { s: string; p: number }[] }[]> {
+	const form = new FormData();
+	form.append(
+		'file',
+		new Blob([audio as BlobPart], { type: opcoes.contentType ?? 'audio/webm' }),
+		'fala.webm'
+	);
+	const resposta = await fetch(`${baseUrl()}/v1/asr/phonemes`, {
+		method: 'POST',
+		headers: authHeaders(),
+		body: form,
+		signal: comPrazo(timeoutMs)
+	});
+	if (!resposta.ok) throw await erroDaResposta(resposta);
+	const corpo = fonemasSchema.parse(await resposta.json());
+	return corpo.phonemes.map((som) => ({
+		s: som.symbol,
+		p: som.p,
+		...(som.alternatives.length
+			? { alt: som.alternatives.map((a) => ({ s: a.symbol, p: a.p })) }
+			: {})
+	}));
+}
+
 /**
  * O idioma em que o serviço SINTETIZA. É a lista do Kokoro-82M (nove), não a
  * do Whisper (~99) — e essa assimetria é o motivo de existir.

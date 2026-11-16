@@ -1,8 +1,35 @@
 import type { z, ZodType } from 'zod';
 import type { LanguageProfile } from '../language/profile';
+import type { RigorDaPronuncia } from '../language/pronuncia';
 import type { Result, Score } from '../grading/result';
 
 export type PromptKind = 'text' | 'audio' | 'image' | 'composite';
+
+/**
+ * Como o aluno RECEBE o diálogo: o texto das falas e o áudio delas, só o áudio
+ * (escuta), ou só o texto (leitura). Na geração quem decide é o nível da
+ * atividade (`mostraDoDialogo`); no editor, o professor.
+ */
+export type MostraDoDialogo = 'ambos' | 'audio' | 'texto';
+
+export interface FalaDoContexto {
+	falante: string;
+	texto: string;
+}
+
+/**
+ * O que um prompt `composite` mostra ANTES da pergunta: o trecho de um texto,
+ * ou as falas de um diálogo. Vai DENTRO do item, copiado do material na
+ * geração: a versão publicada não pode depender do material (regra nº 7), que
+ * o professor pode apagar.
+ *
+ * No diálogo, `ate` é a fala que o ALUNO tem de produzir ("Sua vez"): só as
+ * anteriores a ela chegam ao browser, e nunca o texto dela (regra nº 1). Sem
+ * `ate`, o diálogo inteiro é o contexto (a pergunta de compreensão).
+ */
+export type ContextoDoPrompt =
+	| { tipo: 'texto'; texto: string }
+	| { tipo: 'dialogo'; falas: FalaDoContexto[]; ate?: number; mostra: MostraDoDialogo };
 
 export interface Prompt {
 	kind: PromptKind;
@@ -21,6 +48,8 @@ export interface Prompt {
 	 * interface. Quem traduz é a camada de apresentação.
 	 */
 	instructionKey?: string;
+	/** Só no `composite`: o trecho ou o diálogo que vem antes da pergunta. */
+	contexto?: ContextoDoPrompt;
 }
 
 export type InteractionKind =
@@ -77,6 +106,11 @@ export interface SelectRuntime {
 export interface SpeakRuntime {
 	target: string;
 	ipa?: string;
+	/** Só na Pronúncia: as sílabas como o aluno as lê, e os fonemas (para a boca). */
+	silabas?: { leitura: string; tonica: boolean }[];
+	fonemas?: string[];
+	/** E o rigor da correção, que a `hint` da questão diz ao aluno. Não é gabarito. */
+	rigor?: RigorDaPronuncia;
 }
 
 export type InteractionRuntime =

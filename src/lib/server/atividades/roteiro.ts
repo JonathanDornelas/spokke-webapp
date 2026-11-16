@@ -6,7 +6,7 @@ import { getInteraction } from '$lib/kernel/interactions/registry';
 import { matchAuthoringSchema } from '$lib/kernel/interactions/match';
 import { resumoDoItem, ROTULO_DO_MATERIAL } from '$lib/server/atividades/resumo';
 import { readableAnswerKey } from '$lib/server/studio/answer-key';
-import type { HabilidadeDaResumida } from '$lib/atividades/questao-resumida';
+import { habilidadeDaQuestao } from '$lib/atividades/questao-resumida';
 import type { RuntimeDaQuestao } from '$lib/components/interactions/types';
 
 /**
@@ -70,13 +70,7 @@ export function questoesDoRoteiro(
 		const prompt = promptSchema.parse(item.prompt);
 		const interaction = interactionSchema.parse(item.interaction);
 		const skills = getInteraction(interaction.type).skills(prompt);
-		const habilidade: HabilidadeDaResumida = skills.includes('listening')
-			? 'escuta'
-			: skills.includes('speaking')
-				? 'fala'
-				: skills.includes('writing')
-					? 'escrita'
-					: 'leitura';
+		const habilidade = habilidadeDaQuestao(skills);
 		// O "ligue os pares" que fecha a atividade não tem material de origem: ele junta
 		// palavras de vários. Sem isto a linha dizia "criada por você" de uma questão
 		// que o professor não escreveu. As palavras do idioma alvo ficam do lado esquerdo.
@@ -106,11 +100,19 @@ export function questoesDoRoteiro(
 		// A resposta legível. No "monte a frase" a frase inteira não fica no item
 		// (só as peças): vem do áudio ou do material, e juntar as peças com espaço
 		// quebraria o japonês (regra nº 5) — fica para o último caso.
+		// Na próxima fala do diálogo, a resposta é a fala da parada (o trecho do
+		// material seria a primeira fala da conversa).
+		const falaDaParada =
+			prompt.contexto?.tipo === 'dialogo' && prompt.contexto.ate !== undefined
+				? prompt.contexto.falas[prompt.contexto.ate]?.texto
+				: undefined;
 		const resposta =
 			interaction.type === 'assemble'
 				? prompt.kind === 'audio' && prompt.text
 					? prompt.text
-					: (material?.trecho ?? readableAnswerKey(interaction.type, interaction.payload).answer)
+					: (falaDaParada ??
+						material?.trecho ??
+						readableAnswerKey(interaction.type, interaction.payload).answer)
 				: readableAnswerKey(interaction.type, interaction.payload).answer;
 
 		return {

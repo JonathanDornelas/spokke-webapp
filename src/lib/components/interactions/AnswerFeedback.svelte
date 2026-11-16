@@ -25,7 +25,8 @@
 		marks = [],
 		expected = [],
 		heard = '',
-		dir = 'ltr'
+		dir = 'ltr',
+		porSilaba = false
 	}: {
 		state: 'correct' | 'partial' | 'incorrect';
 		/** O que faltou. Vem do servidor: nada aqui decide certo ou errado. */
@@ -51,6 +52,12 @@
 		heard?: string;
 		/** Direção do conteúdo — vem do `LanguageProfile`, não da interface. */
 		dir?: Dir;
+		/**
+		 * Na Pronúncia, `marks` são as SÍLABAS da palavra, com a que saiu fora
+		 * grifada: vão separadas por "·", como a pronúncia escrita, e só quando há
+		 * o que mostrar (no acerto, a palavra inteira certa não precisa de grifo).
+		 */
+		porSilaba?: boolean;
 	} = $props();
 
 	// Classes inteiras e literais por estado — o Tailwind só gera o que aparece
@@ -72,8 +79,9 @@
 </script>
 
 <div
-	class="mt-3.5 flex animate-entrada items-start gap-2.5
-	       rounded-field border-s-[3px] bg-base-200 px-4 py-3 {borda[state]}"
+	class="mt-3.5 flex animate-entrada items-start gap-2.5 rounded-field
+	       border-s-[3px] bg-base-200 px-4 py-3 baixa:mt-2.5 baixa:py-2.5 muito-baixa:mt-2
+	       muito-baixa:py-2 {borda[state]}"
 	role="status"
 	aria-live="polite"
 >
@@ -86,16 +94,18 @@
 			{hint ?? ''}
 		</p>
 
-		{#if marks.length > 0}
+		{#if marks.length > 0 && !(porSilaba && foraDeLugar.length === 0)}
 			<!-- A frase que o aluno montou, com o que está fora do lugar grifado.
 			     `aria-hidden` porque a linha abaixo diz o mesmo em palavras: o
 			     sublinhado ondulado não é anunciável. -->
 			<p
-				class="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-1 font-content text-[15px] leading-relaxed"
+				class="mt-2 flex flex-wrap items-baseline gap-x-1.5 gap-y-1 leading-relaxed
+				       {porSilaba ? 'font-mono text-[15px]' : 'font-content text-[15px]'}"
 				{dir}
 				aria-hidden="true"
 			>
 				{#each marks as marca, i (i)}
+					{#if porSilaba && i > 0}<span class="text-base-content/40">·</span>{/if}
 					{#if marca.ok}
 						<span>{marca.text}</span>
 					{:else}
@@ -108,31 +118,43 @@
 				{/each}
 			</p>
 			<p class="sr-only">
-				Sua resposta: {marks.map((m) => m.text).join(' ')}. Fora de lugar: {foraDeLugar.join(
-					', '
-				) || 'nada'}.
+				{#if porSilaba}
+					Sílabas: {marks.map((m) => m.text).join(', ')}. Saíram diferentes: {foraDeLugar.join(
+						', '
+					)}.
+				{:else}
+					Sua resposta: {marks.map((m) => m.text).join(' ')}. Fora de lugar: {foraDeLugar.join(
+						', '
+					) || 'nada'}.
+				{/if}
 			</p>
 		{/if}
 
 		{#if heard}
 			<!-- Fala: o que se ouviu vem ANTES do gabarito, na mesma ordem do resto
 			     do produto — primeiro o que o aluno fez, depois o certo. Entre aspas
-			     e com rótulo porque, sem eles, a transcrição lida como enunciado. -->
-			<p class="mt-2.5 text-[12px] font-semibold text-base-content/65">Ouvimos:</p>
-			<p class="mt-1 font-content text-[15px] leading-relaxed" {dir}>“{heard}”</p>
+			     e com rótulo porque, sem eles, a transcrição lida como enunciado. O
+			     rótulo vai NA LINHA do texto: numa linha própria ele custava a altura
+			     que a questão precisa para caber na tela sem rolar. -->
+			<p class="mt-2 text-[15px] leading-relaxed">
+				<span class="me-1 text-[12px] font-semibold text-base-content/65">Ouvimos:</span>
+				<!-- Na Pronúncia são os SONS, na escrita das sílabas: em mono, como elas. -->
+				<span {dir} class:font-mono={porSilaba} class:font-content={!porSilaba}>“{heard}”</span>
+			</p>
 		{/if}
 
 		{#if expected.length > 0 && state !== 'correct'}
 			<!-- Como deveria ficar. Vem depois do que ele montou, para o olho
-			     comparar as duas linhas na mesma ordem de leitura. -->
-			<p class="mt-2.5 text-[12px] font-semibold text-base-content/65">O certo era:</p>
-			<p
-				class="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-1 font-content text-[15px] leading-relaxed text-success"
-				{dir}
-			>
-				{#each expected as pedaco, i (i)}
-					<span>{pedaco}</span>
-				{/each}
+			     comparar as duas linhas na mesma ordem de leitura. Os pedaços vão
+			     separados pela MARGEM, nunca por um espaço no texto: juntar com
+			     espaço é a regra nº 5 pelo avesso, e em japonês sairia errado. -->
+			<p class="mt-2 text-[15px] leading-relaxed">
+				<span class="me-1 text-[12px] font-semibold text-base-content/65">O certo era:</span>
+				<span {dir} class="font-content text-success"
+					>{#each expected as pedaco, i (i)}<span class="me-1.5 inline-block last:me-0"
+							>{pedaco}</span
+						>{/each}</span
+				>
 			</p>
 		{/if}
 	</div>

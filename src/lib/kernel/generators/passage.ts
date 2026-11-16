@@ -30,10 +30,13 @@ export const passageComprehension: Generator<Passage> = {
 				id: `${content.id}:passage-comprehension:${i}`,
 				sourceContentId: content.id,
 				generatedBy: 'passage-comprehension',
+				// O TRECHO vai junto, no contexto. Antes ia só a pergunta, e o aluno
+				// recebia "Responda sobre o texto." sem texto nenhum na tela.
 				prompt: {
 					kind: 'composite',
 					text: question.question,
-					instructionKey: 'answer-about-passage'
+					instructionKey: 'answer-about-passage',
+					contexto: { tipo: 'texto', texto: content.data.text }
 				},
 				interaction: {
 					type: 'choice',

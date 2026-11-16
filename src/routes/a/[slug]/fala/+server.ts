@@ -3,13 +3,9 @@ import type { RequestHandler } from './$types';
 import { playerRepo } from '$lib/server/db/repos/player';
 import { putObject } from '$lib/server/storage';
 import { falaExpiraEm, falaObjectKey } from '$lib/server/tts';
-import { transcreverNoIdioma } from '$lib/server/asr/audiotext-provider';
-import {
-	guardarTranscricao,
-	hashDoAudio,
-	transcricaoGuardada
-} from '$lib/server/asr/pre-transcricao';
+import { guardarResposta, hashDoAudio, respostaGuardada } from '$lib/server/asr/pre-transcricao';
 import { vocabulario } from '$lib/server/asr/vocabulario';
+import { ouvirFala } from '$lib/server/pronuncia';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { getProfile } from '$lib/kernel/language/profiles';
@@ -36,8 +32,8 @@ import type { Prisma } from '../../../../../generated/prisma/client.ts';
  * **Dois modos, um endpoint.** `modo=ouvir` só transcreve e devolve o texto —
  * é o que a tela chama assim que a gravação para, para o aluno ver o que foi
  * entendido ANTES de enviar. O modo padrão corrige e grava a resposta, e
- * reaproveita a transcrição do modo anterior quando os bytes são os mesmos
- * (`pre-transcricao.ts`): o Whisper roda uma vez por gravação, não duas. As
+ * reaproveita o que o modo anterior ouviu quando os bytes são os mesmos
+ * (`pre-transcricao.ts`): o modelo roda uma vez por gravação, não duas. As
  * checagens de tentativa, item e tipo valem igual nos dois — ouvir também é
  * uma chamada de ASR paga com CPU, e não pode ser feita em nome de qualquer
  * tentativa.
@@ -117,16 +113,18 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	const bytes = new Uint8Array(await arquivo.arrayBuffer());
 	const hash = hashDoAudio(bytes);
 
-	let transcript = transcricaoGuardada(attemptId, itemId, hash);
-	if (transcript === null) {
+	// O que se ouviu: a transcrição, ou, na Pronúncia, os sons do reconhecedor de
+	// fonemas (`ouvirFala`). Feito uma vez por gravação: o "Verificar" reaproveita.
+	let answer = respostaGuardada(attemptId, itemId, hash);
+	if (answer === null) {
 		try {
-			const resultado = await transcreverNoIdioma(
+			answer = await ouvirFala({
+				payload: interaction.payload,
 				bytes,
-				profile.asr.model,
-				hints,
-				arquivo.type || 'audio/webm'
-			);
-			transcript = resultado.text;
+				contentType: arquivo.type || 'audio/webm',
+				profile,
+				hints
+			});
 		} catch (erro) {
 			// Serviço de áudio fora do ar não pode virar 500 na cara do aluno no
 			// meio do exercício: `speak` nunca reprova de forma dura (kernel.md), e
@@ -134,14 +132,14 @@ export const POST: RequestHandler = async ({ request, params }) => {
 			console.error('[fala] transcrição falhou', erro);
 			error(503, 'não conseguimos ouvir sua gravação agora — pule esta questão e siga em frente');
 		}
-		guardarTranscricao(attemptId, itemId, hash, transcript);
+		guardarResposta(attemptId, itemId, hash, answer);
 	}
+	const transcript = answer.transcript;
 
 	// Só ouvir: o aluno decide se manda isto ou grava de novo. Nada é gravado.
 	// O que o serviço entendeu não é gabarito — é a fala dele mesmo.
 	if (somenteOuvir) return json({ transcript });
 
-	const answer = { transcript };
 	const resultado = registered.grade(
 		interaction.payload,
 		answer,
@@ -185,6 +183,8 @@ export const POST: RequestHandler = async ({ request, params }) => {
 		hint: resultado.value.feedback,
 		// O que o serviço ENTENDEU. Numa questão de fala isso é metade do
 		// retorno: "quase" sem dizer o que se ouviu não ensina nada.
-		transcript
+		transcript,
+		// Na Pronúncia, as sílabas da palavra com a que saiu fora marcada.
+		marks: resultado.value.marks
 	});
 };

@@ -163,3 +163,134 @@ describe('teclado virtual no item', () => {
 		}
 	});
 });
+
+describe('diálogo e Pronúncia: o que chega ao browser', () => {
+	const dialogo = {
+		id: 'dlg_1',
+		kind: 'Dialogue' as const,
+		data: {
+			lines: [
+				{ speaker: 'Ana', text: 'Hi, are you new here?' },
+				{ speaker: 'Ben', text: 'Yes, I started this week.' },
+				{ speaker: 'Ana', text: 'Welcome to the team!' },
+				{ speaker: 'Ben', text: 'Thanks, everyone has been very kind.' }
+			],
+			questions: [
+				{ question: 'When did Ben start?', answer: 'This week' },
+				{ question: 'Who welcomes Ben?', answer: 'Ana' }
+			]
+		}
+	};
+	const itensDoDialogo = (nivel?: 'A1' | 'C1') =>
+		runGenerators([dialogo], { ...options, nivel })
+			.groups.flatMap((g) => g.items)
+			.map((item) => structuredClone({ ...item, id: `row_${item.id}` }) as StoredItemRow);
+
+	it('na próxima fala, o texto da fala do aluno nunca vai, nem as falas depois dela', () => {
+		const paradas = itensDoDialogo().filter((r) => r.id.includes('dialogue-next-line'));
+		expect(paradas.length).toBeGreaterThan(0);
+		for (const linha of paradas) {
+			const prompt = linha.prompt as { contexto: { ate: number; falas: { texto: string }[] } };
+			const alvo = prompt.contexto.falas[prompt.contexto.ate]!.texto;
+			const depois = prompt.contexto.falas.slice(prompt.contexto.ate + 1).map((f) => f.texto);
+			const runtime = buildRuntimeItem(linha, 'tentativa', new Map());
+			const contexto = JSON.stringify(runtime.contexto);
+			expect(contexto).not.toContain(alvo);
+			for (const fala of depois) expect(contexto).not.toContain(fala);
+			expect(runtime.contexto?.tipo === 'dialogo' && runtime.contexto.vez).toBeTruthy();
+		}
+	});
+
+	it('com "só áudio" (de B2 para cima) nenhuma fala vai em texto', () => {
+		const linha = itensDoDialogo('C1').find((r) => r.id.includes('dialogue-comprehension'))!;
+		const runtime = buildRuntimeItem(linha, 'tentativa', new Map());
+		expect(runtime.contexto?.tipo).toBe('dialogo');
+		if (runtime.contexto?.tipo === 'dialogo') {
+			expect(runtime.contexto.falas.every((f) => f.texto === undefined)).toBe(true);
+		}
+		// A pergunta vai (o aluno precisa dela); a resposta certa, só como alternativa embaralhada.
+		expect(runtime.pergunta).toBe('When did Ben start?');
+		expect(runtime.passage).toBeUndefined();
+	});
+
+	it('cada fala ouvida tem a voz da PESSOA: as falas da mesma pessoa, o mesmo arquivo de voz', async () => {
+		const { audiosDoItem } = await import('./runtime');
+		const linha = itensDoDialogo().find((r) => r.id.includes('dialogue-comprehension'))!;
+		const audios = audiosDoItem(linha, 'en-US').filter((a) => a.papel === 'fala');
+		expect(audios).toHaveLength(4);
+		expect(audios[0]!.voz).toBe(audios[2]!.voz);
+		expect(audios[1]!.voz).toBe(audios[3]!.voz);
+		expect(audios[0]!.voz).not.toBe(audios[1]!.voz);
+	});
+
+	it('a Pronúncia leva a boca passo a passo e as sílabas, e a palavra pede áudio', async () => {
+		const { audiosDoItem } = await import('./runtime');
+		const vocab = [
+			{
+				id: 'v1',
+				kind: 'VocabItem' as const,
+				data: { term: 'priority', translation: 'prioridade' }
+			},
+			{ id: 'v2', kind: 'VocabItem' as const, data: { term: 'kitchen', translation: 'cozinha' } }
+		];
+		const fonetica: Record<string, string> = {
+			priority: 'P R AY0 AO1 R AH0 T IY0',
+			kitchen: 'K IH1 CH AH0 N'
+		};
+		const linha = runGenerators(vocab, {
+			...options,
+			foneticaDe: (p) => fonetica[p]?.split(' ') ?? null
+		})
+			.groups.flatMap((g) => g.items)
+			.filter((i) => i.generatedBy === 'vocab-pronuncia')
+			.map((item) => structuredClone({ ...item, id: `row_${item.id}` }) as StoredItemRow)[0]!;
+		const runtime = buildRuntimeItem(linha, 'tentativa', new Map());
+		expect(runtime.silabas).toEqual([
+			{ leitura: 'prai', tonica: false },
+			{ leitura: 'aw', tonica: true },
+			{ leitura: 'ruh', tonica: false },
+			{ leitura: 'tee', tonica: false }
+		]);
+		expect(runtime.pronuncia?.passos.length).toBeGreaterThan(4);
+		expect(runtime.gradingLabel).toBe('pronúncia');
+		expect(audiosDoItem(linha, 'en-US').map((a) => a.papel)).toEqual(['palavra']);
+	});
+
+	it('o rigor da Pronúncia sai do nível da atividade e aparece no rótulo e na dica', () => {
+		const vocab = [
+			{
+				id: 'v1',
+				kind: 'VocabItem' as const,
+				data: { term: 'priority', translation: 'prioridade' }
+			},
+			{ id: 'v2', kind: 'VocabItem' as const, data: { term: 'kitchen', translation: 'cozinha' } }
+		];
+		const fonetica: Record<string, string> = {
+			priority: 'P R AY0 AO1 R AH0 T IY0',
+			kitchen: 'K IH1 CH AH0 N'
+		};
+		const naAtividade = (nivel?: 'A1' | 'B1' | 'C2') => {
+			const item = runGenerators(vocab, {
+				...options,
+				nivel,
+				foneticaDe: (p) => fonetica[p]?.split(' ') ?? null
+			})
+				.groups.flatMap((g) => g.items)
+				.find((i) => i.generatedBy === 'vocab-pronuncia')!;
+			return buildRuntimeItem(
+				structuredClone({ ...item, id: `row_${item.id}` }) as StoredItemRow,
+				'tentativa',
+				new Map()
+			);
+		};
+		const leve = naAtividade('A1');
+		expect(leve.rigor).toBe('leve');
+		expect(leve.gradingLabel).toBe('pronúncia leve');
+		expect(leve.hint).toContain('correção leve');
+		expect(naAtividade('B1').rigor).toBe('normal');
+		expect(naAtividade().rigor).toBe('normal');
+		const alto = naAtividade('C2');
+		expect(alto.rigor).toBe('rigoroso');
+		expect(alto.gradingLabel).toBe('pronúncia rigorosa');
+	});
+});

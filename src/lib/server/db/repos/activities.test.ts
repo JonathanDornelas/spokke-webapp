@@ -70,6 +70,17 @@ describe('atividades', () => {
 		expect(fromOther).toBeNull();
 	});
 
+	// Renomear pela tela da atividade: o id de outro professor passa em silêncio.
+	it('renomeia só a atividade deste professor', async () => {
+		const activity = await atividades(teacherA).create('Nome antigo', 'pt-BR', 'en-US', PLANO);
+
+		expect(await atividades(teacherB).renomear(activity.id, 'Tomada pelo B')).toBe(false);
+		expect((await atividades(teacherA).byId(activity.id))?.title).toBe('Nome antigo');
+
+		expect(await atividades(teacherA).renomear(activity.id, 'Nome novo')).toBe(true);
+		expect((await atividades(teacherA).byId(activity.id))?.title).toBe('Nome novo');
+	});
+
 	/**
 	 * O produto não tem versão na interface: para o professor a atividade é uma
 	 * só, que ele publica e volta a editar. Estes dois testes cobrem o que

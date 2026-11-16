@@ -43,7 +43,15 @@ export const dialogueLineSchema = z.object({
 export const dialogueSchema = z.object({
 	// Ordem importa — regra do gerador `order-lines`. Mínimo 2 falas para
 	// existir diálogo de verdade.
-	lines: z.array(dialogueLineSchema).min(2)
+	lines: z.array(dialogueLineSchema).min(2),
+	/**
+	 * Perguntas sobre o diálogo, escritas pelo PROFESSOR (como as do texto):
+	 * `dialogue-comprehension` as transforma em questões. Sem elas, o diálogo
+	 * segue rendendo o ordenar e a "próxima fala".
+	 */
+	questions: z
+		.array(z.object({ question: z.string().min(1), answer: z.string().min(1) }))
+		.default([])
 });
 export type Dialogue = z.infer<typeof dialogueSchema>;
 

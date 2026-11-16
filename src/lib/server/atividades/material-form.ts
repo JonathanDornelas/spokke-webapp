@@ -10,6 +10,8 @@ import {
 	type Tradutor
 } from '$lib/server/traducao';
 import { variantesDasFrases } from '$lib/server/atividades/variantes-aceitas';
+import { MAX_PALAVRAS_DO_TERMO, problemaDoVocabulario } from '$lib/kernel/content/vocabulario';
+import { previewRawLines } from '$lib/kernel/content/parse-raw';
 
 /**
  * Os campos que um formulário de material manda, e como eles viram o
@@ -107,7 +109,10 @@ export async function preencherTraducao(
 		);
 		const source = unidades[0].source;
 		if (campos.kind !== 'SentencePair' || traduzidas === 0) {
-			return { campos: { ...campos, source }, traduzida: traduzidas > 0 };
+			// O sentido de uma PALAVRA não leva ponto final: o tradutor às vezes põe, e a
+			// regra do vocabulário (`problemaDoVocabulario`) recusaria o que ele escreveu.
+			const sentido = campos.kind === 'VocabItem' ? semPontoFinal(source) : source;
+			return { campos: { ...campos, source: sentido }, traduzida: traduzidas > 0 };
 		}
 		const [automaticas] = await variacoesAutomaticas(
 			[{ original: texto(campos.target), principal: source }],
@@ -156,7 +161,18 @@ export async function traduzirLote(
 	try {
 		const embranco = new Set(registros.flatMap((u, i) => (texto(u[campos.traducao]) ? [] : [i])));
 		const traduzido = await completarTraducoes(registros, campos, par, tradutor);
-		if (kind !== 'SentencePair') return traduzido;
+		if (kind !== 'SentencePair') {
+			// O sentido de uma palavra, sem o ponto final que o tradutor às vezes põe.
+			const unidades = traduzido.unidades.map((u, i) =>
+				embranco.has(i) && typeof u === 'object' && u !== null
+					? {
+							...(u as Record<string, unknown>),
+							translation: semPontoFinal(texto((u as Record<string, unknown>).translation))
+						}
+					: u
+			);
+			return { unidades, traduzidas: traduzido.traduzidas };
+		}
 		// As linhas que o tradutor completou ganham as variações também, num pedido
 		// para a lista toda (`variantesDasFrases`).
 		const alvos = traduzido.unidades.flatMap((u, i) => {
@@ -224,12 +240,40 @@ function texto(valor: unknown): string {
 	return typeof valor === 'string' ? valor.trim() : '';
 }
 
+/** Sem o ponto final (de qualquer escrita do produto) que o tradutor põe no fim. */
+function semPontoFinal(valor: string): string {
+	return valor.replace(/[.。．｡]+\s*$/u, '').trim();
+}
+
+/**
+ * Por que nenhuma linha da lista colada entrou, numa frase para o professor: a
+ * falta de separador, ou, no vocabulário, linhas que são frase. As duas telas de
+ * colar (wizard e biblioteca) dizem a mesma coisa.
+ */
+export function nenhumaLinhaEntrou(
+	kind: 'SentencePair' | 'VocabItem',
+	raw: string,
+	temTradutor: boolean
+): string {
+	const temSeparador = previewRawLines(raw, { traduzirSemSeparador: temTradutor }).some(
+		(linha) => linha.ok
+	);
+	if (kind === 'VocabItem' && temSeparador) {
+		return `Nenhuma linha virou vocabulário: ele é palavra ou expressão curta, de até ${MAX_PALAVRAS_DO_TERMO} palavras, sem pontuação de frase. Frases inteiras entram como Sentença.`;
+	}
+	return 'Nenhuma linha tem o separador. Use "alvo · tradução", um por linha.';
+}
+
 /**
  * Os campos da tela viram o `ContentUnit` do kernel — ou uma mensagem
  * dizendo o que falta. Nunca uma exceção: campo em branco é erro do
  * formulário, não corrupção de dado.
  */
-export function montarMaterial(campos: CamposMaterial): { dados: unknown } | { error: string } {
+export function montarMaterial(
+	campos: CamposMaterial,
+	/** As tags do par de idiomas: ligam a regra do vocabulário (só palavra, nunca frase). */
+	tags?: { alvo: string; origem: string }
+): { dados: unknown } | { error: string } {
 	const alvo = texto(campos.target);
 	const traducao = texto(campos.source);
 
@@ -249,6 +293,10 @@ export function montarMaterial(campos: CamposMaterial): { dados: unknown } | { e
 
 	if (campos.kind === 'VocabItem') {
 		if (!alvo || !traducao) return { error: 'Preencha o termo e o sentido.' };
+		const problema = tags
+			? problemaDoVocabulario({ term: alvo, translation: traducao }, tags)
+			: null;
+		if (problema) return { error: problema };
 		const exemplo = texto(campos.example);
 		return {
 			dados: { term: alvo, translation: traducao, ...(exemplo ? { example: exemplo } : {}) }
@@ -271,5 +319,13 @@ export function montarMaterial(campos: CamposMaterial): { dados: unknown } | { e
 		.map((l) => ({ speaker: texto(l.speaker) || 'A', text: texto(l.text) }))
 		.filter((l) => l.text);
 	if (falas.length < 2) return { error: 'Um diálogo precisa de pelo menos duas falas.' };
-	return { dados: { lines: falas } };
+	// As perguntas sobre o diálogo, como as do texto. Sem nenhuma, o campo nem vai:
+	// o material igual ao que já existe (gravado antes das perguntas) continua
+	// sendo o MESMO para o reaproveitamento, que compara o jsonb inteiro.
+	const perguntas = listaDeJson(campos.questions)
+		.map((q) => ({ question: texto(q.question), answer: texto(q.answer) }))
+		.filter((q) => q.question && q.answer);
+	return {
+		dados: perguntas.length > 0 ? { lines: falas, questions: perguntas } : { lines: falas }
+	};
 }

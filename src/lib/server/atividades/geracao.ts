@@ -6,6 +6,8 @@ import type { LanguageProfile } from '$lib/kernel/language/profile';
 import type { Transcritor } from '$lib/kernel/language/escrita';
 import { typeAuthoringSchema } from '$lib/kernel/interactions/type';
 import { lerTiposGerais, lerTiposPorMaterial } from '$lib/atividades/tipos-por-material';
+import { nivelOuNulo } from '$lib/atividades/nivel';
+import type { FoneticaDe } from '$lib/server/pronuncia';
 import type { Tradutor } from '$lib/server/traducao';
 import { paresDasFrases } from './pares-de-palavras';
 import { comVariantesDaTraducao } from './variantes-aceitas';
@@ -39,11 +41,15 @@ export interface FontesDaGeracao<Gravado = unknown> {
 		itemTarget: number;
 		skills: string[];
 		tiposPorMaterial: unknown;
+		/** O nível CEFR: no diálogo, decide se o aluno lê as falas (`mostraDoDialogo`). */
+		level?: unknown;
 	};
 	materiais: () => Promise<StoredContentUnit[]>;
 	capacidades: { tts: boolean; asr: boolean };
 	tradutor: Tradutor | null;
 	transcritorPara: (profile: LanguageProfile) => Promise<Transcritor | undefined>;
+	/** O dicionário de pronúncia do idioma (`server/pronuncia`); sem ele, sem questão de Pronúncia. */
+	foneticaPara?: (profile: LanguageProfile) => Promise<FoneticaDe | undefined>;
 	/** Grava o rascunho (dentro, depois fora). Devolve os itens que ENTRARAM, gravados. */
 	gravar: (dentro: Item[], fora: Item[]) => Promise<Gravado[]>;
 	/** Pede o áudio do que entrou — o que ficou de fora pede quando entrar. */
@@ -118,6 +124,7 @@ export async function executarGeracao<Gravado>(
 	const materiais = await fontes.materiais();
 	if (materiais.length === 0) throw new SemMaterial();
 	const transcrever = await fontes.transcritorPara(alvo);
+	const foneticaDe = await fontes.foneticaPara?.(alvo);
 	passos = passosDe(materiais, fontes.tradutor).map((id) =>
 		id === 'lendo' ? passos[0] : { id, estado: 'esperando' as const }
 	);
@@ -129,14 +136,23 @@ export async function executarGeracao<Gravado>(
 		: [];
 	if (passos.some((p) => p.id === 'pares')) concluir('pares', palavrasTraduzidas.length);
 
-	// 3. Os geradores.
+	// 3. Os geradores. O plano (os tipos de cada material) vai junto: o diálogo
+	// de um material sem escuta é gerado lido (`GeneratorContext.pedidas`).
+	const plano = {
+		skills: lerTiposGerais(activity.skills),
+		skillsPorMaterial: lerTiposPorMaterial(activity.tiposPorMaterial)
+	};
 	const { groups, closing } = runGenerators(materiais, {
 		targetProfile: alvo,
 		sourceProfile: origem,
 		seed: activity.id,
 		capabilities: fontes.capacidades,
 		transcrever,
-		palavrasTraduzidas
+		palavrasTraduzidas,
+		nivel: nivelOuNulo(activity.level),
+		foneticaDe,
+		pedidasPara: (id) =>
+			plano.skillsPorMaterial[id] ?? (plano.skills.length > 0 ? plano.skills : undefined)
 	});
 	const montadas = groups.reduce((total, g) => total + g.items.length, 0) + (closing ? 1 : 0);
 	concluir('montando', montadas);
@@ -144,11 +160,7 @@ export async function executarGeracao<Gravado>(
 	// 4. O que entra e o que fica de fora.
 	const separadas = separarPelaQuantidade(
 		groups,
-		{
-			target: activity.itemTarget,
-			skills: lerTiposGerais(activity.skills),
-			skillsPorMaterial: lerTiposPorMaterial(activity.tiposPorMaterial)
-		},
+		{ target: activity.itemTarget, ...plano },
 		closing
 	);
 	if (separadas.dentro.length === 0) throw new NadaParaGerar();

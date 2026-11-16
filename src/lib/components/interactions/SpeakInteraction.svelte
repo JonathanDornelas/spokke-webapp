@@ -3,6 +3,7 @@
 	import Loading from '../Loading.svelte';
 	import type { EstadoDaGravacao } from '$lib/client/gravacao.svelte';
 	import type { SpeakRuntimeItem } from './types';
+	import PronunciaDaPalavra from '../pronuncia/PronunciaDaPalavra.svelte';
 
 	// Fala. Pular está sempre visível — mas fica no rodapé da tela (é ação de
 	// navegação, não desta interação): microfone negado ou ambiente barulhento não
@@ -21,7 +22,8 @@
 		ouvido = null,
 		ouvindo = false,
 		erro = null,
-		corrigida = false
+		corrigida = false,
+		compacta = false
 	}: {
 		item: SpeakRuntimeItem;
 		recording?: boolean;
@@ -48,6 +50,8 @@
 		 * fala respondida; no celular da home, a corrigida.
 		 */
 		corrigida?: boolean;
+		/** Na moldura de celular do Studio: a boca da Pronúncia menor. */
+		compacta?: boolean;
 	} = $props();
 
 	const impedimento: Partial<Record<EstadoDaGravacao, string>> = {
@@ -81,18 +85,31 @@
 	</p>
 {/snippet}
 
-<p dir={item.dir} class="mb-1.5 font-content text-[22px] leading-normal">{item.target}</p>
-{#if item.ipa}
-	<p class="font-mono text-[13px] text-base-content/65">{item.ipa}</p>
+{#if item.silabas && item.pronuncia}
+	<!-- A Pronúncia: a palavra, as sílabas e a boca, com o áudio da palavra. -->
+	<PronunciaDaPalavra
+		palavra={item.target}
+		silabas={item.silabas}
+		passos={item.pronuncia.passos}
+		audio={item.pronuncia.audio}
+		audioSlow={item.pronuncia.audioSlow}
+		dir={item.dir}
+		{compacta}
+	/>
+{:else}
+	<p dir={item.dir} class="mb-1.5 font-content text-[22px] leading-normal">{item.target}</p>
+	{#if item.ipa}
+		<p class="font-mono text-[13px] text-base-content/65">{item.ipa}</p>
+	{/if}
 {/if}
 
 {#if !corrigida}
-	<p class="mt-6 mb-3.5 text-[12.5px] font-semibold text-base-content/65">
+	<p class="mt-6 mb-3.5 text-[12.5px] font-semibold text-base-content/65 baixa:mt-3.5 baixa:mb-2">
 		{estado === 'pronto' ? 'Gravado — toque para regravar' : 'Grave sua voz'}
 	</p>
 {/if}
 
-<div class="mt-auto mb-6 flex flex-col items-center gap-3" class:hidden={corrigida}>
+<div class="mt-auto mb-6 flex flex-col items-center gap-3 baixa:mb-2" class:hidden={corrigida}>
 	<Recorder
 		{recording}
 		abrindo={estado === 'abrindo'}
@@ -101,7 +118,7 @@
 		hint={estado === 'abrindo'
 			? 'Abrindo o microfone…'
 			: estado === 'gravando'
-				? 'Fale a frase — vamos parar sozinhos quando você terminar'
+				? `Fale ${item.silabas ? 'a palavra' : 'a frase'} — vamos parar sozinhos quando você terminar`
 				: estado === 'pronto'
 					? 'Toque para gravar de novo'
 					: 'Toque para gravar'}
@@ -126,21 +143,34 @@
 		     microfone longe ou coberto. Dá para enviar assim mesmo, mas o aluno
 		     merece saber antes de gastar a questão. -->
 		{@render aviso(
-			'Não entendemos nenhuma palavra. Fale mais perto do microfone e grave de novo.',
+			item.silabas
+				? 'Não ouvimos som nenhum. Fale mais perto do microfone e grave de novo.'
+				: 'Não entendemos nenhuma palavra. Fale mais perto do microfone e grave de novo.',
 			'status'
 		)}
 	{:else if estado === 'pronto' && ouvido}
 		<!-- O que foi ENTENDIDO, antes de enviar. É a fala dele mesmo, não
 		     gabarito — e é o que deixa o aluno decidir entre enviar e regravar,
-		     em vez de descobrir junto com o veredito que o microfone cortou. -->
+		     em vez de descobrir junto com o veredito que o microfone cortou. Na
+		     Pronúncia são os SONS ouvidos, na escrita das sílabas ("prai · aw ·
+		     ree · tee"), e por isso em mono, como elas. -->
 		<div
 			class="w-full max-w-[46ch] rounded-box border border-line bg-base-200 px-4 py-3 text-center"
 			role="status"
 		>
 			<p class="mb-1 text-[11px] font-bold tracking-[0.09em] text-base-content/65 uppercase">
-				Entendemos
+				{item.silabas ? 'Ouvimos' : 'Entendemos'}
 			</p>
-			<p dir={item.dir} class="font-content text-[17px] leading-snug">“{ouvido}”</p>
+			<p
+				dir={item.dir}
+				class="leading-snug"
+				class:font-mono={!!item.silabas}
+				class:text-[16px]={!!item.silabas}
+				class:font-content={!item.silabas}
+				class:text-[17px]={!item.silabas}
+			>
+				“{ouvido}”
+			</p>
 			<p class="mt-1.5 text-[12px] text-base-content/65">
 				Não foi isso? Toque no microfone e grave de novo.
 			</p>

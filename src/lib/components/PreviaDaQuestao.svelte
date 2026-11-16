@@ -20,6 +20,7 @@
 	import SpeakInteraction from './interactions/SpeakInteraction.svelte';
 	import WritingInteraction from './interactions/WritingInteraction.svelte';
 	import AnswerFeedback from './interactions/AnswerFeedback.svelte';
+	import ContextoDaQuestao from './ContextoDaQuestao.svelte';
 	import type {
 		AssembleRuntimeItem,
 		ChoiceRuntimeItem,
@@ -141,6 +142,19 @@
 	</div>
 {/if}
 
+<!-- O trecho ou o diálogo antes da pergunta, e a pergunta — como no Player. -->
+{#if r.contexto}
+	<ContextoDaQuestao contexto={r.contexto} dir={r.dir} {compacta} />
+{/if}
+{#if r.pergunta}
+	<p
+		dir={r.dir}
+		class="mb-4 font-content leading-snug font-semibold {compacta ? 'text-[16px]' : 'text-[19px]'}"
+	>
+		{r.pergunta}
+	</p>
+{/if}
+
 {#if r.interaction === 'choice'}
 	<ChoiceInteraction item={comoChoice(r)} bind:value={escolha} />
 {:else if r.interaction === 'type' && r.gradedLater}
@@ -152,7 +166,12 @@
 {:else if r.interaction === 'type' || r.interaction === 'cloze'}
 	<ClozeInteraction item={comoCloze(r)} bind:value={texto} feedback={veredito} />
 {:else if r.interaction === 'assemble'}
-	<AssembleInteraction item={comoAssemble(r)} bind:chosen={montagem} />
+	<AssembleInteraction
+		item={comoAssemble(r)}
+		bind:chosen={montagem}
+		corrigida={!!veredito}
+		feedback={veredito}
+	/>
 {:else if r.interaction === 'select'}
 	<SelectInteraction item={comoSelect(r)} bind:value={selecao} />
 {:else if r.interaction === 'match'}
@@ -164,21 +183,27 @@
 		feedback={veredito}
 	/>
 {:else if r.interaction === 'order'}
-	<OrderInteraction item={comoOrder(r)} bind:order={ordem} />
+	<OrderInteraction item={comoOrder(r)} bind:order={ordem} feedback={veredito} />
 {:else if r.interaction === 'speak'}
-	<SpeakInteraction item={comoSpeak(r)} bind:recording={gravando} />
+	<SpeakInteraction item={comoSpeak(r)} bind:recording={gravando} {compacta} />
 {/if}
 
-<!-- O veredito fica FORA da interação, como no Player. No associar ele vem só
-     com a linha de estado: as ligações erradas já estão pintadas nos cartões. -->
+<!-- O veredito fica FORA da interação, como no Player. Em montar, associar e
+     ordenar as marcas estão na própria interação (a peça grifada, os cartões
+     pintados, a fala com o lugar dela), e o veredito não as repete. -->
 {#if veredito}
 	<div class="mt-4">
 		<AnswerFeedback
 			state={veredito.state}
 			hint={veredito.hint}
-			marks={r.interaction === 'match' ? undefined : veredito.marks}
-			expected={r.interaction === 'match' ? undefined : veredito.expected}
+			marks={r.interaction === 'assemble' || r.interaction === 'match' || r.interaction === 'order'
+				? undefined
+				: veredito.marks}
+			expected={r.interaction === 'match' || r.interaction === 'order'
+				? undefined
+				: veredito.expected}
 			dir={r.dir}
+			porSilaba={Array.isArray(r.silabas)}
 		/>
 	</div>
 {/if}

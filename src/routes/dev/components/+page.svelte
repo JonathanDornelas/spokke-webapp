@@ -1,6 +1,16 @@
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
+	import BocaDaPronuncia from '$lib/components/pronuncia/BocaDaPronuncia.svelte';
+	import PronunciaDaPalavra from '$lib/components/pronuncia/PronunciaDaPalavra.svelte';
+	import { FORMAS, NOME_DA_BOCA } from '$lib/components/pronuncia/formas';
+	import { passosDaBoca, pronunciaDe } from '$lib/kernel/language/pronuncia';
+	import { pronunciaEmInglesAmericano } from '$lib/kernel/language/profiles/en-pronuncia';
+	// A Pronúncia de exemplo: "priority", com a boca andando pelo peso dos sons.
+	const passosDemo = passosDaBoca(
+		pronunciaDe(['P', 'R', 'AY0', 'AO1', 'R', 'AH0', 'T', 'IY0'], pronunciaEmInglesAmericano),
+		pronunciaEmInglesAmericano
+	);
 	import AvatarEditor from '$lib/components/AvatarEditor.svelte';
 	import PlanosTabela from '$lib/components/PlanosTabela.svelte';
 	import { CODIGO_PADRAO, sortearCodigo } from '$lib/avatar/montar';
@@ -100,6 +110,7 @@
 		['materiais', 'Materiais'],
 		['bandeja', 'Bandeja'],
 		['avatar', 'Avatar'],
+		['pronuncia', 'Pronúncia'],
 		['planos', 'Planos'],
 		['teclado', 'Teclado virtual'],
 		['movimento', 'Movimento'],
@@ -1723,6 +1734,37 @@
 					}}
 					class="btn motion-tap btn-plain">Com erro do servidor</button
 				>
+			</div>
+		</section>
+
+		<section id="pronuncia" class="mb-14 scroll-mt-6">
+			<h2 class="font-display text-2xl">Pronúncia</h2>
+			<p class="mt-1 max-w-2xl text-sm text-base-content/60">
+				A boca de frente em cada visema (`components/pronuncia/formas.ts`), desenhada por dado, e a
+				questão de Pronúncia com a palavra, as sílabas e a boca andando sem áudio.
+			</p>
+			<div class="mt-6 grid grid-cols-3 gap-4 sm:grid-cols-5">
+				{#each Object.keys(FORMAS) as visema (visema)}
+					<figure class="grid justify-items-center gap-1.5">
+						<BocaDaPronuncia visema={visema as keyof typeof FORMAS} tamanho={112} />
+						<figcaption class="text-center text-[11.5px] leading-snug text-base-content/65">
+							<span class="font-mono font-semibold text-base-content">{visema}</span><br />
+							{NOME_DA_BOCA[visema as keyof typeof FORMAS]}
+						</figcaption>
+					</figure>
+				{/each}
+			</div>
+			<div class="mt-6 max-w-xl rounded-box border border-line bg-card p-5">
+				<PronunciaDaPalavra
+					palavra="priority"
+					silabas={[
+						{ leitura: 'prai', tonica: false },
+						{ leitura: 'aw', tonica: true },
+						{ leitura: 'ruh', tonica: false },
+						{ leitura: 'tee', tonica: false }
+					]}
+					passos={passosDemo}
+				/>
 			</div>
 		</section>
 

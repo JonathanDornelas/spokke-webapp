@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { InteractionKind } from '$lib/kernel/interactions/types';
+import { RIGORES, type RigorDaPronuncia } from '$lib/kernel/language/pronuncia';
 import { instructionText } from './enunciados';
 
 /**
@@ -74,12 +75,31 @@ export const DICA_DO_FORMATO: Record<InteractionKind, string> = {
 	speak: 'O aluno grava a frase, e a fala é comparada com ela.'
 };
 
-/** O tipo de uma questão que já existe: é daqui que o editor abre marcado. */
-export function tipoDaQuestao(promptKind: string, interacao: InteractionKind): TipoDeQuestao {
+/**
+ * O tipo de uma questão que já existe: é daqui que o editor abre marcado. É o
+ * nome que o roteiro e o celular dão a ela (`habilidadePrincipal`): a pergunta
+ * sobre um diálogo que o aluno OUVE é escuta, e a de "Só texto" é leitura.
+ */
+export function tipoDaQuestao(
+	promptKind: string,
+	interacao: InteractionKind,
+	mostraDoDialogo?: 'ambos' | 'audio' | 'texto'
+): TipoDeQuestao {
 	if (promptKind === 'audio') return 'escuta';
 	if (interacao === 'speak') return 'fala';
 	if (interacao === 'type' || interacao === 'cloze') return 'escrita';
+	if (mostraDoDialogo && mostraDoDialogo !== 'texto') return 'escuta';
 	return 'leitura';
+}
+
+/** Como o aluno recebe o diálogo de um prompt, quando ele tem um. */
+export function mostraDoPrompt(prompt: {
+	kind: string;
+	contexto?: { tipo: string; mostra?: 'ambos' | 'audio' | 'texto' };
+}): 'ambos' | 'audio' | 'texto' | undefined {
+	return prompt.kind === 'composite' && prompt.contexto?.tipo === 'dialogo'
+		? prompt.contexto.mostra
+		: undefined;
 }
 
 const CHAVE_PADRAO: Partial<Record<`${TipoDeQuestao}:${InteractionKind}`, string>> = {
@@ -181,10 +201,54 @@ export const camposSchema = z.discriminatedUnion('interacao', [
 	}),
 	z.object({
 		interacao: z.literal('speak'),
-		frase: campo
+		frase: campo,
+		/**
+		 * Só na questão de PRONÚNCIA: o rigor da correção (`TOLERANCIA`). A
+		 * presença dele é o que diz ao formulário que a fala é de Pronúncia.
+		 */
+		rigor: z.enum(RIGORES).optional()
 	})
 ]);
 export type CamposDaQuestao = z.infer<typeof camposSchema>;
+
+/** O rigor da Pronúncia no editor: o nome e o que cada um aceita, numa linha. */
+export const RIGOR_NO_EDITOR: Record<RigorDaPronuncia, { rotulo: string; descricao: string }> = {
+	leve: {
+		rotulo: 'Leve',
+		descricao: 'Som parecido passa, como o "i" de sheep no lugar do de ship. Bom para começar.'
+	},
+	normal: {
+		rotulo: 'Normal',
+		descricao: 'Cada som precisa sair certo. Passa só a variação que o próprio inglês tem.'
+	},
+	rigoroso: {
+		rotulo: 'Rigoroso',
+		descricao: 'Como o normal, e a vogal fraca também precisa sair reduzida, como a de um nativo.'
+	}
+};
+
+/**
+ * O CONTEXTO da questão no editor (`Prompt.contexto`): o trecho de um texto, ou
+ * o diálogo — as falas, a fala que é a vez do aluno (`null` na pergunta sobre o
+ * diálogo inteiro) e como ele recebe o diálogo. Atravessa a edição: salvar uma
+ * questão de diálogo não pode perder o diálogo.
+ */
+export const contextoNaQuestaoSchema = z.discriminatedUnion('tipo', [
+	z.object({ tipo: z.literal('texto'), texto: campo }),
+	z.object({
+		tipo: z.literal('dialogo'),
+		falas: z.array(z.object({ falante: campo, texto: campo })).max(40),
+		ate: z.number().int().min(1).nullable(),
+		mostra: z.enum(['ambos', 'audio', 'texto'])
+	})
+]);
+export type ContextoNaQuestao = z.infer<typeof contextoNaQuestaoSchema>;
+
+export const ROTULO_DO_MOSTRA: Record<'ambos' | 'audio' | 'texto', string> = {
+	ambos: 'Texto e áudio',
+	audio: 'Só áudio',
+	texto: 'Só texto'
+};
 
 export const questaoSchema = z.object({
 	tipo: z.enum(TIPOS_DE_QUESTAO),
@@ -192,12 +256,37 @@ export const questaoSchema = z.object({
 	enunciado: campo,
 	/**
 	 * O que o aluno LÊ — ou, na escuta, OUVE (é dele que o áudio sai). Na lacuna
-	 * e no montar é a tradução de apoio; na fala, a frase na língua dele.
+	 * e no montar é a tradução de apoio; na fala, a frase na língua dele. Na
+	 * pergunta sobre um texto ou um diálogo, a pergunta.
 	 */
 	texto: campo,
-	campos: camposSchema
+	campos: camposSchema,
+	contexto: contextoNaQuestaoSchema.optional()
 });
 export type Questao = z.infer<typeof questaoSchema>;
+
+/**
+ * O formato leva o contexto adiante? O trecho de texto e a pergunta sobre o
+ * diálogo são de ESCOLHA; a próxima fala é escolher, montar ou dizer. Os outros
+ * formatos não usam contexto, e salvar neles tira o contexto da questão.
+ */
+export function formatoUsaContexto(
+	contexto: ContextoNaQuestao | undefined,
+	interacao: InteractionKind | null
+): boolean {
+	if (!contexto || !interacao) return false;
+	if (contexto.tipo === 'texto' || contexto.ate === null) return interacao === 'choice';
+	return interacao === 'choice' || interacao === 'assemble' || interacao === 'speak';
+}
+
+/** O enunciado padrão de uma questão com contexto (as chaves dos geradores). */
+export function chaveDoContexto(contexto: ContextoNaQuestao, interacao: InteractionKind): string {
+	if (contexto.tipo === 'texto') return 'answer-about-passage';
+	if (contexto.ate === null) return 'answer-about-dialogue';
+	if (interacao === 'assemble') return 'assemble-next-line';
+	if (interacao === 'speak') return 'say-next-line';
+	return 'choose-next-line';
+}
 
 /**
  * A "frase alvo" que atravessa a troca de formato: trocar o formato refaz os
@@ -282,6 +371,8 @@ export function comoECorrigida(campos: CamposDaQuestao): string {
 		case 'select':
 			return 'Automática, pela palavra tocada.';
 		case 'speak':
-			return 'Automática, pela transcrição da fala. Sotaque não reprova: o mais duro é "quase".';
+			return campos.rigor
+				? 'Automática, som a som, no rigor escolhido acima: o retorno diz qual sílaba saiu diferente.'
+				: 'Automática, pela transcrição da fala. Sotaque não reprova: o mais duro é "quase".';
 	}
 }

@@ -3,6 +3,16 @@ import { normalize } from '../language/normalize';
 import { tokenize } from '../language/tokenize';
 import { similarity } from '../grading/levenshtein';
 import { promptSkills } from './skills';
+import {
+	compararPronuncia,
+	compararSons,
+	RIGORES,
+	type Pronuncia,
+	type RegrasDePronuncia,
+	type SomOuvido
+} from '../language/pronuncia';
+import type { LanguageProfile } from '../language/profile';
+import type { Result, Score } from '../grading/result';
 import type { InteractionType, SpeakRuntime } from './types';
 
 /**
@@ -19,13 +29,55 @@ import type { InteractionType, SpeakRuntime } from './types';
  * palavra provavelmente errada em destaque, e pular sempre disponível.
  */
 
+/**
+ * A pronúncia da palavra, na questão de PRONÚNCIA (`vocab-pronuncia`): os
+ * fonemas do dicionário e as sílabas. Não é gabarito — o aluno vê a palavra, a
+ * pronúncia escrita e a boca —, e por isso vai inteira para o runtime.
+ */
+export const pronunciaSchema = z.object({
+	fonemas: z.array(z.string().min(1)).min(1),
+	silabas: z
+		.array(
+			z.object({
+				leitura: z.string(),
+				tonica: z.boolean(),
+				fonemas: z.array(z.string().min(1)).min(1)
+			})
+		)
+		.min(1),
+	/** O quanto a correção exige (`TOLERANCIA`). Ausente nas de antes dos níveis: vale o normal. */
+	rigor: z.enum(RIGORES).optional()
+});
+
+/** Um som que o reconhecedor de fonemas ouviu (`SomOuvido`). */
+const somOuvidoSchema = z.object({
+	s: z.string(),
+	p: z.number(),
+	alt: z.array(z.object({ s: z.string(), p: z.number() })).optional()
+});
+
 export const speakAuthoringSchema = z.object({
 	target: z.string().min(1),
 	ipa: z.string().optional(),
-	hints: z.array(z.string()).default([])
+	hints: z.array(z.string()).default([]),
+	pronuncia: pronunciaSchema.optional()
 });
 
-export const speakAnswerSchema = z.object({ transcript: z.string() });
+/**
+ * Na questão de Pronúncia a resposta leva o que se OUVIU, para a correção
+ * refeita no resultado dar o mesmo veredito:
+ *
+ * - `sons`: os sons que o RECONHECEDOR DE FONEMAS ouviu, com a certeza de cada
+ *   um. É a correção de verdade, e aí `transcript` é a leitura desses sons
+ *   ("prai · aw · ree · tee"), não uma transcrição do Whisper.
+ * - `fonemas`: a reserva, com o reconhecedor fora do ar — o dicionário aplicado
+ *   ao que o Whisper transcreveu.
+ */
+export const speakAnswerSchema = z.object({
+	transcript: z.string(),
+	fonemas: z.array(z.string()).optional(),
+	sons: z.array(somOuvidoSchema).optional()
+});
 
 export type SpeakPayload = z.infer<typeof speakAuthoringSchema>;
 export type SpeakAnswer = z.infer<typeof speakAnswerSchema>;
@@ -43,9 +95,23 @@ export const speak: InteractionType<
 	authoringSchema: speakAuthoringSchema,
 	answerSchema: speakAnswerSchema,
 
-	toRuntime: (payload) => ({ target: payload.target, ipa: payload.ipa }),
+	toRuntime: (payload) => ({
+		target: payload.target,
+		ipa: payload.ipa,
+		...(payload.pronuncia
+			? {
+					silabas: payload.pronuncia.silabas.map((s) => ({ leitura: s.leitura, tonica: s.tonica })),
+					fonemas: payload.pronuncia.fonemas,
+					rigor: payload.pronuncia.rigor ?? 'normal'
+				}
+			: {})
+	}),
 
 	grade: (payload, answer, profile) => {
+		if (payload.pronuncia && answer.sons && profile.pronuncia)
+			return corrigirPelosSons(payload.pronuncia, answer.sons, profile.pronuncia);
+		if (payload.pronuncia)
+			return corrigirPronuncia(payload.pronuncia, payload.target, answer, profile);
 		const target = normalize(payload.target, profile);
 		const said = normalize(answer.transcript, profile);
 		const score = target === said ? 1 : similarity(said, target);
@@ -79,3 +145,87 @@ export const speak: InteractionType<
 
 	skills: (prompt) => [...promptSkills(prompt), 'speaking']
 };
+
+/**
+ * O veredito da Pronúncia a partir do resultado por sílaba: "Correto" com todas
+ * certas; "Quase" com UMA fora numa palavra de duas ou mais; o resto é erro, sem
+ * o piso de 0,3 da fala comum. O retorno sempre diz a sílaba (`marks`, uma por
+ * sílaba, e o texto).
+ */
+function vereditoPorSilaba(
+	silabas: { leitura: string; ok: boolean }[],
+	tudoCerto: () => Result<Score>
+): Result<Score> {
+	const fora = silabas.filter((s) => !s.ok);
+	if (fora.length === 0) return tudoCerto();
+	const nomes = fora.map((s) => `"${s.leitura}"`);
+	const quase = fora.length === 1 && silabas.length >= 2;
+	return {
+		ok: true,
+		value: {
+			value: quase ? 0.5 : 0,
+			marks: silabas.map((s) => ({ text: s.leitura, ok: s.ok })),
+			feedback:
+				nomes.length === 1
+					? `A sílaba ${nomes[0]} saiu diferente.`
+					: `As sílabas ${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)} saíram diferentes.`
+		}
+	};
+}
+
+/**
+ * A correção da PRONÚNCIA pelos sons que o RECONHECEDOR DE FONEMAS ouviu — a de
+ * verdade, e a exceção deliberada a "speak nunca reprova de forma dura"
+ * (kernel.md): aqui o som é o exercício. O rigor da questão (`pronuncia.rigor`)
+ * diz o que conta como o som certo (`compararSons`, `TOLERANCIA`).
+ */
+function corrigirPelosSons(
+	pronuncia: Pronuncia,
+	sons: SomOuvido[],
+	regras: RegrasDePronuncia
+): Result<Score> {
+	if (sons.length === 0) {
+		return { ok: true, value: { value: 0, feedback: 'Não deu para ouvir a palavra.' } };
+	}
+	const comparacao = compararSons(pronuncia, sons, regras, pronuncia.rigor ?? 'normal');
+	return vereditoPorSilaba(comparacao.silabas, () => ({
+		ok: true,
+		value: { value: 1, marks: comparacao.silabas.map((s) => ({ text: s.leitura, ok: true })) }
+	}));
+}
+
+/**
+ * A correção da PRONÚNCIA de RESERVA, com o reconhecedor de fonemas fora do ar:
+ * o dicionário aplicado ao que o Whisper transcreveu (`fonemas`). O Whisper
+ * puxa o som para a palavra real mais próxima, então "priority" mal dita ainda
+ * sai "priority" — esta só pega palavra trocada, e diz em que sílaba.
+ *
+ * Sem os sons ouvidos (palavra fora do dicionário, nada transcrito), vale a
+ * palavra: a mesma, certa; outra, errada, com o que se ouviu.
+ */
+function corrigirPronuncia(
+	pronuncia: Pronuncia,
+	target: string,
+	answer: SpeakAnswer,
+	profile: LanguageProfile
+): Result<Score> {
+	const alvo = normalize(target, profile);
+	const ouvido = normalize(answer.transcript, profile);
+	const tudoCerto = (): Result<Score> => ({
+		ok: true,
+		value: { value: 1, marks: pronuncia.silabas.map((s) => ({ text: s.leitura, ok: true })) }
+	});
+	if (ouvido === alvo) return tudoCerto();
+	if (!answer.fonemas || answer.fonemas.length === 0) {
+		return {
+			ok: true,
+			value: {
+				value: 0,
+				feedback: ouvido
+					? `Ouvimos outra palavra: "${answer.transcript.trim()}".`
+					: 'Não deu para ouvir a palavra.'
+			}
+		};
+	}
+	return vereditoPorSilaba(compararPronuncia(pronuncia, answer.fonemas).silabas, tudoCerto);
+}

@@ -8,6 +8,7 @@ import { motivoDoBloqueio } from '$lib/server/billing/entitlements';
 import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { comCota, motivoDeCriar } from '$lib/server/billing/cota';
 import { nivelOuNulo, nivelSchema } from '$lib/atividades/nivel';
+import { TETO_DO_TITULO } from '$lib/atividades/titulo';
 import {
 	MAX_LINHAS_POR_LOTE,
 	avisoDeLimite,
@@ -37,6 +38,7 @@ import { parseRawMaterial } from '$lib/kernel/content/parse-raw';
 import {
 	camposMaterial,
 	montarMaterial,
+	nenhumaLinhaEntrou,
 	preencherTraducao,
 	traduzirLote
 } from '$lib/server/atividades/material-form';
@@ -45,9 +47,12 @@ import { getProfile, tagForLabel } from '$lib/kernel/language/profiles';
 import { interactionSchema, promptSchema, gradingSchema } from '$lib/kernel/item';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { transcritorPara } from '$lib/server/escrita';
+import { foneticaDoIdioma } from '$lib/server/pronuncia';
+import { mostraDoDialogo } from '$lib/kernel/generators/dialogue';
+import { dialogueSchema } from '$lib/kernel/content/types';
 import { liberarEnviosQueEsperavamPublicacao } from '$lib/server/modulos/programacao';
 import { montarPlano, tiposPorMaterialSchema } from '$lib/atividades/tipos-por-material';
-import { questaoSchema, tipoDaQuestao } from '$lib/atividades/questao';
+import { mostraDoPrompt, questaoSchema, tipoDaQuestao } from '$lib/atividades/questao';
 import type { Prisma } from '../../../../generated/prisma/client.ts';
 
 /**
@@ -217,6 +222,25 @@ export const definirNivel = command(
 	}
 );
 
+/**
+ * Renomear pela tela da atividade, sem o wizard. O título vale na hora, também
+ * no que está no ar (ele mora na atividade, não na versão).
+ */
+export const renomearAtividade = command(
+	z.object({
+		activityId: z.string(),
+		title: z
+			.string()
+			.trim()
+			.min(1, 'Dê um título para a atividade')
+			.max(TETO_DO_TITULO, `O título vai até ${TETO_DO_TITULO} caracteres`)
+	}),
+	async ({ activityId, title }) => {
+		const { teacher } = await activityOr404(activityId);
+		return { ok: await atividades(teacher).renomear(activityId, title) };
+	}
+);
+
 export const criarAtividade = form(
 	z.object({
 		title: z.string().min(1, 'Dê um título para a atividade'),
@@ -309,7 +333,10 @@ export const adicionarMaterial = form(
 			getTradutor()
 		);
 		if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
-		const montado = montarMaterial(comTraducao.campos);
+		const montado = montarMaterial(comTraducao.campos, {
+			alvo: activity.targetLang,
+			origem: activity.sourceLang
+		});
 		if ('error' in montado) return { ok: false as const, error: montado.error };
 
 		// Material igual a um que o professor já tem é REAPROVEITADO, não
@@ -349,13 +376,15 @@ export const adicionarMateriaisEmLote = form(
 		const tradutor = getTradutor();
 
 		const linhas = raw.split('\n').filter((linha) => linha.trim()).length;
-		// Com tradutor, a linha sem separador ENTRA e a tradução vem dele.
-		const lidas = parseRawMaterial(kind, raw, { traduzirSemSeparador: !!tradutor });
+		// Com tradutor, a linha sem separador ENTRA e a tradução vem dele. No
+		// vocabulário, a linha que é frase fica de fora (`problemaDoVocabulario`).
+		const tags = { alvo: activity.targetLang, origem: activity.sourceLang };
+		const lidas = parseRawMaterial(kind, raw, {
+			traduzirSemSeparador: !!tradutor,
+			vocabulario: kind === 'VocabItem' ? tags : undefined
+		});
 		if (lidas.length === 0) {
-			return {
-				ok: false as const,
-				error: 'Nenhuma linha tem o separador. Use "alvo · tradução", um por linha.'
-			};
+			return { ok: false as const, error: nenhumaLinhaEntrou(kind, raw, !!tradutor) };
 		}
 
 		if (lidas.length > MAX_LINHAS_POR_LOTE) {
@@ -409,7 +438,10 @@ export const editarMaterial = form(
 			getTradutor()
 		);
 		if ('error' in comTraducao) return { ok: false as const, error: comTraducao.error };
-		const montado = montarMaterial(comTraducao.campos);
+		const montado = montarMaterial(comTraducao.campos, {
+			alvo: activity.targetLang,
+			origem: activity.sourceLang
+		});
 		if ('error' in montado) return { ok: false as const, error: montado.error };
 
 		const atualizado = await materiais(teacher).update(contentId, campos.kind, montado.dados);
@@ -597,7 +629,8 @@ export const gerarItens = command(
 				sourceLang: atual.sourceLang,
 				itemTarget: atual.itemTarget,
 				skills: atual.skills,
-				tiposPorMaterial: atual.tiposPorMaterial
+				tiposPorMaterial: atual.tiposPorMaterial,
+				level: atual.level
 			},
 			// Só o material DESTA atividade — a biblioteca inteira geraria itens
 			// de conteúdo que não pertence a ela.
@@ -607,6 +640,8 @@ export const gerarItens = command(
 			// A leitura da frase (kana, pinyin) entra no gabarito das questões de
 			// digitar — e fica visível e editável no editor de questão.
 			transcritorPara,
+			// A pronúncia das palavras, para a questão de Pronúncia.
+			foneticaPara: foneticaDoIdioma,
 			gravar: async (dentro, fora) => {
 				const versao = await atividades(teacher).replaceDraftItems(activityId, dentro, fora);
 				// As questões do rascunho anterior saíram: o áudio que só elas usavam
@@ -653,11 +688,16 @@ export const previaDoMaterial = query(
 		const { teacher, activity } = await activityOr404(activityId);
 		const units = await materiais(teacher).byActivity(activityId);
 		if (!units.some((u) => u.id === contentId)) error(404, 'Material não encontrado');
+		const alvo = getProfile(activity.targetLang);
 		const { groups } = runGenerators(units, {
-			targetProfile: getProfile(activity.targetLang),
+			targetProfile: alvo,
 			sourceProfile: getProfile(activity.sourceLang),
 			seed: activity.id,
-			capabilities: { asr: isAsrConfigured(), tts: isTtsConfigured() }
+			capabilities: { asr: isAsrConfigured(), tts: isTtsConfigured() },
+			nivel: nivelOuNulo(activity.level),
+			foneticaDe: await foneticaDoIdioma(alvo),
+			// Os tipos de agora, como na geração: sem escuta, o diálogo vai lido.
+			pedidasPara: (id) => (id === contentId ? tipos : undefined)
 		});
 		// Um exemplo de CADA TIPO, como QUESTÃO RESUMIDA — o cartão do desenho, com a
 		// resposta certa marcada (tela do professor). O tipo desligado vai junto,
@@ -666,6 +706,38 @@ export const previaDoMaterial = query(
 		return umaPorHabilidade(
 			(grupo?.items ?? []).map((item) => resumirQuestao(item, entraComOsTipos(item, tipos)))
 		);
+	}
+);
+
+/**
+ * Os diálogos desta atividade, para o editor criar DO ZERO uma questão sobre um
+ * deles, e como o aluno recebe o diálogo por padrão (o nível decide, como na
+ * geração — `mostraDoDialogo`).
+ */
+export const dialogosDaAtividade = query(
+	z.object({ activityId: z.string() }),
+	async ({ activityId }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		const units = await materiais(teacher).byActivity(activityId);
+		const alvo = getProfile(activity.targetLang);
+		return {
+			mostraPadrao: mostraDoDialogo(
+				nivelOuNulo(activity.level),
+				isTtsConfigured() && alvo.tts.voices.length > 0
+			),
+			dialogos: units.flatMap((u) => {
+				if (u.kind !== 'Dialogue') return [];
+				const lido = dialogueSchema.safeParse(u.data);
+				return lido.success
+					? [
+							{
+								id: u.id,
+								falas: lido.data.lines.map((l) => ({ falante: l.speaker, texto: l.text }))
+							}
+						]
+					: [];
+			})
+		};
 	}
 );
 
@@ -834,7 +906,7 @@ export const questaoParaEditar = query(
 			),
 			// O que a tela precisa para o enunciado padrão acompanhar o gravado.
 			gravada: {
-				tipo: tipoDaQuestao(prompt.kind, interaction.type),
+				tipo: tipoDaQuestao(prompt.kind, interaction.type, mostraDoPrompt(prompt)),
 				interacao: interaction.type,
 				chave: prompt.instructionKey,
 				answerLang: grading.answerLang
@@ -869,7 +941,8 @@ export const salvarQuestao = command(
 		const montada = montarQuestao(questao, {
 			alvo,
 			capacidades,
-			atual: atual ?? undefined
+			atual: atual ?? undefined,
+			foneticaDe: await foneticaDoIdioma(alvo)
 		});
 		if (!montada.ok) return { ok: false as const, error: montada.error };
 
@@ -903,17 +976,21 @@ export const salvarQuestao = command(
 		}
 		if (!gravado) error(404, 'Questão não encontrada neste rascunho');
 
-		if (montada.audioMudou && !descartada) {
+		// O áudio que a questão usa agora — a frase da escuta, as falas do diálogo, a
+		// palavra da Pronúncia. `enfileirarAudioFaltante` pula o que já existe e o
+		// que já está na fila, então pedir sempre não multiplica trabalho.
+		if (!descartada) {
 			await enfileirarAudioFaltante({
 				teacherId: teacher.id,
 				targetTag: activity.targetLang,
 				items: [gravado]
 			});
 		}
-		// A questão era de escuta e mudou a frase ou deixou de ser escuta: o
-		// arquivo antigo, se nenhuma outra questão o usa, sai do bucket.
-		const eraEscuta = atual ? promptSchema.parse(atual.prompt).kind === 'audio' : false;
-		if (eraEscuta && (montada.audioMudou || montada.prompt.kind !== 'audio')) {
+		// O áudio que a questão deixou de usar (mudou a frase, deixou de ser escuta,
+		// trocou o diálogo): se nenhuma outra questão o usa, sai do bucket.
+		const antes = atual ? itemAudioHashes(atual, activity.targetLang) : [];
+		const depois = new Set(itemAudioHashes(gravado, activity.targetLang));
+		if (antes.some((hash) => !depois.has(hash))) {
 			void limparAudioSemUso(teacher.id).catch((erro) => console.warn(erro));
 		}
 		return { ok: true as const, itemId: gravado.id };
@@ -962,7 +1039,12 @@ export const previaDaQuestao = query(
 		if (itemId && !atual) error(404, 'Questão não encontrada neste rascunho');
 		const { alvo, ...capacidades } = capacidadesDe(activity.targetLang);
 
-		const montada = montarQuestao(questao, { alvo, capacidades, atual: atual ?? undefined });
+		const montada = montarQuestao(questao, {
+			alvo,
+			capacidades,
+			atual: atual ?? undefined,
+			foneticaDe: await foneticaDoIdioma(alvo)
+		});
 		if (!montada.ok) return { ok: false as const, error: montada.error };
 
 		const row = {

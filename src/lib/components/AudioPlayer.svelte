@@ -165,10 +165,12 @@
 	onerror={aoFalhar}
 ></audio>
 
-<div class="flex flex-wrap items-center gap-4 rounded-box border border-line bg-base-200 p-4">
+<div
+	class="flex flex-wrap items-center gap-4 rounded-box border border-line bg-base-200 p-4 baixa:gap-3 baixa:p-3"
+>
 	<button
 		type="button"
-		class="btn btn-circle size-[62px] min-h-[62px] shrink-0 btn-accent"
+		class="btn btn-circle size-[62px] min-h-[62px] shrink-0 btn-accent baixa:size-[52px] baixa:min-h-[52px]"
 		class:animate-[en-pulse-ring_2.6s_ease-out_infinite]={playing}
 		onclick={alternar}
 		aria-label={playing ? 'Pausar áudio' : 'Tocar áudio'}
@@ -205,13 +207,20 @@
 	</div>
 
 	<!-- No celular o controle desce para uma linha própria com rótulo: em largura
-	     de telefone ele espremia a onda contra o botão de tocar. -->
+	     de telefone ele espremia a onda contra o botão de tocar. Na tela BAIXA ele
+	     volta para a linha do tocar, como no `emLinha`: a segunda linha custava uns
+	     70px, e é a diferença entre a questão de escuta caber ou rolar
+	     (design-system.md "Player numa tela só"). -->
 	<div
-		class={emLinha ? 'w-auto' : 'w-full border-t border-line pt-3.5 lg:w-auto lg:border-0 lg:pt-0'}
+		class={emLinha
+			? 'w-auto'
+			: 'w-full border-t border-line pt-3.5 lg:w-auto lg:border-0 lg:pt-0 baixa:w-auto baixa:border-0 baixa:pt-0'}
 	>
 		<div class="flex items-center gap-2">
 			{#if !emLinha}
-				<span class="flex-1 text-[12.5px] text-base-content/65 lg:hidden">Velocidade</span>
+				<span class="flex-1 text-[12.5px] text-base-content/65 lg:hidden baixa:hidden"
+					>Velocidade</span
+				>
 			{/if}
 			<button
 				type="button"

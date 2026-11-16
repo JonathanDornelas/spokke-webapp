@@ -40,6 +40,13 @@ describe('regras do editor de questão', () => {
 		// Montar sem áudio é Leitura, como o kernel deriva (o roteiro e o celular dizem o mesmo).
 		expect(tipoDaQuestao('text', 'assemble')).toBe('leitura');
 		expect(tipoDaQuestao('text', 'match')).toBe('leitura');
+		// O diálogo que o aluno OUVE é escuta, o de "Só texto" é leitura, e o que ele
+		// responde falando é fala — os nomes do roteiro e do celular.
+		expect(tipoDaQuestao('composite', 'choice', 'ambos')).toBe('escuta');
+		expect(tipoDaQuestao('composite', 'assemble', 'audio')).toBe('escuta');
+		expect(tipoDaQuestao('composite', 'choice', 'texto')).toBe('leitura');
+		expect(tipoDaQuestao('composite', 'speak', 'ambos')).toBe('fala');
+		expect(tipoDaQuestao('composite', 'choice')).toBe('leitura');
 	});
 
 	it('o enunciado padrão acompanha o formato, e o gravado vence quando nada mudou', () => {

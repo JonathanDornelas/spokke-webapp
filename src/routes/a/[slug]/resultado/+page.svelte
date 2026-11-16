@@ -303,9 +303,8 @@
 	>
 	<div class="flex-1"></div>
 	{#if data.student.temConta}
-		<!-- Com conta, o nome é a porta do painel do aluno. Sem conta é só o nome:
-		     a área não existe para quem não a tem, e este não é o lugar de
-		     oferecê-la. -->
+		<!-- Com conta, o nome é a porta do painel do aluno. Sem conta é só o nome
+		     aqui em cima: a oferta de criar uma mora no rodapé, como a ação do fim. -->
 		<a
 			href={resolve('/aluno')}
 			class="flex items-center gap-2 rounded-full py-1 pe-2 text-[12.5px] whitespace-nowrap text-base-content/65 no-underline transition-colors hover:text-primary"
@@ -701,27 +700,81 @@
 	{/if}
 </div>
 
-{#if data.showFeedback}
-	<footer
-		class="flex shrink-0 items-center gap-4 border-t border-line px-5 pt-3.5 pb-[22px] lg:px-10 lg:pt-5 lg:pb-[26px]"
-	>
-		<span class="hidden flex-1 text-[12.5px] text-base-content/65 lg:block">
-			Suas respostas ficam com o professor desta atividade.
-		</span>
+<!-- O fim da atividade leva ao PAINEL do aluno (pedido do dono do repositório):
+     com conta, "Ir para o meu painel"; sem conta, a oferta de criar uma, com o
+     que ela dá escrito ao lado. É oferta, nunca exigência (auth.md "A conta do
+     aluno"): o resultado já está com o professor, e a área do aluno oferece
+     guardar o que este aparelho respondeu assim que a conta existe. -->
+<footer
+	class="flex shrink-0 flex-col gap-2.5 border-t border-line px-5 pt-3.5 pb-[22px] lg:flex-row lg:items-center lg:gap-4 lg:px-10 lg:pt-5 lg:pb-[26px]"
+>
+	<p class="hidden flex-1 text-[12.5px] leading-snug text-base-content/65 lg:block">
+		{#if data.student.temConta}
+			Suas respostas ficam com o professor desta atividade e no seu painel.
+		{:else}
+			Suas respostas ficam com o professor desta atividade. Com uma conta, elas também ficam
+			guardadas para você, em qualquer aparelho.
+		{/if}
+	</p>
+	{#if !data.student.temConta}
+		<p class="text-center text-[12.5px] leading-snug text-base-content/65 lg:hidden">
+			Crie uma conta para guardar este resultado e ver tudo o que você já respondeu.
+		</p>
+	{/if}
+	<div class="flex flex-col gap-2.5 lg:flex-row lg:items-center">
+		{#if data.showFeedback}
+			<a
+				href={resolve('/a/[slug]/revisao', { slug: data.activity.slug })}
+				class="btn btn-lg min-h-[50px] w-full motion-tap gap-2.5 btn-outline text-base font-bold no-underline lg:w-auto lg:px-[26px]"
+			>
+				Rever minhas respostas
+			</a>
+		{/if}
+		{#if data.student.temConta}
+			<a
+				href={resolve('/aluno')}
+				class="btn btn-lg min-h-[50px] w-full motion-tap gap-2.5 btn-primary text-base font-bold no-underline lg:w-auto lg:px-[26px]"
+			>
+				Ir para o meu painel
+				{@render seta()}
+			</a>
+		{:else}
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do modo. -->
+			<a
+				href="{resolve('/(auth)/cadastro')}?como=aluno"
+				class="btn btn-lg min-h-[50px] w-full motion-tap gap-2.5 btn-primary text-base font-bold no-underline lg:w-auto lg:px-[26px]"
+			>
+				Criar minha conta
+				{@render seta()}
+			</a>
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do modo. -->
+			<a
+				href="{resolve('/(auth)/entrar')}?como=aluno"
+				class="text-center text-[13px] font-semibold text-primary lg:hidden"
+			>
+				Já tenho conta: entrar
+			</a>
+		{/if}
+	</div>
+	{#if !data.student.temConta}
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- rota resolvida mais a query do modo. -->
 		<a
-			href={resolve('/a/[slug]/revisao', { slug: data.activity.slug })}
-			class="btn btn-lg min-h-[50px] w-full motion-tap gap-2.5 btn-outline text-base font-bold no-underline lg:w-auto lg:px-[26px]"
+			href="{resolve('/(auth)/entrar')}?como=aluno"
+			class="hidden text-[13px] font-semibold whitespace-nowrap text-primary lg:inline"
 		>
-			Rever minhas respostas
-			<svg class="size-[18px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-				<path
-					d="M9 5l7 7-7 7"
-					stroke="currentColor"
-					stroke-width="2.2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				/>
-			</svg>
+			Já tenho conta
 		</a>
-	</footer>
-{/if}
+	{/if}
+</footer>
+
+{#snippet seta()}
+	<svg class="size-[18px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+		<path
+			d="M9 5l7 7-7 7"
+			stroke="currentColor"
+			stroke-width="2.2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		/>
+	</svg>
+{/snippet}

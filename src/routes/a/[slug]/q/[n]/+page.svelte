@@ -23,6 +23,7 @@
 	import { finalizarTentativa, responderItem } from '../../player.remote';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import AnswerFeedback from '$lib/components/interactions/AnswerFeedback.svelte';
+	import ContextoDaQuestao from '$lib/components/ContextoDaQuestao.svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import VolumeControl from '$lib/components/VolumeControl.svelte';
 	import AudioPlayer from '$lib/components/AudioPlayer.svelte';
@@ -64,6 +65,11 @@
 		audioSlow?: string;
 		audioDuration?: string;
 		passage?: string;
+		/** O trecho ou o diálogo antes da pergunta, e a pergunta (`composite` com contexto). */
+		contexto?: import('$lib/components/interactions/types').ContextoNoRuntime;
+		pergunta?: string;
+		/** Só na Pronúncia: as sílabas (a fala as usa, e o veredito grifa por sílaba). */
+		silabas?: { leitura: string; tonica: boolean }[];
 		gradedLater?: boolean;
 		skippable?: boolean;
 	}
@@ -682,6 +688,17 @@
 	 */
 	const jaRespondida = $derived(feedback !== null || data.answered !== null);
 	const ultima = $derived(data.index >= data.activity.itemCount);
+	/**
+	 * A questão traz um BLOCO antes da pergunta (o diálogo, o trecho de um texto),
+	 * e é ele que rola por dentro quando a questão não cabe na tela — nunca a
+	 * página (design-system.md "Player numa tela só"). A coluna dele fica com a
+	 * altura que sobra, e a da resposta, com a do conteúdo.
+	 */
+	const temBloco = $derived(!!data.item.contexto);
+	/** Montar, associar e ordenar grifam a resposta na própria interação. */
+	const marcasNaInteracao = $derived(
+		interaction === 'assemble' || interaction === 'match' || interaction === 'order'
+	);
 
 	const kbd =
 		'rounded-md border border-line border-b-2 bg-base-200 px-2 py-1 font-mono text-[11.5px] font-medium text-base-content';
@@ -746,7 +763,8 @@
 <svelte:window onkeydown={onKey} />
 
 <header
-	class="flex items-center gap-3 px-4 pt-4 pb-3 lg:gap-[18px] lg:border-b lg:border-line lg:px-10 lg:py-4"
+	class="flex items-center gap-3 px-4 pt-4 pb-3 lg:gap-[18px] lg:border-b
+	       lg:border-line lg:px-10 lg:py-4 max-lg:baixa:pt-2.5 max-lg:baixa:pb-2 lg:baixa:py-2.5"
 >
 	{#if data.index > 1}
 		<!-- Botão e não link: voltar passa pelo MESMO `trocarPara` da ida, e é
@@ -834,16 +852,21 @@
 </header>
 
 <form onsubmit={verificar} class="flex min-h-0 flex-1 flex-col">
-	<!-- `relative` para as faixas decorativas; `content-center` porque no
-	     desktop a questão fica no meio do cartão, não colada no topo. -->
-	<!-- É ESTE o container que rola. `safe center` e não `center`: com a
-	     centralização normal, conteúdo mais alto que a área transborda para os
-	     DOIS lados e o topo da questão fica inalcançável — o `safe` desiste de
+	<!-- `relative` para as faixas decorativas. A questão CABE nesta área, sem
+	     rolar (design-system.md "Player numa tela só"): no desktop a única linha
+	     da grade tem a altura da área e as colunas ficam no meio dela; quem não
+	     cabe é o bloco do diálogo ou do texto, que rola por dentro. A rolagem
+	     daqui continua existindo como último recurso — numa tela pequena demais,
+	     nada pode ficar fora do alcance. `safe center` e não `center`: com a
+	     centralização normal, a coluna mais alta que a área transbordaria para os
+	     DOIS lados e o topo da questão ficaria inalcançável — o `safe` desiste de
 	     centralizar exatamente quando não cabe. -->
 	<div
-		class="relative flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-5 py-[18px]
-		       lg:grid lg:grid-cols-2 lg:[align-content:safe_center] lg:items-center lg:gap-14 lg:px-16
-		       {gradeNaTela && tecladoAberto ? 'lg:py-6' : 'lg:py-13'}"
+		class="relative flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto px-5 py-[18px] lg:grid
+		       lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)] lg:[align-items:safe_center] lg:gap-14 lg:px-16 max-lg:baixa:py-3 max-lg:muito-baixa:py-2.5
+		       {gradeNaTela && tecladoAberto
+			? 'lg:py-6'
+			: 'lg:py-[clamp(1.25rem,5vh,3.25rem)] lg:baixa:py-5'}"
 	>
 		<!-- As faixas decorativas ficam FORA do `{#key}`: elas são o fundo do
 		     cartão, não a questão, e reiniciar as formas a cada troca faria o
@@ -852,9 +875,17 @@
 		<AmbientShapes edges="both" edgesNoCelular="bottom" />
 
 		{#key data.index}
-			<div class="relative z-1 min-w-0 {movimento}" style="--q-shift: {deslocamento}">
+			<!-- Com um bloco (diálogo, texto), a coluna é flex: no celular ela cresce
+			     até a resposta e o bloco fica com a sobra; no desktop ela tem a
+			     altura da área no máximo, e o bloco encolhe até caber. -->
+			<div
+				class="relative z-1 min-w-0 {temBloco
+					? 'flex grow flex-col lg:max-h-full lg:min-h-0'
+					: ''} {movimento}"
+				style="--q-shift: {deslocamento}"
+			>
 				<p
-					class="mb-3 flex items-center gap-[9px] text-[11.5px] font-bold tracking-[0.08em] uppercase lg:mb-[15px] lg:text-xs
+					class="mb-3 flex shrink-0 items-center gap-[9px] text-[11.5px] font-bold tracking-[0.08em] uppercase lg:mb-[15px] lg:text-xs baixa:mb-2 lg:baixa:mb-2.5
 				       {data.item.skill === 'listening' || data.item.skill === 'speaking'
 						? 'text-accent'
 						: 'text-primary'}"
@@ -870,8 +901,11 @@
 					</svg>
 					{data.item.skillLabel}{data.item.gradingLabel ? ` · ${data.item.gradingLabel}` : ''}
 				</p>
+				<!-- Na tela baixa o título desce para 22–28px: no celular com as barras
+				     do navegador, cada linha dele é uma alternativa a menos à vista. -->
 				<h1
-					class="mb-3.5 font-display text-title font-semibold tracking-[-0.025em] text-pretty lg:mb-3.5"
+					class="mb-3.5 shrink-0 font-display text-title font-semibold tracking-[-0.025em] text-pretty
+					       baixa:mb-2.5 baixa:text-[clamp(1.375rem,1rem+1vw,1.75rem)]"
 				>
 					{data.item.prompt}
 				</h1>
@@ -879,13 +913,15 @@
 				<!-- A regra da questão. No celular ela dá lugar ao conteúdo: a tela é
 			     uma só e a informação reaparece no feedback da correção. -->
 				{#if data.item.hint}
-					<p class="mb-7 hidden text-[15px] leading-[1.6] text-base-content/65 lg:block">
+					<p
+						class="mb-7 hidden shrink-0 text-[15px] leading-[1.6] text-base-content/65 lg:block baixa:mb-4"
+					>
 						{data.item.hint}
 					</p>
 				{/if}
 
 				{#if data.item.audio}
-					<div class="mb-[18px] lg:mt-7 lg:mb-0">
+					<div class="mb-[18px] shrink-0 lg:mt-7 lg:mb-0 max-lg:baixa:mb-3 lg:baixa:mt-4">
 						<AudioPlayer
 							src={data.item.audio}
 							srcSlow={data.item.audioSlow}
@@ -894,7 +930,9 @@
 							onplay={() => plays++}
 						/>
 						{#if viewport.desktop}
-							<p class="mt-5 flex items-center gap-2.5 text-[12.5px] text-base-content/65">
+							<p
+								class="mt-5 flex items-center gap-2.5 text-[12.5px] text-base-content/65 baixa:mt-3"
+							>
 								<span class={kbd}>Espaço</span> tocar de novo
 							</p>
 						{/if}
@@ -911,7 +949,7 @@
 							Em {data.item.sourceLabel}
 						</p>
 					{/if}
-					<div class="mb-5 rounded-box border border-line bg-base-200 p-4">
+					<div class="mb-5 rounded-box border border-line bg-base-200 p-4 baixa:mb-3 baixa:p-3.5">
 						<p
 							dir={data.item.interaction === 'assemble' ? data.item.sourceDir : data.item.dir}
 							class="font-content text-[17px] leading-[1.65]"
@@ -920,18 +958,42 @@
 						</p>
 					</div>
 				{/if}
+
+				<!-- O trecho ou o diálogo antes da pergunta (`composite` com contexto). -->
+				{#if data.item.contexto}
+					<ContextoDaQuestao contexto={data.item.contexto} dir={data.item.dir} ajustavel />
+				{/if}
 			</div>
 		{/key}
 
 		{#key data.index}
+			<!-- Com um bloco ao lado, a coluna da resposta tem a altura dela e não
+			     cresce: a sobra da tela é do diálogo ou do texto. -->
 			<div
-				class="relative z-1 flex min-w-0 flex-1 flex-col {movimento}"
+				class="relative z-1 flex min-w-0 flex-1 flex-col {temBloco
+					? 'max-lg:grow-0'
+					: ''} {movimento}"
 				style="--q-shift: {deslocamento}"
 			>
+				<!-- A pergunta sobre o trecho ou o diálogo abre a coluna da RESPOSTA: no
+				     desktop ela fica ao lado das alternativas, e não no pé de um diálogo
+				     longo, fora da vista; no celular continua entre o diálogo e elas. -->
+				{#if data.item.pergunta}
+					<p
+						dir={data.item.dir}
+						class="mb-5 font-content text-[19px] leading-snug font-semibold baixa:mb-3 baixa:text-[17px]"
+					>
+						{data.item.pergunta}
+					</p>
+				{/if}
 				{#if data.item.interaction === 'choice'}
 					<ChoiceInteraction item={data.item} bind:value={choiceValue} desktop={viewport.desktop} />
-					{#if viewport.desktop}
-						<p class="mt-3.5 flex items-center gap-2.5 text-[12.5px] text-base-content/65">
+					<!-- Respondida, a legenda dos números sai: não há mais o que escolher, e
+					     ela empurrava o veredito para baixo da dobra. -->
+					{#if viewport.desktop && !jaRespondida}
+						<p
+							class="mt-3.5 flex items-center gap-2.5 text-[12.5px] text-base-content/65 baixa:mt-2.5"
+						>
 							{#each data.item.options as opt, i (opt.id)}<span class={kbd}>{i + 1}</span>{/each} escolher
 							pelo número
 						</p>
@@ -963,7 +1025,16 @@
 						tecladoNaTela
 					/>
 				{:else if data.item.interaction === 'assemble'}
-					<AssembleInteraction item={data.item} bind:chosen={assembleChosen} />
+					<!-- A dica de teclado só onde há teclado; respondida, as peças que
+					     sobraram saem (não há mais o que montar) e as fora do lugar ficam
+					     grifadas na própria frase. -->
+					<AssembleInteraction
+						item={data.item}
+						bind:chosen={assembleChosen}
+						dicaDeTeclado={viewport.desktop}
+						corrigida={jaRespondida}
+						{feedback}
+					/>
 				{:else if data.item.interaction === 'select'}
 					<SelectInteraction item={data.item} bind:value={selectValue} />
 				{:else if data.item.interaction === 'match'}
@@ -975,7 +1046,7 @@
 						{feedback}
 					/>
 				{:else if data.item.interaction === 'order'}
-					<OrderInteraction item={data.item} bind:order={orderSequence} />
+					<OrderInteraction item={data.item} bind:order={orderSequence} {feedback} />
 				{:else if data.item.interaction === 'speak'}
 					<!-- Respondida, o microfone sai: a tela dizia "toque para regravar"
 					     e o toque era recusado. O veredito embaixo já diz o que se
@@ -999,17 +1070,22 @@
 				     um "Monte a frase" não via feedback nenhum: a tela esperava os
 				     2,2 s de leitura e passava para a próxima questão. -->
 				{#if feedback}
-					<!-- No `match` o veredito vem SÓ com a linha de estado: as marcas
-					     pintam os cartões dentro da própria interação, e repetir
-					     "bookshop → relatório" aqui embaixo diria a mesma coisa duas
-					     vezes — a segunda sem as colunas ao lado. -->
+					<!-- Em montar, associar e ordenar as marcas ficam DENTRO da interação
+					     (a peça grifada, os cartões pintados, a fala com o lugar dela), e
+					     repeti-las aqui diria a mesma coisa duas vezes — seis falas viravam
+					     dezoito linhas. No montar o veredito ainda traz a frase certa; no
+					     associar, não (resolveria o exercício); no ordenar o lugar de
+					     cada fala já é a resposta. -->
 					<AnswerFeedback
 						state={feedback.state}
 						hint={feedback.hint}
-						marks={interaction === 'match' ? undefined : feedback.marks}
-						expected={interaction === 'match' ? undefined : feedback.expected}
+						marks={marcasNaInteracao ? undefined : feedback.marks}
+						expected={interaction === 'match' || interaction === 'order'
+							? undefined
+							: feedback.expected}
 						heard={feedback.heard}
 						dir={data.item.dir}
+						porSilaba={Array.isArray(data.item.silabas)}
 					/>
 				{/if}
 
@@ -1047,7 +1123,8 @@
 	{/if}
 
 	<footer
-		class="flex items-center gap-2.5 border-t border-line px-5 pt-3.5 pb-[22px] lg:gap-4 lg:px-16 lg:pt-5 lg:pb-[26px]"
+		class="flex items-center gap-2.5 border-t border-line px-5 pt-3.5 pb-[22px] lg:gap-4 lg:px-16
+		       lg:pt-5 lg:pb-[26px] max-lg:baixa:pt-3 max-lg:baixa:pb-3.5 lg:baixa:pt-3.5 lg:baixa:pb-4"
 	>
 		{#if gradeNaTela && !jaRespondida && !tecladoAberto}
 			<!-- Oculto, o teclado volta por aqui — o mesmo lugar do "Pular", porque

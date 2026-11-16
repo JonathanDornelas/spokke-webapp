@@ -69,14 +69,87 @@ describe('runGenerators', () => {
 	});
 
 	it('explica o material que não gerou nada em vez de sumir com ele', () => {
-		const soUmVocab: StoredContentUnit[] = [
-			{ id: 'v1', kind: 'VocabItem', data: { term: 'bread', translation: 'pão' } }
+		// Texto sem pergunta de compreensão não rende questão nenhuma.
+		const textoSemPergunta: StoredContentUnit[] = [
+			{
+				id: 'p1',
+				kind: 'Passage',
+				data: { title: 'At the bakery', text: 'I buy bread every morning.', questions: [] }
+			}
 		];
-		const [group] = runGenerators(soUmVocab, options).groups;
+		const [group] = runGenerators(textoSemPergunta, options).groups;
 
 		expect(group.items).toHaveLength(0);
 		expect(group.reason).toBeTruthy();
-		expect(group.excerpt).toBe('bread');
+		expect(group.excerpt).toBe('At the bakery');
+	});
+});
+
+// O vocabulário rende as quatro habilidades, como a frase (pedido do dono do
+// repositório), e as escolhas só saem com outros termos para errar.
+describe('vocabulário: tradução, escuta, escrita e fala', () => {
+	const vocab: StoredContentUnit[] = [
+		{ id: 'v1', kind: 'VocabItem', data: { term: 'bread', translation: 'pão' } },
+		{ id: 'v2', kind: 'VocabItem', data: { term: 'kitchen', translation: 'cozinha' } },
+		{ id: 'v3', kind: 'VocabItem', data: { term: 'ice cream', translation: 'sorvete' } }
+	];
+	const geradores = (opcoes: GenerationOptions, unidades = vocab) =>
+		runGenerators(unidades, opcoes)
+			.groups.find((g) => g.contentId === 'v1')!
+			.items.map((i) => i.generatedBy);
+
+	it('um termo com outros termos no conjunto rende as escolhas, a escuta, a escrita e a fala', () => {
+		expect(geradores({ ...options, capabilities: { asr: true, tts: true } })).toEqual([
+			'vocab-choice',
+			'vocab-choice-term',
+			'listen-vocab-choice',
+			'vocab-type',
+			'listen-vocab-type',
+			'speak-vocab'
+		]);
+	});
+
+	it('sozinho ele ainda rende a escrita, o ditado e a fala: só as escolhas pedem outros termos', () => {
+		expect(geradores({ ...options, capabilities: { asr: true, tts: true } }, [vocab[0]!])).toEqual([
+			'vocab-type',
+			'listen-vocab-type',
+			'speak-vocab'
+		]);
+	});
+
+	it('sem voz não há escuta, sem ASR não há fala', () => {
+		const semNada = geradores({ ...options, capabilities: { asr: false, tts: false } });
+		expect(semNada).toEqual(['vocab-choice', 'vocab-choice-term', 'vocab-type']);
+	});
+
+	it('a palavra que vira Pronúncia não ganha também a fala comum; a expressão, sim', () => {
+		const comDicionario: GenerationOptions = {
+			...options,
+			capabilities: { asr: true, tts: true },
+			foneticaDe: (p) => ({ bread: ['B', 'R', 'EH1', 'D'] })[p] ?? null
+		};
+		expect(geradores(comDicionario)).toContain('vocab-pronuncia');
+		expect(geradores(comDicionario)).not.toContain('speak-vocab');
+		const expressao = runGenerators(vocab, comDicionario)
+			.groups.find((g) => g.contentId === 'v3')!
+			.items.map((i) => i.generatedBy);
+		expect(expressao).toContain('speak-vocab');
+		expect(expressao).not.toContain('vocab-pronuncia');
+	});
+
+	it('as escolhas erram com os outros termos, e o áudio nunca vai como enunciado', () => {
+		const itens = runGenerators(vocab, {
+			...options,
+			capabilities: { asr: true, tts: true }
+		}).groups.find((g) => g.contentId === 'v1')!.items;
+		const termo = itens.find((i) => i.generatedBy === 'vocab-choice-term')!;
+		expect(termo.prompt.text).toBe('pão');
+		expect(termo.interaction.payload).toMatchObject({ options: expect.arrayContaining(['bread']) });
+		const escuta = itens.find((i) => i.generatedBy === 'listen-vocab-choice')!;
+		expect(escuta.prompt).toMatchObject({ kind: 'audio', text: 'bread' });
+		expect(escuta.interaction.payload).toMatchObject({
+			options: expect.arrayContaining(['pão', 'cozinha'])
+		});
 	});
 });
 
