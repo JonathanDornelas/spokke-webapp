@@ -46,6 +46,22 @@ entre 0 e 1 e o feedback estruturado — nunca lance exceção para resposta err
 Aceite múltiplas respostas válidas. Passe toda comparação pelo normalizador do
 `LanguageProfile`; nunca compare string direto.
 
+## 5b. `conferir`
+
+A conferência de qualidade da questão (kernel.md "Conferência de qualidade"), no mesmo arquivo
+da interação. Diz o que este formato tem de errado sem saber idioma nenhum, e devolve
+`Problema[]` com código, nunca frase:
+
+- **`erro`** para o que corrige errado ou não testa nada: a resposta escrita no enunciado
+  (`respostaNoEnunciado`), dois textos iguais onde a correção é por posição (`repetidos`), o
+  gabarito que o aluno não tem como dar. Na geração, a questão com erro não entra sozinha.
+- **`aviso`** para o que vale olhar.
+
+Toda comparação usa os helpers de `kernel/qualidade/comparar.ts` (normalizador pelos dois
+perfis, regra nº 6). Código novo entra em `CODIGOS_DAS_REGRAS` e ganha a frase em
+`$lib/atividades/qualidade.ts`. O que depende de SENTIDO não entra aqui: é do tradutor, no
+servidor, e só na tradução para a língua do aluno (`server/atividades/variantes-aceitas.ts`).
+
 ## 6. Gerador
 
 Em `src/lib/kernel/generators/`. `(ContentUnit, LanguageProfile) => Item[]`, pura.
@@ -62,7 +78,7 @@ feedback otimista.
 
 ## 8. Testes
 
-Os quatro obrigatórios de `.claude/rules/testing.md`, sem exceção. O de `toRuntime` é o que
+Os cinco obrigatórios de `.claude/rules/testing.md`, sem exceção. O de `toRuntime` é o que
 impede vazamento de gabarito; se você escrever só um, escreva esse.
 
 ## Checklist final
@@ -70,6 +86,7 @@ impede vazamento de gabarito; se você escrever só um, escreva esse.
 - [ ] Registrado no registry e aparece no Studio
 - [ ] Formulário gerado a partir do schema, sem UI escrita à mão
 - [ ] `toRuntime` testado contra vazamento
+- [ ] `conferir` com um caso de cada problema, e a questão sã passando limpa
 - [ ] Testado em idioma sem espaço e em idioma com diacrítico
 - [ ] Habilidades derivadas corretamente (não declaradas manualmente)
 - [ ] Nenhuma migration criada

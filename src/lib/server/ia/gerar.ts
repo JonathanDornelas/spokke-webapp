@@ -66,6 +66,32 @@ function resumoDe(
 	}
 }
 
+/**
+ * A proposta COMO A BIBLIOTECA A VÊ. A IA manda as outras traduções certas junto
+ * de cada frase (`variants`), e o reaproveitamento compara o material inteiro: a
+ * mesma frase que o professor já tem SEM variações deixaria de casar, e aceitar a
+ * proposta criaria uma segunda linha igual. Então, quando a frase já existe sem
+ * elas, a proposta vira a que existe (as variações da IA ficam de fora: o material
+ * do professor não muda por causa de uma proposta).
+ */
+export async function comoNaBiblioteca(
+	teacher: TeacherScope,
+	kind: ContentUnitKind,
+	dados: Record<string, unknown>
+): Promise<{ dados: Record<string, unknown>; reused: boolean }> {
+	const repo = materiais(teacher);
+	if ((await repo.findEquivalent(kind, dados)) !== null) return { dados, reused: true };
+	if (kind === 'SentencePair' && 'variants' in dados) {
+		const semVariacoes = Object.fromEntries(
+			Object.entries(dados).filter(([chave]) => chave !== 'variants')
+		);
+		if ((await repo.findEquivalent(kind, semVariacoes)) !== null) {
+			return { dados: semVariacoes, reused: true };
+		}
+	}
+	return { dados, reused: false };
+}
+
 /** Chave de repetição: o material aparado, para "duas iguais na mesma resposta" virar uma. */
 function chaveDe(dados: Record<string, unknown>): string {
 	return JSON.stringify(dados, (_k, v) => (typeof v === 'string' ? v.trim().toLowerCase() : v));
@@ -188,15 +214,15 @@ export async function gerarPropostas(
 	await estornar(teacher, estornados, entrada.requestId, debito.cicloInicio);
 	await registrarUso(teacher, gerador, entrada, validas.length, resposta);
 
-	const repo = materiais(teacher);
 	const propostas: PropostaDaIa[] = [];
-	for (const [i, dados] of validas.entries()) {
+	for (const [i, proposta] of validas.entries()) {
+		const { dados, reused } = await comoNaBiblioteca(teacher, entrada.kind, proposta);
 		propostas.push({
 			id: `${entrada.requestId}:${i}`,
 			kind: entrada.kind,
 			dados,
 			resumo: resumoDe(entrada.kind, dados),
-			reused: (await repo.findEquivalent(entrada.kind, dados)) !== null
+			reused
 		});
 	}
 

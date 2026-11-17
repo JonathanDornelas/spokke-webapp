@@ -1,8 +1,19 @@
 import { z } from 'zod';
 import { tolerantScore } from '../grading/compare';
-import { graphemeCount } from '../language/tokenize';
+import { normalize } from '../language/normalize';
+import { graphemeCount, tokenize } from '../language/tokenize';
+import { regra, textoVisivel, vazios } from '../qualidade/comparar';
+import type { Problema } from '../qualidade/types';
 import { promptSkills } from './skills';
 import type { InteractionType, TextRuntime } from './types';
+
+/**
+ * Abaixo deste tamanho a palavra da lacuna aparecer no apoio não diz nada: o
+ * "a" do inglês e o artigo "a" do português são palavras diferentes que se
+ * escrevem igual. A partir dele é o "hotel" e o "chocolate" — a lacuna está
+ * resolvida na frase de cima.
+ */
+const MIN_CARACTERES_PARA_LACUNA_NO_APOIO = 4;
 
 /**
  * Completar a lacuna. É `type` com a frase mascarada visível — a mecânica de
@@ -54,5 +65,28 @@ export const cloze: InteractionType<
 		value: tolerantScore(answer.text, payload.accepted, profile)
 	}),
 
-	skills: (prompt) => [...promptSkills(prompt), 'writing']
+	skills: (prompt) => [...promptSkills(prompt), 'writing'],
+
+	conferir: (payload, ctx) => {
+		const problemas: Problema[] = [...vazios(payload.accepted, ctx.perfis)];
+		if (!/_{2,}/.test(payload.masked)) problemas.push(regra('lacuna-ausente', 'erro'));
+
+		// A palavra da lacuna escrita na frase de apoio: o aluno copia de cima. A
+		// comparação é por PALAVRAS (regra nº 5), nas duas línguas — o apoio está na
+		// do aluno e a lacuna na alvo, e o cognato é igual pelas duas.
+		const apoio = textoVisivel(ctx.prompt);
+		const [lacuna] = payload.accepted;
+		if (apoio && lacuna && graphemeCount(lacuna.trim()) >= MIN_CARACTERES_PARA_LACUNA_NO_APOIO) {
+			const noApoio = [ctx.perfis.alvo, ctx.perfis.origem].some((perfil) => {
+				const frase = tokenize(apoio, perfil).map((p) => normalize(p, perfil));
+				const trecho = tokenize(lacuna, perfil)
+					.map((p) => normalize(p, perfil))
+					.filter(Boolean);
+				if (trecho.length === 0 || trecho.length > frase.length) return false;
+				return frase.some((_, i) => trecho.every((p, j) => frase[i + j] === p));
+			});
+			if (noApoio) problemas.push(regra('lacuna-no-apoio', 'aviso', lacuna));
+		}
+		return problemas;
+	}
 };

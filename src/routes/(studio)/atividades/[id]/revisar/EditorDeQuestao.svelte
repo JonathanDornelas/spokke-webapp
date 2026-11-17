@@ -36,7 +36,7 @@
 		/** A questão aberta está fora da atividade. */
 		fora: boolean;
 		idioma: { tag: string; dir: 'ltr' | 'rtl'; alvo: string; aluno: string };
-		capacidades: { tts: boolean; asr: boolean };
+		capacidades: { tts: boolean; asr: boolean; traducao?: boolean };
 		onfechar: () => void;
 		onsalvo: (itemId: string, irPara: string | null) => void;
 		onalternarFora: (itemId: string, fora: boolean) => Promise<string | null>;

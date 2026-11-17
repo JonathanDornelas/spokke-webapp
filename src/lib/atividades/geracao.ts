@@ -23,6 +23,8 @@ export interface PassoComEstado {
 	numero?: number;
 	/** O segundo número, quando há (as que ficam de fora). */
 	outro?: number;
+	/** O terceiro, quando há: das de fora, as que a conferência reprovou. */
+	terceiro?: number;
 }
 
 export interface ProgressoDaGeracao {
@@ -56,9 +58,14 @@ export function textoDoPasso(passo: PassoComEstado): string {
 				? `${plural(n, 'questão montada', 'questões montadas')}`
 				: 'Montando as questões de cada material';
 		case 'separando':
-			return passo.estado === 'feito'
-				? `${plural(n, 'entra', 'entram')} na atividade, ${plural(passo.outro ?? 0, 'fica de fora', 'ficam de fora')}`
-				: 'Separando pela quantidade pedida';
+			if (passo.estado !== 'feito') return 'Separando pela quantidade pedida';
+			return [
+				`${plural(n, 'entra', 'entram')} na atividade, ${plural(passo.outro ?? 0, 'fica de fora', 'ficam de fora')}`,
+				// As reprovadas pela conferência vão para as de fora, com o motivo na revisão.
+				passo.terceiro ? `${passo.terceiro} com problema` : ''
+			]
+				.filter(Boolean)
+				.join(', ');
 		case 'variantes':
 			return passo.estado === 'feito'
 				? n > 0

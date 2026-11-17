@@ -137,6 +137,20 @@ Gemini, que é a dos preços; o Claude é pago pelos créditos mensais da API (d
 **Medir**: `AiUsage.source` (`prompt`, `imagem`, `video`) e `AiUsage.mediaSeconds` separam, na
 consulta de adr-002, os tokens de ler o arquivo dos de escrever as propostas.
 
+### 7. As variações da tradução vêm com o material (2026-11-16)
+
+O par de frases que a IA propõe traz as variações da tradução (`variants`, até 3): a mesma chamada
+do "Gerar com IA", o mesmo crédito, nada novo saindo da máquina. Viram resposta aceita na questão de
+tradução — o pedido do dono foi "preciso de variações para não negativar errado".
+
+**A IA fica só nisto: gerar material.** Houve um revisor de IA para conferir o gabarito de cada
+questão gerada; ele saiu antes de ser ligado, a pedido do dono ("a ideia é utilizar as ferramentas
+que já temos ou que são irrisórias; a IA será apenas para geração de material"). A conferência das
+questões é feita pelas regras do kernel e pelo tradutor do serviço de áudio, que roda na nossa
+máquina (`.claude/rules/kernel.md` "Conferência de qualidade", `docs/adr-006-traducao.md`). Com
+isso a política de privacidade continua verdadeira como está: as questões são montadas sem modelo
+de linguagem e sem enviar o material do professor a ninguém.
+
 ## Privacidade
 
 O pedido do professor e os nomes dos idiomas vão ao provedor (Claude ou Gemini); nenhum dado de

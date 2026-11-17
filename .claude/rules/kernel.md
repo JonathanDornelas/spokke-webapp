@@ -79,6 +79,9 @@ export const assemble: InteractionType = {
   grade: (payload, answer, profile) => Result<Score>,
 
   skills: (prompt) => Skill[],
+
+  // o que este formato tem de errado sem saber idioma — "Conferência de qualidade"
+  conferir: (payload, ctx) => Problema[],
 };
 ```
 
@@ -341,10 +344,12 @@ grava os dois no rascunho, o `fora` marcado como descartado, para a revisão tro
 
 - **Teto duro de 15 questões por atividade** (`MAX_ITENS`) — acima disso o aluno abandona no
   meio e o relatório do professor fica pela metade.
-- **Fala e escuta ficam em 5 cada** (`TETO_POR_HABILIDADE`): cada item de escuta é um par de
+- **Fala e escuta ficam em 10 cada** (`TETO_POR_HABILIDADE`): cada item de escuta é um par de
   arquivos de TTS a sintetizar e esperar, e cada um de fala é uma gravação que o aluno precisa
   de silêncio para fazer. Uma atividade inteira de qualquer um dos dois é o que sai por
-  acidente quando o material é todo do mesmo tipo.
+  acidente quando o material é todo do mesmo tipo. Eram 5; o dono do repositório subiu para 10
+  (2026-11-17), depois de uma atividade só de fala com sete vocabulários entregar 5 e deixar 2 de
+  fora. Juntas, as duas são limitadas pelo teto de 15 da atividade (`maximoPelosTetos`).
 - **Um item entra se todas as habilidades que ele EXIGE foram pedidas**, não se alguma foi.
   "Ouça e escreva" é listening + writing: quem desmarcou escrita não quer digitar, mesmo que o
   exercício também treine escuta — a regra frouxa devolveria justamente o que ele tirou da
@@ -411,10 +416,15 @@ repositório: "Nunca desista dos seus sonhos" dava quase contra "Nunca desista d
 Elas nascem ao GERAR os itens, nunca na correção, e entram em `accepted` depois da resposta do
 professor — o editor de item as mostra em "Também aceitas", cada uma com o X de remover, e a
 revisão diz "aceita mais N respostas". O kernel só decide o TAMANHO da diferença
-(`grading/variantes.ts`, `variantesProximas`: Dice de palavras ≥ 0,7, no máximo duas palavras a
-mais ou a menos, nada que o normalizador já iguale, teto de três); quem pede as candidatas e
+(`grading/variantes.ts`, `variantesProximas`), por duas réguas: Dice de palavras ≥ 0,7, ou — na
+frase CURTA — até duas palavras trocadas com as outras na mesma ordem. Mais: no máximo duas
+palavras a mais ou a menos, nada que o normalizador já iguale, teto de quatro. A segunda régua
+veio do retorno do dono do repositório ("não está gerando variações"): o Dice é uma proporção, e
+trocar "estou com" por "tenho" em "Não estou com fome" dá 0,57 — as frases de iniciante ficavam sem
+variação nenhuma. A ORDEM é o que separa a troca pequena da frase reescrita ("O relatório já foi
+concluído" contra "Eles já terminaram o relatório" continua de fora). Quem pede as candidatas e
 confere o sentido é o servidor (`server/atividades/variantes-aceitas.ts`, server.md "Tradução do
-material").
+material"), com o tradutor do serviço de áudio e sem IA.
 
 **O par de frases também guarda variações** (`SentencePair.variants`): as que o tradutor sugeriu
 quando o professor cadastrou a frase (o formulário de material as mostra como "automática") e as
@@ -436,10 +446,84 @@ vindo por cima, sem repetir as do material.
   ("eu e meu irmão", pelas `conjuncoes` do profile). Vale na hora para o que já foi publicado,
   quando o professor escreveu o pronome. **Na geração** (`candidatasComSujeito`): o feixe do
   tradutor não garante esse par — para "I'm looking forward to the weekend" ele só variava gênero e
-  preposição —, então, quando a resposta do professor não traz o sujeito, o servidor propõe a forma
-  com cada pronome e a ida e volta escolhe o certo ("Nós estou…" volta como "We look forward…" e
-  cai; "Eu está chovendo" volta como "I'm raining"). Fica no máximo uma, antes das do feixe e fora
-  do teto delas.
+  preposição —, então, quando nenhuma resposta aceita traz o sujeito, o kernel monta a forma com
+  cada pronome e o servidor a confere pelo COMEÇO FORÇADO: o tradutor traduz a frase obrigado a
+  começar por "Eu", e o pronome só vale se ele escrever a frase do professor depois dele. A ida e
+  volta não serve para isso — o modelo ignora um pronome sobrando, e "Eu há um gato no jardim"
+  voltava igual à frase certa (server.md "Tradução do material"). Fica no máximo uma, antes das do
+  feixe e fora do teto delas.
+
+**No editor, as variações são um PEDIDO do professor** ("Sugerir outras traduções", no aviso de
+"só uma tradução é aceita"): o mesmo funil, para aquela questão, e as novas entram em "Também
+aceitas" para ele manter ou tirar. O material que a IA gerou já chega com as variações
+(`SentencePair.variants`, até três por frase) — é o único ponto em que a IA entra.
+
+## Conferência de qualidade
+
+Toda questão passa por uma conferência antes de chegar ao aluno (pedido do dono do repositório:
+"uma camada de controle de qualidade na geração, como a dos áudios, abrangendo todos os tipos"). O
+caso que a trouxe: vocabulário de espanhol para português em que "la cometa" tinha "la cometa" como
+sentido — o tradutor devolveu a palavra sem traduzir, e a questão mostrava a resposta.
+
+**Nada aqui usa IA** (pedido do dono do repositório: "utilizar as ferramentas que já temos"). As
+regras são do kernel, puras, e valem sempre. O que depende de SENTIDO é do tradutor do serviço de
+áudio, no servidor: a tradução automática conferida antes de ser gravada e as outras traduções
+certas de cada questão (server.md "Tradução do material").
+
+**Cada interação confere a si mesma** (`InteractionType.conferir`, no registry, como o
+`toRuntime`): não existe `switch` por formato. `conferirItem(item, perfis)`
+(`kernel/qualidade/index.ts`) é a porta única, e devolve `Problema[]`: um CÓDIGO, a gravidade, o
+e o trecho da questão a que se refere. O kernel não carrega frase:
+quem escreve para o professor é `$lib/atividades/qualidade.ts`.
+
+| Código                        | Onde                           | Gravidade | O que é                                             |
+| ----------------------------- | ------------------------------ | --------- | --------------------------------------------------- |
+| `resposta-igual-ao-enunciado` | choice, type, assemble, select | erro      | o gabarito é o texto que o aluno lê                 |
+| `alternativas-repetidas`      | choice                         | erro      | duas alternativas iguais (a correção é pelo índice) |
+| `peca-faltando`               | assemble                       | erro      | o gabarito usa peça que não está no banco           |
+| `lacuna-ausente`              | cloze                          | erro      | a frase não tem `___`                               |
+| `pares-repetidos`             | match                          | erro      | o mesmo termo em duas linhas de um lado             |
+| `falas-repetidas`             | order                          | erro      | duas falas iguais (a correção é pela posição)       |
+| `palavra-certa-repetida`      | select                         | erro      | a palavra certa aparece duas vezes para tocar       |
+| `texto-vazio`                 | todos                          | erro      | resposta ou alternativa que some no normalizador    |
+| `formato-invalido`            | todos                          | erro      | o payload não passa no `authoringSchema`            |
+| `resposta-unica-na-traducao`  | type (`answerLang` source)     | aviso     | frase de 3 palavras ou mais com uma resposta aceita |
+| `lacuna-no-apoio`             | cloze                          | aviso     | a palavra da lacuna está na tradução de apoio       |
+| `par-igual-nos-dois-lados`    | match                          | aviso     | "hotel" ↔ "hotel": o par se liga sozinho            |
+| `uma-peca-so`                 | assemble                       | aviso     | uma peça só não é exercício de montar               |
+| `traducao-igual-ao-original`  | speak                          | aviso     | o texto de apoio repete a frase que o aluno fala    |
+
+- **`erro` é o que corrige errado ou não testa nada; `aviso` é o que vale olhar.** A diferença
+  decide o que a geração faz (abaixo), não só a cor.
+- **Toda comparação é a do normalizador, pelos DOIS perfis** (`kernel/qualidade/comparar.ts`,
+  `mesmoTexto`): a conferência nem sempre sabe em que língua está cada texto — as alternativas de
+  "escolha a tradução" estão na do aluno, as de "ouça e escolha" na alvo —, e igual por qualquer um
+  dos dois é igual. É por isso que "La cometa." e "la cometa" são o mesmo texto.
+- **O ditado não é erro.** Em "ouça e escreva" e "ouça e escolha o que ouviu" a resposta É o áudio:
+  `textoVisivel` só conta o que o aluno LÊ (prompt `text` e `composite`). A exceção é "ouça e
+  escolha o SENTIDO", onde a resposta é na língua do aluno (`answerLang: 'source'`, que
+  `vocab-choice` e `listen-vocab-choice` passaram a declarar): ali a certa igual ao que se ouve é a
+  palavra sem traduzir.
+- **Escrita livre (`rubric`) não tem gabarito a conferir**, e a lacuna só acusa palavra de quatro
+  letras ou mais no apoio: o "a" do inglês e o artigo "a" do português são palavras diferentes.
+- A frase a montar é comparada com o enunciado PALAVRA A PALAVRA, pelo segmentador (regra nº 5) —
+  juntar as peças com espaço quebraria o japonês.
+
+**Na geração, a questão com `erro` não entra sozinha** (`separarPelaQuantidade`, quarto argumento
+`reprovado`): ela sai do sorteio, as limpas tomam a vaga, e ela vai para o FIM das "de fora", onde
+a revisão a mostra com o motivo. O professor ainda pode aceitá-la — o sistema só não a escolhe por
+ele. É o desenho da voz: a síntese reprovada é trocada antes de ir para o bucket (server.md "TTS").
+
+**E os geradores já não produzem o que a conferência reprovaria**, onde dá para evitar na origem:
+
+- O termo cujo "sentido" é ele mesmo não vira par do `closing-match` (como as palavras das frases
+  que o tradutor devolve iguais) e não empresta alternativa errada às questões dos outros termos
+  (`sentidosDosOutros`): "la cometa" apareceria em espanhol no meio dos sentidos em português.
+- `distractorPhrases` tira repetição pela forma NORMALIZADA, não pelo texto: "a casa" e "A casa."
+  eram duas alternativas iguais na mesma questão.
+
+Formato novo de exercício traz o seu `conferir` (skill `nova-interacao`), e
+`qualidade.test.ts` confere que toda interação registrada tem um.
 
 ## LanguageProfile
 

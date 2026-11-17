@@ -9,11 +9,13 @@
 	// Os campos são legíveis (alternativas, a frase na ordem certa, os pares); quem
 	// os transforma no payload do kernel é o servidor (`montarQuestao`), o MESMO
 	// para a prévia e para salvar — a tela não oferece o que o servidor recusaria.
-	import { onMount, untrack } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import PreviaDaQuestao from '$lib/components/PreviaDaQuestao.svelte';
 	import CelularDoAluno from '$lib/components/CelularDoAluno.svelte';
+	import ProblemasDaQuestao from './ProblemasDaQuestao.svelte';
+	import { rotuloDaMarca } from '$lib/atividades/qualidade';
 	import { tokenize } from '$lib/kernel/language/tokenize';
 	import type { InteractionKind } from '$lib/kernel/interactions/types';
 	import {
@@ -45,7 +47,8 @@
 		dialogosDaAtividade,
 		previaDaQuestao,
 		questaoParaEditar,
-		salvarQuestao
+		salvarQuestao,
+		sugerirRespostas
 	} from '../../atividades.remote';
 
 	let {
@@ -68,7 +71,7 @@
 		proximoId: string | null;
 		fora: boolean;
 		idioma: { tag: string; dir: 'ltr' | 'rtl'; alvo: string; aluno: string };
-		capacidades: { tts: boolean; asr: boolean };
+		capacidades: { tts: boolean; asr: boolean; traducao?: boolean };
 		onfechar: () => void;
 		onsalvo: (itemId: string, irPara: string | null) => void;
 		onalternarFora: (itemId: string, fora: boolean) => Promise<string | null>;
@@ -526,6 +529,69 @@
 	$effect(() => {
 		if (consulta?.ready) previa = consulta.current ?? null;
 	});
+
+	// ── a conferência ── o que as regras do kernel dizem do que está no
+	// formulário AGORA (vem junto da prévia).
+	const problemas = $derived(previa?.ok ? previa.problemas : []);
+	const marcaDaConferencia = $derived(rotuloDaMarca(problemas));
+	let blocoDaConferencia = $state<HTMLElement>();
+	/**
+	 * Leva até os avisos (no celular eles ficam na aba de editar, não na da prévia).
+	 * Rola SÓ a coluna do formulário: `scrollIntoView` rola todo ancestral, inclusive
+	 * a moldura do modal, que é `overflow-hidden` — o cabeçalho subia para fora da
+	 * vista e sobrava um vão no pé do modal.
+	 */
+	async function verConferencia() {
+		aba = 'editar';
+		await tick();
+		const bloco = blocoDaConferencia;
+		const coluna = bloco?.closest<HTMLElement>('.overflow-y-auto');
+		if (!bloco || !coluna) return;
+		const distancia = bloco.getBoundingClientRect().top - coluna.getBoundingClientRect().top;
+		const reduzido = matchMedia('(prefers-reduced-motion: reduce)').matches;
+		coluna.scrollTo({
+			top: coluna.scrollTop + distancia - (coluna.clientHeight - bloco.offsetHeight) / 2,
+			behavior: reduzido ? 'auto' : 'smooth'
+		});
+	}
+	// "Sugerir outras traduções": o tradutor propõe as outras formas certas da
+	// resposta, pelo mesmo funil da geração, e elas entram em "Também aceitas" —
+	// cada uma com o X de remover. É um pedido do professor, nunca automático: no
+	// editor, o que ele escreveu, ele decide.
+	let sugerindo = $state(false);
+	let notaDaSugestao = $state<string | null>(null);
+	const SEM_RESPOSTA_DO_TRADUTOR =
+		'O tradutor não respondeu agora. Escreva as outras formas que você aceita.';
+	async function sugerirOutras() {
+		if (!questao || sugerindo) return;
+		sugerindo = true;
+		notaDaSugestao = null;
+		try {
+			const r = await sugerirRespostas({
+				activityId,
+				itemId: itemId ?? undefined,
+				questao: $state.snapshot(questao)
+			});
+			if (!r.ok) {
+				notaDaSugestao =
+					r.motivo === 'limite'
+						? 'Muitos pedidos seguidos. Tente de novo em alguns minutos.'
+						: SEM_RESPOSTA_DO_TRADUTOR;
+				return;
+			}
+			const ja = new Set(aceitas.map((a) => a.trim()));
+			const novas = r.respostas.map((t) => t.trim()).filter((t) => t && !ja.has(t));
+			if (novas.length > 0) aceitas = [...aceitas, ...novas];
+			else {
+				notaDaSugestao =
+					'O tradutor não achou outra forma segura para esta frase. Escreva as que você aceita.';
+			}
+		} catch {
+			notaDaSugestao = SEM_RESPOSTA_DO_TRADUTOR;
+		} finally {
+			sugerindo = false;
+		}
+	}
 
 	// ── salvar e fechar ─────────────────────────────────────────────────────
 	let salvando = $state<'so' | 'proxima' | null>(null);
@@ -1402,6 +1468,18 @@
 						{/if}
 					</div>
 				</section>
+				<!-- A conferência, logo depois da resposta certa: é sobre ela que os
+				     avisos falam. Sem problema, não aparece nada. -->
+				{#if problemas.length > 0}
+					<div class="mt-4" bind:this={blocoDaConferencia}>
+						<ProblemasDaQuestao
+							{problemas}
+							onsugerir={capacidades.traducao && interacao === 'type' ? sugerirOutras : undefined}
+							{sugerindo}
+							{notaDaSugestao}
+						/>
+					</div>
+				{/if}
 			{/if}
 		{/if}
 	</div>
@@ -1499,6 +1577,21 @@
 				{@render icone('M12 7.5v6M12 16.5h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', 'size-[15px]')}
 				{erro}
 			</p>
+		{:else if marcaDaConferencia}
+			<!-- A conferência mora depois da resposta certa, e numa tela baixa fica fora
+			     da vista enquanto o professor digita: esta linha diz que há algo e leva
+			     até lá. Não trava o salvar. -->
+			<button
+				type="button"
+				onclick={verConferencia}
+				class="flex w-full items-center gap-2 text-start text-[12.5px] font-semibold lg:w-auto lg:flex-1"
+			>
+				<span class={problemas.some((p) => p.gravidade === 'erro') ? 'text-error' : 'text-warning'}>
+					{@render icone('M12 3.5l9.5 16.5H2.5zM12 9.5v4.5M12 17h.01', 'size-[15px]')}
+				</span>
+				<span>{marcaDaConferencia} nesta questão.</span>
+				<span class="text-primary">Ver</span>
+			</button>
 		{:else}
 			<p class="hidden text-[12.5px] text-base-content/65 lg:block lg:flex-1">
 				{nova

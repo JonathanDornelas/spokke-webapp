@@ -269,10 +269,11 @@
 	async function sugerir(
 		texto: string,
 		de: string,
-		para: string
+		para: string,
+		palavra: boolean
 	): Promise<SugestaoDeTraducao | null> {
 		try {
-			const r = await sugerirTraducao({ texto, de, para });
+			const r = await sugerirTraducao({ texto, de, para, palavra });
 			return r.ok ? { traducao: r.traducao, alternativas: r.alternativas } : null;
 		} catch {
 			return null;

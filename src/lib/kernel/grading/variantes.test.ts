@@ -58,6 +58,35 @@ describe('variantesProximas', () => {
 		).toEqual(['Já terminaram o relatório.']);
 	});
 
+	// A proporção pune frase curta: trocar duas palavras de quatro dá 0,5, e eram
+	// justamente as frases de iniciante que ficavam sem variação nenhuma. As
+	// candidatas são as do MADLAD para cada frase.
+	it('na frase curta, valem até duas palavras trocadas com as outras na mesma ordem', () => {
+		expect(
+			variantesProximas('Não estou com fome.', ['Não tenho fome.', 'Eu não tenho fome.'], ptBR)
+		).toEqual(['Não tenho fome.', 'Eu não tenho fome.']);
+		expect(
+			variantesProximas('Amanhã vamos à praia.', ['Amanhã vamos para a praia.'], ptBR)
+		).toEqual(['Amanhã vamos para a praia.']);
+		expect(
+			variantesProximas('Eu geralmente acordo às sete.', ['Eu costumo acordar às sete.'], ptBR)
+		).toEqual(['Eu costumo acordar às sete.']);
+		expect(variantesProximas('Vou te ligar mais tarde.', ['Eu te ligo mais tarde.'], ptBR)).toEqual(
+			['Eu te ligo mais tarde.']
+		);
+	});
+
+	it('três palavras trocadas, ou nenhuma em comum, continua sendo outra frase', () => {
+		expect(
+			variantesProximas(
+				'Temos que sair agora.',
+				// Em comum na ordem: "temos" e "agora". Sobram três de "ir embora".
+				['Temos de ir embora agora.', 'Vamos nessa.'],
+				ptBR
+			)
+		).toEqual([]);
+	});
+
 	it('para no teto', () => {
 		const candidatas = [
 			'Eu não gosto de chá',

@@ -3,7 +3,7 @@ import { command, getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { atividades } from '$lib/server/db/repos/activities';
-import { gerarPropostas } from '$lib/server/ia/gerar';
+import { comoNaBiblioteca, gerarPropostas } from '$lib/server/ia/gerar';
 import { validarProposta } from '$lib/server/ia/schemas';
 import { avisoDeLimite, gravarMateriais } from '$lib/server/atividades/gravar-materiais';
 import { contentUnitKinds } from '$lib/kernel/content/types';
@@ -90,11 +90,20 @@ export const aceitarPropostasIa = command(
 		const tags = atividade
 			? { alvo: atividade.targetLang, origem: atividade.sourceLang }
 			: { alvo: idioma ?? 'und', origem: 'und' };
-		const unidades = propostas
+		const validas = propostas
 			.map((p) => validarProposta(kind, p, tags))
 			.filter((d): d is NonNullable<typeof d> => d !== null);
-		if (unidades.length === 0) {
+		if (validas.length === 0) {
 			return { ok: false as const, error: 'Nenhuma proposta marcada está completa.' };
+		}
+		// A frase que o professor já tem SEM as variações que a IA mandou é a mesma
+		// frase: entra como a que existe, em vez de virar uma segunda linha igual
+		// (`comoNaBiblioteca` — o reaproveitamento compara o material inteiro).
+		const unidades: unknown[] = [];
+		for (const dados of validas) {
+			unidades.push(
+				(await comoNaBiblioteca(teacher, kind, dados as Record<string, unknown>)).dados
+			);
 		}
 
 		const r = await gravarMateriais(teacher, { kind, unidades, activityId, idioma });

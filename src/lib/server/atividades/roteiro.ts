@@ -2,13 +2,20 @@ import { buildRuntimeItem, itemAudioHashes, type StoredItemRow } from '$lib/serv
 import type { LinhaDoTempo } from '$lib/kernel/language/sintese';
 import { parseContentUnit } from '$lib/kernel/content/parse';
 import type { ContentUnitKind } from '$lib/kernel/content/types';
-import { interactionSchema, promptSchema } from '$lib/kernel/item';
+import { gradingSchema, interactionSchema, promptSchema, type Item } from '$lib/kernel/item';
 import { getInteraction } from '$lib/kernel/interactions/registry';
+import { tetoCheio, usoDosTetos } from '$lib/kernel/generators/select';
 import { matchAuthoringSchema } from '$lib/kernel/interactions/match';
 import { resumoDoItem, ROTULO_DO_MATERIAL } from '$lib/server/atividades/resumo';
 import { readableAnswerKey } from '$lib/server/studio/answer-key';
 import { habilidadeDaQuestao } from '$lib/atividades/questao-resumida';
 import type { RuntimeDaQuestao } from '$lib/components/interactions/types';
+import {
+	conferirItem,
+	ordenarProblemas,
+	type PerfisDaConferencia,
+	type Problema
+} from '$lib/kernel/qualidade';
 
 /**
  * O ROTEIRO do aluno como as telas do professor o desenham — a revisão (etapa 3)
@@ -49,6 +56,22 @@ export function materiaisPorId(
 	);
 }
 
+/**
+ * A conferência de uma questão do roteiro (kernel.md "Conferência de
+ * qualidade"). O `grading` vem de uma coluna JSON: sem passar no schema, a
+ * questão não tem como ser corrigida, e é isso que a revisão diz.
+ */
+function problemasDe(
+	prompt: Item['prompt'],
+	interaction: Item['interaction'],
+	gradingCru: unknown,
+	perfis: PerfisDaConferencia
+): Problema[] {
+	const grading = gradingSchema.safeParse(gradingCru);
+	if (!grading.success) return [{ codigo: 'formato-invalido', gravidade: 'erro' }];
+	return ordenarProblemas(conferirItem({ prompt, interaction, grading: grading.data }, perfis));
+}
+
 type ItemDoRoteiro = StoredItemRow & {
 	discarded: boolean;
 	generatedBy: string | null;
@@ -66,13 +89,24 @@ export function questoesDoRoteiro(
 		/** Onde cada som está em cada áudio, pelo hash (`linhasPorHash`). */
 		linhasByHash?: Map<string, LinhaDoTempo>;
 		materialPorId: Map<string, MaterialDaQuestao>;
+		/**
+		 * As duas línguas da atividade, para a CONFERÊNCIA de cada questão (a revisão
+		 * mostra o aviso na linha). Sem elas — a tela da atividade, que só lê —, as
+		 * questões vão sem problemas.
+		 */
+		perfis?: PerfisDaConferencia;
 	}
 ) {
 	let posicao = 0;
-	return itens.map((item) => {
+	const lidos = itens.map((item) => {
 		const prompt = promptSchema.parse(item.prompt);
 		const interaction = interactionSchema.parse(item.interaction);
-		const skills = getInteraction(interaction.type).skills(prompt);
+		return { item, prompt, interaction, skills: getInteraction(interaction.type).skills(prompt) };
+	});
+	// Quanto de cada teto (fala, escuta) as de DENTRO já usam: é o que diz se uma
+	// de fora ficou de fora pelo teto, e não pela quantidade.
+	const usoDentro = usoDosTetos(lidos.filter((l) => !l.item.discarded).map((l) => l.skills));
+	return lidos.map(({ item, prompt, interaction, skills }) => {
 		const habilidade = habilidadeDaQuestao(skills);
 		// O "ligue os pares" que fecha a atividade não tem material de origem: ele junta
 		// palavras de vários. Sem isto a linha dizia "criada por você" de uma questão
@@ -129,7 +163,13 @@ export function questoesDoRoteiro(
 			material: material ?? null,
 			resposta,
 			runtime,
-			audioPendente: audioDaQuestao.some((hash) => !contexto.urlByHash.has(hash))
+			audioPendente: audioDaQuestao.some((hash) => !contexto.urlByHash.has(hash)),
+			/** Na de fora: a habilidade com teto que já está cheia no roteiro (`tetoCheio`). */
+			foraPeloTeto: item.discarded ? tetoCheio(skills, usoDentro) : null,
+			/** O que as regras do kernel acham da questão, erro antes de aviso. */
+			problemas: contexto.perfis
+				? problemasDe(prompt, interaction, item.grading, contexto.perfis)
+				: []
 		};
 	});
 }

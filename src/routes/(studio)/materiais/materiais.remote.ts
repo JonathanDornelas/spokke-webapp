@@ -129,8 +129,12 @@ export const criarMateriaisEmLote = form(
 			ok: true as const,
 			added: r.criados,
 			reused: r.reaproveitados,
-			ignored: linhas - unidades.length,
+			// Só as que o parser recusou: as que o tradutor não soube têm a frase delas.
+			ignored: Math.max(0, linhas - unidades.length - traduzido.semTraducao),
 			traduzidas: traduzido.traduzidas,
+			// As que o tradutor não soube traduzir ficaram de fora (`traduzirConferindo`).
+			semTraducao: traduzido.semTraducao,
+			semTraducaoDe: traduzido.semTraducaoDe ?? [],
 			foraDoLimite: r.foraDoLimite,
 			aviso: avisoDeLimite(r),
 			motivo: r.motivo

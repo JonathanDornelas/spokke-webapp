@@ -53,6 +53,10 @@ import { dialogueSchema } from '$lib/kernel/content/types';
 import { liberarEnviosQueEsperavamPublicacao } from '$lib/server/modulos/programacao';
 import { montarPlano, tiposPorMaterialSchema } from '$lib/atividades/tipos-por-material';
 import { mostraDoPrompt, questaoSchema, tipoDaQuestao } from '$lib/atividades/questao';
+import { conferirItem, ordenarProblemas } from '$lib/kernel/qualidade';
+import { typeAuthoringSchema } from '$lib/kernel/interactions/type';
+import { variantesDaFrase } from '$lib/server/atividades/variantes-aceitas';
+import { criarLimite } from '$lib/server/limite-por-ip';
 import type { Prisma } from '../../../../generated/prisma/client.ts';
 
 /**
@@ -414,9 +418,14 @@ export const adicionarMateriaisEmLote = form(
 		return {
 			ok: true as const,
 			added: r.criados + r.reaproveitados,
-			ignored: linhas - unidades.length,
+			// Só as que o parser recusou: as que o tradutor não soube têm a frase delas.
+			ignored: Math.max(0, linhas - unidades.length - traduzido.semTraducao),
 			// Quantas traduções vieram do tradutor — é o que o professor confere.
 			traduzidas: traduzido.traduzidas,
+			// E quantas ele não soube traduzir: essas linhas ficaram de fora, e a tela
+			// as devolve para o professor completar (`traduzirConferindo`).
+			semTraducao: traduzido.semTraducao,
+			semTraducaoDe: traduzido.semTraducaoDe ?? [],
 			// Colar a lista da aula passada de novo é comum — dizer quantas linhas
 			// já existiam evita o professor achar que duplicou tudo.
 			reused: r.reaproveitados,
@@ -1068,7 +1077,12 @@ export const previaDaQuestao = query(
 				),
 				// Frase de áudio nova ainda não tem arquivo: a tela diz isso em vez de
 				// mostrar um player que não toca.
-				audioPendente: hashes.length > 0 && assets.length < hashes.length
+				audioPendente: hashes.length > 0 && assets.length < hashes.length,
+				// A conferência ENQUANTO o professor escreve: as regras do kernel sobre o
+				// que está no formulário (kernel.md "Conferência de qualidade").
+				problemas: ordenarProblemas(
+					conferirItem(row, { alvo, origem: getProfile(activity.sourceLang) })
+				)
 			};
 		} catch {
 			return {
@@ -1076,6 +1090,63 @@ export const previaDaQuestao = query(
 				error: 'Os campos desta questão não formam um exercício ainda.'
 			};
 		}
+	}
+);
+
+/** Um pedido por clique; 40 em 10 minutos é folga para revisar uma atividade inteira. */
+const limiteDeSugestoes = criarLimite({ maximo: 40, janelaMs: 10 * 60_000 });
+
+/**
+ * "Sugerir outras traduções", no editor de questão: as outras formas certas da
+ * resposta de uma questão de TRADUÇÃO para a língua do aluno, pelo mesmo funil
+ * da geração (`variantes-aceitas.ts`: o tradutor do serviço de áudio propõe e
+ * confere, sem IA). Não grava nada — a tela as põe em "Também aceitas" e o
+ * professor salva, ou tira a que não quiser.
+ *
+ * É como a questão escrita à mão ganha variações: a geração só passa pelas que
+ * ela mesma montou. Cada pedido é CPU do serviço que também transcreve a fala
+ * dos alunos, daí o teto por professor.
+ */
+export const sugerirRespostas = command(
+	z.object({ activityId: z.string(), itemId: z.string().optional(), questao: questaoSchema }),
+	async ({ activityId, itemId, questao }) => {
+		const { teacher, activity } = await activityOr404(activityId);
+		const tradutor = getTradutor();
+		if (!tradutor) return { ok: false as const, motivo: 'desligado' as const };
+		if (!limiteDeSugestoes.permitir(teacher.id)) {
+			return { ok: false as const, motivo: 'limite' as const };
+		}
+		const atual = itemId ? await atividades(teacher).draftItem(activityId, itemId) : null;
+		if (itemId && !atual) error(404, 'Questão não encontrada neste rascunho');
+		const { alvo, ...capacidades } = capacidadesDe(activity.targetLang);
+		const montada = montarQuestao(questao, {
+			alvo,
+			capacidades,
+			atual: atual ?? undefined,
+			foneticaDe: await foneticaDoIdioma(alvo)
+		});
+		// Só a tradução para a língua do aluno: no idioma alvo o que se ensina é a
+		// forma, e uma variante do tradutor trocaria o que a lição treina.
+		if (
+			!montada.ok ||
+			montada.interaction.type !== 'type' ||
+			montada.grading.answerLang !== 'source' ||
+			montada.prompt.kind !== 'text'
+		) {
+			return { ok: false as const, motivo: 'nao-se-aplica' as const };
+		}
+		const frase = montada.prompt.text?.trim();
+		const aceitas = typeAuthoringSchema.safeParse(montada.interaction.payload);
+		const [principal, ...outras] = aceitas.success ? aceitas.data.accepted : [];
+		if (!frase || !principal) return { ok: false as const, motivo: 'nao-se-aplica' as const };
+		const respostas = await variantesDaFrase(
+			frase,
+			principal,
+			{ alvo, origem: getProfile(activity.sourceLang) },
+			tradutor,
+			outras
+		);
+		return { ok: true as const, respostas };
 	}
 );
 

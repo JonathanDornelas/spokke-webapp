@@ -25,7 +25,7 @@ desta lista: seis itens por grupo, mais o grupo das escolas.
 | Tradução automática      | Escreve só no idioma que ensina; a tradução para a língua do aluno vem pronta para conferir | `MaterialForm`, adr-006          |
 | Gerar material com IA    | A IA propõe material a partir de um pedido, da foto de uma página ou da fala de um vídeo (até 10 min por geração); o professor marca o que entra (Pro e Super) | `MaterialForm`, `ia.remote.ts`, `materiais/ia/arquivo` |
 | Gerador de questões      | Do material saem os exercícios (7 geradores de frase, 1 de vocabulário, texto e diálogo)    | etapa 3                          |
-| Escolher quantas e quais | Quantidade de questões e habilidades da atividade; teto de 15, fala e escuta até 5 cada     | etapa 1                          |
+| Escolher quantas e quais | Quantidade de questões e habilidades da atividade; teto de 15, fala e escuta até 10 cada     | etapa 1                          |
 | Editor de questão        | Enunciado, resposta certa, respostas aceitas, lacuna pela seleção, como corrigir            | `atividades/[id]/itens/[itemId]` |
 | Prévia como o aluno vê   | A atividade inteira e cada questão, com os componentes do Player                            | `[id]/previa`, editor de questão |
 | Áudio gerado do texto    | Voz sintética em duas velocidades, voz variando por frase                                   | worker `tts`                     |

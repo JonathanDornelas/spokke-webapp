@@ -1,6 +1,7 @@
 import type { VocabItem } from '../content/types';
 import type { Item } from '../item';
 import { normalize } from '../language/normalize';
+import { mesmoTexto } from '../qualidade/comparar';
 import { pickWithSeed } from '../random';
 import type { ContentRef, GeneratorContext } from './types';
 
@@ -59,8 +60,14 @@ export interface ClosingContext {
 export function closingMatch({ vocab, palavras = [], options }: ClosingContext): Item | null {
 	const { sourceProfile, targetProfile } = options;
 
+	// O termo cujo "sentido" é ele mesmo — a tradução que voltou sem traduzir (a
+	// "la cometa" de kernel.md "Conferência de qualidade"), o cognato — não vira par,
+	// pela mesma razão das palavras das frases, abaixo: ele se liga sozinho.
+	const perfis = { alvo: targetProfile, origem: sourceProfile };
 	const doVocab = unicos(
-		vocab.map((ref) => ({ left: ref.data.term, right: ref.data.translation }))
+		vocab
+			.map((ref) => ({ left: ref.data.term, right: ref.data.translation }))
+			.filter((par) => !mesmoTexto(par.left, par.right, perfis))
 	);
 	// Palavra que o tradutor devolveu igual (nome, cognato que ele não traduziu)
 	// não é par: o aluno ligaria "hotel" a "hotel" sem ler nada.

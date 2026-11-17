@@ -35,7 +35,12 @@ function register<A extends ZodType, S extends ZodType, R extends InteractionRun
 				profile,
 				seed
 			),
-		skills: interaction.skills
+		skills: interaction.skills,
+		conferir: (payload, ctx) => {
+			const lido = interaction.authoringSchema.safeParse(payload);
+			if (!lido.success) return [{ codigo: 'formato-invalido', gravidade: 'erro' }];
+			return interaction.conferir(lido.data, ctx);
+		}
 	};
 }
 

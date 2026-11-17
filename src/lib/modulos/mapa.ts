@@ -28,7 +28,7 @@ export type Fase = {
 	 * placar" — estrela ali seria a porta dos fundos do interruptor.
 	 */
 	acerto: number | null;
-	/** Para onde "Jogar", "Continuar" ou "Ver o resultado" levam. */
+	/** Para onde "Começar", "Continuar" ou "Ver o resultado" levam. */
 	href: string | null;
 };
 

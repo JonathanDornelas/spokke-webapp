@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { normalize } from '../language/normalize';
 import { tokenize } from '../language/tokenize';
 import { similarity } from '../grading/levenshtein';
+import { mesmoTexto, regra, textoVisivel, vazios } from '../qualidade/comparar';
+import type { Problema } from '../qualidade/types';
 import { promptSkills } from './skills';
 import {
 	compararPronuncia,
@@ -143,7 +145,19 @@ export const speak: InteractionType<
 		};
 	},
 
-	skills: (prompt) => [...promptSkills(prompt), 'speaking']
+	skills: (prompt) => [...promptSkills(prompt), 'speaking'],
+
+	conferir: (payload, ctx) => {
+		const problemas: Problema[] = [...vazios([payload.target], ctx.perfis)];
+		// O aluno vê a frase que fala (ela é pública), então o texto de cima é APOIO
+		// — quase sempre a tradução. Igual à frase, ele não foi traduzido: é a "la
+		// cometa" de novo, só que sem entregar resposta nenhuma.
+		const apoio = textoVisivel(ctx.prompt);
+		if (apoio && mesmoTexto(apoio, payload.target, ctx.perfis)) {
+			problemas.push(regra('traducao-igual-ao-original', 'aviso', apoio));
+		}
+		return problemas;
+	}
 };
 
 /**

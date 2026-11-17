@@ -14,7 +14,7 @@ tokenização merecem sempre.
 
 ## Obrigatório por tipo de interação
 
-Nenhum tipo novo entra sem estes quatro:
+Nenhum tipo novo entra sem estes cinco:
 
 1. `grade()` com resposta **certa**, **errada** e **quase certa** (a terceira é a que pega bug).
 2. `toRuntime()` provando que nenhum elemento de `accepted` aparece na saída. Este é o teste que
@@ -23,6 +23,30 @@ Nenhum tipo novo entra sem estes quatro:
 4. Pelo menos um idioma com **diacrítico**, testado nas formas composta e pré-composta do mesmo
    caractere. Este teste existe porque `é` digitado como `e` + acento não é o mesmo code point
    que `é` pré-composto, e sem normalização o aluno vê "errado" numa resposta certa.
+
+5. `conferir()` com um caso de cada problema que o formato acusa, e a questão sã passando limpa
+   (kernel.md "Conferência de qualidade"). `kernel/qualidade/qualidade.test.ts` confere que toda
+   interação registrada tem a sua conferência, e parte do caso real: o vocabulário que o gerador
+   produz de "la cometa" → "la cometa" tem de sair reprovado, e o ditado da mesma palavra, não.
+
+## Conferência das questões
+
+- **As regras** (`kernel/qualidade/qualidade.test.ts`): o payload é o que o GERADOR produziu, não
+  um exemplo à mão — é o que prova que a reprovada sai do sorteio e vai para o fim das de fora
+  (`separarPelaQuantidade` com `reprovado`), e que o termo sem tradução não vira par do fecho nem
+  alternativa errada das outras questões.
+- **A geração** (`server/atividades/geracao.test.ts`): a questão que mostra a resposta não entra
+  sozinha, vai para as de fora, e a tela "Gerando" diz quantas.
+- **A tradução conferida** (`server/traducao/traducao.test.ts`, `material-form.test.ts`), com
+  tradutor FALSO que devolve o que o MADLAD devolveu de verdade: a que volta igual ao original fica
+  em branco; no vocabulário fica a hipótese que faz a ida e volta, não a primeira ("o cão", não
+  "Sobre o cão"); nenhuma volta, branco; entre formas iguais, a do original; dois pedidos para a
+  lista inteira; e a linha que ficou de fora chega à tela pelo texto dela.
+- **As variações** (`server/atividades/variantes-aceitas.test.ts`, `kernel/grading/variantes.test.ts`):
+  a segunda chance da ida e volta, a frase curta com duas palavras trocadas, e o sujeito — que só
+  entra quando o modelo, começando pelo pronome, escreve a frase do professor. O pronome que só
+  sobraria ("Eu há um gato no jardim") não vira resposta aceita, e cada passo que falha deixa o que
+  o outro aprovou.
 
 ## Obrigatório em repositório
 

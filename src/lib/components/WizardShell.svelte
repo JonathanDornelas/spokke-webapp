@@ -25,6 +25,8 @@
 		actions,
 		aside,
 		larguraAside = 'estreita',
+		asideSoNoDesktop = false,
+		cancelarNoCelular = true,
 		rolagem = 'pagina',
 		confirmarSaida,
 		concluido = false
@@ -45,6 +47,23 @@
 		 * 540 de 1280) e centraliza o conteúdo na vertical. `estreita`: 340px.
 		 */
 		larguraAside?: 'estreita' | 'larga';
+		/**
+		 * O painel de apoio some no celular (pedido do dono do repositório para a
+		 * etapa 1): ali ele é ilustração — "O que sai daqui" —, e empilhado sob o
+		 * formulário só alongava a tela e passava por cima do botão de continuar.
+		 * Painel com informação que o professor precisa (o QR da etapa 4) NÃO usa
+		 * isto: ele continua descendo para o fim do conteúdo.
+		 */
+		asideSoNoDesktop?: boolean;
+		/**
+		 * `false` tira o "Cancelar" do rodapé NO CELULAR (no desktop ele fica sempre).
+		 * É da etapa 2 com o formulário aberto: ali o rodapé fica logo abaixo do botão
+		 * de adicionar, e num celular estreito (320px) três ações não cabem numa linha —
+		 * o "Cancelar" descia sozinho para uma segunda linha quase vazia, e a tela, que
+		 * já tem duas barras embaixo, ficava espremida. Sair continua a um toque: a
+		 * lista ("Ver os materiais") tem o "Cancelar".
+		 */
+		cancelarNoCelular?: boolean;
 		/**
 		 * `pagina` (padrão): a página rola, com o rodapé grudado embaixo.
 		 * `colunas`: a casca ocupa a altura da tela e quem rola é cada coluna, por
@@ -175,20 +194,27 @@
 			     do conteúdo no celular. -->
 			<aside
 				class="relative overflow-hidden border-t border-line bg-base-200 lg:shrink-0 lg:border-s lg:border-t-0
-				       {larguraAside === 'larga' ? 'flex flex-col lg:w-[42%]' : 'lg:w-[340px]'}"
+				       {larguraAside === 'larga'
+					? `flex-col lg:w-[42%] ${asideSoNoDesktop ? 'hidden lg:flex' : 'flex'}`
+					: `lg:w-[340px] ${asideSoNoDesktop ? 'hidden lg:block' : ''}`}"
 			>
 				{@render aside()}
 			</aside>
 		{/if}
 	</div>
 
+	<!-- `z-10`: o rodapé é a ação principal e fica POR CIMA do conteúdo que rola
+	     sob ele. Sem z-index, um bloco posicionado do conteúdo (os cartões
+	     inclinados de "O que sai daqui", com `z-1`) pintava por cima do botão de
+	     continuar no celular. -->
 	<footer
-		class="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-line bg-base-100 px-4 py-3.5 lg:px-7"
+		class="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-line bg-base-100 px-4 py-3.5 lg:px-7"
 	>
 		<a
 			href={sair}
 			onclick={aoCancelar}
-			class="order-last shrink-0 rounded-field px-3 py-2.5 text-[13.5px] font-semibold text-base-content/65 no-underline transition-colors hover:bg-base-200 hover:text-base-content lg:order-first"
+			class="order-last shrink-0 rounded-field px-3 py-2.5 text-[13.5px] font-semibold text-base-content/65 no-underline transition-colors hover:bg-base-200 hover:text-base-content lg:order-first
+			       {cancelarNoCelular ? '' : 'hidden lg:block'}"
 			title={concluido
 				? 'Volta para a lista de atividades.'
 				: 'Sai da criação. O rascunho continua salvo na lista de atividades.'}

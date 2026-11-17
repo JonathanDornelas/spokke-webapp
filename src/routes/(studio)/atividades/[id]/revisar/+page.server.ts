@@ -8,6 +8,7 @@ import { itemAudioHashes } from '$lib/server/player/runtime';
 import { materiaisPorId, questoesDoRoteiro } from '$lib/server/atividades/roteiro';
 import { isTtsConfigured } from '$lib/server/tts';
 import { isAsrConfigured } from '$lib/server/asr';
+import { isTraducaoLigada } from '$lib/server/traducao';
 import { progressoDaGeracao } from '$lib/server/atividades/geracao';
 import { getProfile, labelForTag } from '$lib/kernel/language/profiles';
 import { MAX_ITENS } from '$lib/kernel/generators/select';
@@ -53,7 +54,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		semente: `revisao:${draft?.id ?? activity.id}`,
 		urlByHash,
 		linhasByHash: linhasPorHash(assets),
-		materialPorId
+		materialPorId,
+		// A conferência de cada questão: as regras do kernel e o revisor de IA. A
+		// linha mostra um aviso discreto e a linha escolhida diz o que é.
+		perfis: { alvo: getProfile(activity.targetLang), origem: getProfile(activity.sourceLang) }
 	});
 
 	// Material que não rendeu questão aparece com o motivo, numa linha só.
@@ -85,7 +89,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		maxItens: MAX_ITENS,
 		capacidades: {
 			tts: isTtsConfigured() && profile.tts.voices.length > 0,
-			asr: isAsrConfigured()
+			asr: isAsrConfigured(),
+			// Com tradutor, o editor oferece "Sugerir outras traduções" (`sugerirRespostas`).
+			traducao: isTraducaoLigada()
 		},
 		questoes,
 		semQuestao

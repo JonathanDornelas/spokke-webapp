@@ -240,6 +240,28 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   no começo ("So I don't know"), e a reprovada é trocada pela normal esticada. A calibração é com as
   nove vozes do inglês; nos outros idiomas a conferência roda pela mesma fonética, sem calibração
   própria ainda.
+- **Toda questão é conferida antes de chegar ao aluno, e sem IA** (kernel.md "Conferência de
+  qualidade"; o caso que a trouxe foi "la cometa" traduzida como "la cometa"). Decisão do dono
+  (2026-11-17): a conferência usa o que já temos, e **a IA fica só em gerar material**. **As regras
+  do kernel valem sempre**, nos oito formatos: a resposta escrita no enunciado, duas alternativas
+  iguais, a peça que falta. A questão com erro não entra sozinha na geração — vai para o fim das de
+  fora, com o motivo. A revisão mostra uma marca discreta na linha e o motivo na linha escolhida, e
+  o editor avisa enquanto o professor escreve. Houve um revisor de IA, pronto e desligado; saiu.
+- **A tradução automática é conferida pelo próprio tradutor** (server.md "Tradução do material"):
+  a que volta igual à frase não é gravada, e **a do vocabulário só entra quando faz a ida e
+  volta** — em palavra solta o MADLAD erra uma em quatro ("el perro" → "Sobre o cão"), e a certa
+  costuma estar entre as outras hipóteses. O que não passa fica em branco e o professor escreve;
+  na lista colada a linha volta ao campo, pronta para completar. **O preço é medido**: mais ou
+  menos uma palavra solta em três fica para o professor, parte delas certas ("parents" → "pais" não
+  volta). No japonês a tradução de palavra solta é fraca e a ida e volta não a conserta.
+- **As outras traduções certas saem do tradutor** (kernel.md "Respostas aceitas"), na geração e,
+  a pedido, no editor ("Sugerir outras traduções"). Medido em 36 frases de aula: 31 ganham
+  variações e nenhuma sem sentido entra. O sujeito que a língua omite ("Eu estou…") é conferido
+  pelo **começo forçado**, um campo novo do `/v1/translate` do serviço de áudio
+  (`target_prefix`): a ida e volta aprovava lixo ("Eu há um gato no jardim"). **O serviço de áudio
+  precisa ser atualizado junto** (a imagem nova); com o antigo, só o sujeito deixa de ser proposto.
+  O passo custa uns 20 a 25 s para 18 frases. **Falta medir fora do espanhol e do inglês**, e
+  decidir se o artigo do vocabulário é opcional ("cometa" por "la cometa" hoje é "quase").
 - **"Gerar com IA" é o Claude, com o Gemini de reserva** (`LLM_PROVIDER="claude,gemini"`, uma fila
   em ordem — `docs/adr-003-ia-gemini.md`): o Gemini só responde quando o Claude falha (sem
   créditos, sobrecarga, recusa). A IA propõe material a partir de um pedido, da FOTO de uma página

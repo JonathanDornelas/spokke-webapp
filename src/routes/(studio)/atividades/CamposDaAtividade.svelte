@@ -77,6 +77,7 @@
 	status="Rascunho salvo"
 	hint="Nada aqui é definitivo: o rascunho só vira atividade quando você publicar."
 	larguraAside="larga"
+	asideSoNoDesktop
 >
 	{@render extra?.()}
 	<!-- O bloco fica no MEIO da coluna, nos dois eixos, e nada nele muda de altura

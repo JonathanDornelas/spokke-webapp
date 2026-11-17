@@ -22,7 +22,17 @@ export function distractorPhrases(
 	seed: string
 ): string[] {
 	const excluded = normalize(exclude, profile);
-	const pool = [...new Set(candidates.filter((c) => normalize(c, profile) !== excluded))];
+	// Uma por forma NORMALIZADA, não por texto: "a casa" e "A casa." são a mesma
+	// alternativa para a correção, e as duas na mesma questão são duas alternativas
+	// iguais — quem escolhe a segunda leva errado (kernel.md "Conferência de
+	// qualidade"). Fica a primeira, como foi escrita.
+	const vistas = new Set([excluded]);
+	const pool = candidates.filter((c) => {
+		const chave = normalize(c, profile);
+		if (!chave || vistas.has(chave)) return false;
+		vistas.add(chave);
+		return true;
+	});
 	return pickWithSeed(pool, count, seed);
 }
 

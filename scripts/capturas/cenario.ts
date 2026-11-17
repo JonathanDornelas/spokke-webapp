@@ -56,7 +56,7 @@ const conta = await prisma.studentAccount.findUniqueOrThrow({ where: { email: AL
 
 // A Ana das propagandas está no 8º A, a turma do vídeo dos módulos (toda quarta, a Frutas 1 abrindo
 // no dia). O seed a põe no 7º B; aqui a conta dela assume uma ficha do 8º A que já tem conta e os
-// links pessoais das fases liberadas ("Jogar" passa por eles), e a ficha ganha o nome dela. A Ana do
+// links pessoais das fases liberadas ("Começar" passa por eles), e a ficha ganha o nome dela. A Ana do
 // 7º B continua como está, com a conta do seed.
 const ficha = await prisma.student.findFirstOrThrow({
 	where: {

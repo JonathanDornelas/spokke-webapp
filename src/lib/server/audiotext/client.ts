@@ -269,7 +269,8 @@ async function pedirTraducoes(
 	de: string,
 	para: string,
 	alternativas: number,
-	timeoutMs: number
+	timeoutMs: number,
+	comeco?: string
 ): Promise<string[][]> {
 	const saida: string[][] = [];
 	for (let i = 0; i < textos.length; i += TEXTOS_POR_PEDIDO) {
@@ -281,7 +282,8 @@ async function pedirTraducoes(
 				texts: lote,
 				source: de,
 				target: para,
-				...(alternativas > 0 ? { alternatives: alternativas } : {})
+				...(alternativas > 0 ? { alternatives: alternativas } : {}),
+				...(comeco ? { target_prefix: comeco } : {})
 			}),
 			signal: comPrazo(timeoutMs)
 		});
@@ -338,4 +340,32 @@ export async function traduzirComAlternativas(
 	timeoutMs = 90_000
 ): Promise<string[][]> {
 	return pedirTraducoes(textos, de, para, Math.min(4, Math.max(1, alternativas)), timeoutMs);
+}
+
+/**
+ * Como `traduzirComAlternativas`, mas cada tradução COMEÇA por `comeco` ("Eu",
+ * "Nós") e o modelo escreve o resto (`target_prefix` no `/v1/translate`). É como
+ * se confere o sujeito que a língua do aluno deixa omitir
+ * (`server/atividades/variantes-aceitas.ts`).
+ *
+ * Um serviço anterior a isto ignora o campo e devolve a tradução livre — quem
+ * chama compara o texto inteiro, então a resposta que não começa pelo pronome
+ * só não confirma nada.
+ */
+export async function traduzirComecandoPor(
+	textos: string[],
+	de: string,
+	para: string,
+	comeco: string,
+	alternativas: number,
+	timeoutMs = 90_000
+): Promise<string[][]> {
+	return pedirTraducoes(
+		textos,
+		de,
+		para,
+		Math.min(4, Math.max(1, alternativas)),
+		timeoutMs,
+		comeco
+	);
 }

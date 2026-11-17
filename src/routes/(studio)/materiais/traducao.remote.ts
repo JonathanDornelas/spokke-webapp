@@ -3,7 +3,7 @@ import { command, getRequestEvent } from '$app/server';
 import { requireTeacher } from '$lib/server/auth/guard';
 import { ehIdioma } from '$lib/idiomas';
 import { criarLimite } from '$lib/server/limite-por-ip';
-import { TraducaoIndisponivel, getTradutor } from '$lib/server/traducao';
+import { TraducaoIndisponivel, getTradutor, traduzirConferindo } from '$lib/server/traducao';
 import { variantesDaFrase } from '$lib/server/atividades/variantes-aceitas';
 import { getProfile } from '$lib/kernel/language/profiles';
 
@@ -28,16 +28,30 @@ const idioma = z.string().refine(ehIdioma, 'Idioma inválido.');
 const limite = criarLimite({ maximo: 120, janelaMs: 10 * 60_000 });
 
 export const sugerirTraducao = command(
-	z.object({ texto: z.string().trim().min(1).max(500), de: idioma, para: idioma }),
-	async ({ texto, de, para }) => {
+	z.object({
+		texto: z.string().trim().min(1).max(500),
+		de: idioma,
+		para: idioma,
+		/** O texto é um termo de vocabulário: a tradução passa pela ida e volta. */
+		palavra: z.boolean().optional()
+	}),
+	async ({ texto, de, para, palavra }) => {
 		const teacher = requireTeacher(getRequestEvent().locals);
 		const tradutor = getTradutor();
 		if (!tradutor) return { ok: false as const, motivo: 'desligado' as const };
 		if (!limite.permitir(teacher.id)) return { ok: false as const, motivo: 'limite' as const };
 		try {
-			const [bruta] = await tradutor.traduzir([texto], de, para);
+			// A MESMA conferência de quem grava (`traduzirConferindo`): a tradução que
+			// volta igual ao texto, ou a de uma palavra que não faz a ida e volta, não é
+			// sugerida — o campo fica em branco para o professor escrever.
+			const [bruta] = await traduzirConferindo([texto], { de, para }, tradutor, {
+				idaEVolta: palavra === true
+			});
 			const traducao = bruta?.trim();
 			if (!traducao) return { ok: false as const, motivo: 'vazio' as const };
+			// A palavra não tem variações: as da frase viram resposta aceita na questão
+			// de tradução, e o vocabulário não gera uma.
+			if (palavra) return { ok: true as const, traducao, alternativas: [] as string[] };
 			// As outras formas certas de dizer a mesma coisa, pelo mesmo filtro das
 			// questões de tradução: o formulário as mostra como variações, e as que o
 			// professor mantiver viram resposta aceita. Falhar aqui não tira a

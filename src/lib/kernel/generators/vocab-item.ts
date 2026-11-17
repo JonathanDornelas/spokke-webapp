@@ -3,6 +3,7 @@ import type { Item } from '../item';
 import { distractorPhrases } from './distractors';
 import { tokenize } from '../language/tokenize';
 import { pronunciaDe, type RigorDaPronuncia } from '../language/pronuncia';
+import { mesmoTexto } from '../qualidade/comparar';
 import type { ContentRef, Generator, GeneratorContext, NivelCefr } from './types';
 
 /**
@@ -13,11 +14,25 @@ import type { ContentRef, Generator, GeneratorContext, NivelCefr } from './types
  * Faltam `vocab-image-choice` (depende de upload de imagem) e `vocab-match` (o
  * `closing-match` já liga os termos no fim da atividade).
  */
+/**
+ * Os SENTIDOS dos outros termos, de onde saem as alternativas erradas de "escolha
+ * o sentido". O irmão cujo "sentido" é o próprio termo — a tradução que voltou sem
+ * traduzir (a "la cometa" de kernel.md "Conferência de qualidade") — não empresta
+ * alternativa: ela apareceria no idioma alvo, no meio de sentidos na língua do
+ * aluno. O termo em si continua valendo como alternativa de "escolha a palavra".
+ */
+function sentidosDosOutros(ctx: GeneratorContext<VocabItem>): string[] {
+	const perfis = { alvo: ctx.targetProfile, origem: ctx.sourceProfile };
+	return ctx.siblings
+		.filter((s) => !mesmoTexto(s.data.term, s.data.translation, perfis))
+		.map((s) => s.data.translation);
+}
+
 export const vocabChoice: Generator<VocabItem> = {
 	id: 'vocab-choice',
 	generate: (content, ctx) => {
 		const distractors = distractorPhrases(
-			ctx.siblings.map((s) => s.data.translation),
+			sentidosDosOutros(ctx),
 			content.data.translation,
 			3,
 			ctx.sourceProfile,
@@ -36,7 +51,10 @@ export const vocabChoice: Generator<VocabItem> = {
 				type: 'choice',
 				payload: { options: [content.data.translation, ...distractors], correctIndex: 0 }
 			},
-			grading: { mode: 'exact' },
+			// As alternativas são SENTIDOS, na língua do aluno: é nela que ele responde.
+			// A correção da escolha é pelo índice e não usa o perfil; quem lê isto é a
+			// conferência (o sentido igual ao termo é a palavra que não foi traduzida).
+			grading: { mode: 'exact', answerLang: 'source' },
 			locale: { source: ctx.sourceProfile.tag, target: ctx.targetProfile.tag }
 		};
 		return [item];
@@ -162,7 +180,7 @@ export const listenVocabChoice: Generator<VocabItem> = {
 	generate: (content, ctx) => {
 		if (!temVoz(ctx)) return [];
 		const distractors = distractorPhrases(
-			ctx.siblings.map((s) => s.data.translation),
+			sentidosDosOutros(ctx),
 			content.data.translation,
 			3,
 			ctx.sourceProfile,
@@ -181,7 +199,8 @@ export const listenVocabChoice: Generator<VocabItem> = {
 				type: 'choice',
 				payload: { options: [content.data.translation, ...distractors], correctIndex: 0 }
 			},
-			grading: { mode: 'exact' }
+			// Ouve no idioma alvo e escolhe o SENTIDO, na língua do aluno.
+			grading: { mode: 'exact', answerLang: 'source' }
 		};
 		return [item];
 	}

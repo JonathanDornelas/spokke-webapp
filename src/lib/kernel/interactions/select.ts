@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { mesmoTexto, regra, respostaNoEnunciado } from '../qualidade/comparar';
+import type { Problema } from '../qualidade/types';
 import { promptSkills } from './skills';
 import type { InteractionType, SelectRuntime } from './types';
 
@@ -51,5 +53,21 @@ export const select: InteractionType<
 		return { ok: true, value: { value: index === payload.correctIndex ? 1 : 0 } };
 	},
 
-	skills: promptSkills
+	skills: promptSkills,
+
+	conferir: (payload, ctx) => {
+		const certa = payload.segments[payload.correctIndex]?.text;
+		if (!certa) return [];
+		const problemas: Problema[] = [];
+		// A correção é pela POSIÇÃO: com a palavra duas vezes na frase, quem toca a
+		// outra leva errado por ter acertado.
+		const repetida = payload.segments.some(
+			(s, i) => i !== payload.correctIndex && s.selectable && mesmoTexto(s.text, certa, ctx.perfis)
+		);
+		if (repetida) problemas.push(regra('palavra-certa-repetida', 'erro', certa));
+		// A pista que É a palavra: o aluno toca a igual, sem ler a frase.
+		const naPista = respostaNoEnunciado(certa, ctx);
+		if (naPista) problemas.push(naPista);
+		return problemas;
+	}
 };

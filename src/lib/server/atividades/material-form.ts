@@ -75,6 +75,15 @@ export const AVISO_SEM_TRADUTOR =
 	'O tradutor automático não respondeu agora. Escreva a tradução ou tente de novo em instantes.';
 
 /**
+ * O tradutor respondeu, mas a tradução não passou na conferência
+ * (`traduzirConferindo`): voltou igual ao original (o caso da "la cometa") ou,
+ * numa palavra, não fez a ida e volta. Ela não é gravada.
+ */
+export function avisoSemTraducao(original: string): string {
+	return `O tradutor automático não soube traduzir "${original}". Escreva a tradução.`;
+}
+
+/**
  * A tradução que veio EM BRANCO num par de frases ou num termo sai do tradutor
  * automático (docs/adr-006-traducao.md). O que o professor escreveu nunca é
  * tocado, e sem tradutor nada muda: `montarMaterial` continua pedindo a
@@ -101,12 +110,16 @@ export async function preencherTraducao(
 		};
 	}
 	try {
-		const { unidades, traduzidas } = await completarTraducoes(
+		const { unidades, traduzidas, semTraducao } = await completarTraducoes(
 			[{ target: texto(campos.target), source: '' }],
 			{ texto: 'target', traducao: 'source' },
 			par,
-			tradutor
+			tradutor,
+			// A palavra solta é onde o tradutor mais erra: a dela passa pela ida e volta.
+			{ idaEVolta: campos.kind === 'VocabItem' }
 		);
+		// A tradução não passou na conferência: nada é gravado — o professor escreve.
+		if (semTraducao > 0) return { error: avisoSemTraducao(texto(campos.target)) };
 		const source = unidades[0].source;
 		if (campos.kind !== 'SentencePair' || traduzidas === 0) {
 			// O sentido de uma PALAVRA não leva ponto final: o tradutor às vezes põe, e a
@@ -144,7 +157,10 @@ export async function traduzirLote(
 	unidades: unknown[],
 	par: ParDeIdiomas | null,
 	tradutor: Tradutor | null
-): Promise<{ unidades: unknown[]; traduzidas: number } | { error: string }> {
+): Promise<
+	| { unidades: unknown[]; traduzidas: number; semTraducao: number; semTraducaoDe?: string[] }
+	| { error: string }
+> {
 	const registros = unidades.filter(
 		(u): u is Record<string, unknown> => typeof u === 'object' && u !== null
 	);
@@ -153,30 +169,57 @@ export async function traduzirLote(
 			? { texto: 'target', traducao: 'source' }
 			: { texto: 'term', traducao: 'translation' };
 	const faltando = registros.some((u) => !texto(u[campos.traducao]));
-	if (!faltando) return { unidades, traduzidas: 0 };
+	if (!faltando) return { unidades, traduzidas: 0, semTraducao: 0 };
 	if (!tradutor || !par) {
 		// Sem tradutor o parser nem deixa a linha entrar; isto é a guarda.
-		return { unidades: registros.filter((u) => texto(u[campos.traducao])), traduzidas: 0 };
+		return {
+			unidades: registros.filter((u) => texto(u[campos.traducao])),
+			traduzidas: 0,
+			semTraducao: 0
+		};
 	}
 	try {
 		const embranco = new Set(registros.flatMap((u, i) => (texto(u[campos.traducao]) ? [] : [i])));
-		const traduzido = await completarTraducoes(registros, campos, par, tradutor);
+		const traduzido = await completarTraducoes(registros, campos, par, tradutor, {
+			idaEVolta: kind === 'VocabItem'
+		});
+		// A linha cuja tradução não passou na conferência fica de FORA, e a tela a
+		// devolve ao professor para ele escrever a tradução: gravá-la com a "tradução"
+		// igual ao original é o caso da "la cometa". As outras entram — uma palavra
+		// teimosa não derruba a lista.
+		const comTraducao = (u: unknown) =>
+			typeof u === 'object' && u !== null
+				? texto((u as Record<string, unknown>)[campos.traducao]) !== ''
+				: false;
+		const semTraducaoDe = traduzido.unidades
+			.filter((u) => !comTraducao(u))
+			.map((u) => texto(u[campos.texto]));
+		if (traduzido.semTraducao > 0 && !traduzido.unidades.some(comTraducao)) {
+			return {
+				error:
+					'O tradutor automático não soube traduzir estas linhas. Escreva a tradução depois do separador.'
+			};
+		}
 		if (kind !== 'SentencePair') {
 			// O sentido de uma palavra, sem o ponto final que o tradutor às vezes põe.
-			const unidades = traduzido.unidades.map((u, i) =>
-				embranco.has(i) && typeof u === 'object' && u !== null
-					? {
-							...(u as Record<string, unknown>),
-							translation: semPontoFinal(texto((u as Record<string, unknown>).translation))
-						}
-					: u
-			);
-			return { unidades, traduzidas: traduzido.traduzidas };
+			const unidades = traduzido.unidades
+				.map((u, i) =>
+					embranco.has(i) && comTraducao(u)
+						? { ...u, translation: semPontoFinal(texto(u.translation)) }
+						: u
+				)
+				.filter(comTraducao);
+			return {
+				unidades,
+				traduzidas: traduzido.traduzidas,
+				semTraducao: traduzido.semTraducao,
+				semTraducaoDe
+			};
 		}
 		// As linhas que o tradutor completou ganham as variações também, num pedido
 		// para a lista toda (`variantesDasFrases`).
 		const alvos = traduzido.unidades.flatMap((u, i) => {
-			if (!embranco.has(i) || typeof u !== 'object' || u === null) return [];
+			if (!embranco.has(i) || !comTraducao(u)) return [];
 			const registro = u as Record<string, unknown>;
 			return [{ i, original: texto(registro.target), principal: texto(registro.source) }];
 		});
@@ -186,7 +229,12 @@ export async function traduzirLote(
 			const lista = limparVariacoes(variacoes[n] ?? [], principal);
 			if (lista.length > 0) unidades[i] = { ...(unidades[i] as object), variants: lista };
 		});
-		return { unidades, traduzidas: traduzido.traduzidas };
+		return {
+			unidades: unidades.filter(comTraducao),
+			traduzidas: traduzido.traduzidas,
+			semTraducao: traduzido.semTraducao,
+			semTraducaoDe
+		};
 	} catch (erro) {
 		if (erro instanceof TraducaoIndisponivel) {
 			return {

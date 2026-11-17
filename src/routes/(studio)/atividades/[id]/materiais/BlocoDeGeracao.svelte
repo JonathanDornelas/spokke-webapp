@@ -8,7 +8,8 @@
 	//
 	// A quantidade não corta nada nesta tela: a geração é para todos os materiais,
 	// e o que passar do número fica "fora" na revisão, para o professor trocar.
-	import { MAX_ITENS, TETO_POR_HABILIDADE } from '$lib/kernel/generators/select';
+	import { MAX_ITENS, TETO_POR_HABILIDADE, maximoPelosTetos } from '$lib/kernel/generators/select';
+	import { fraseDoTeto } from '$lib/atividades/de-fora';
 	import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 	import type { Skill } from '$lib/kernel/interactions/types';
 	import {
@@ -35,6 +36,15 @@
 		onquantidade: () => void;
 		onalternar: (tipo: Skill) => void;
 	} = $props();
+
+	// Só fala (ou só escuta) ligada e mais questões pedidas do que o teto deixa:
+	// o botão gera o teto, e esta linha diz por quê e como passar dele.
+	const maximo = $derived(maximoPelosTetos(plano.geral));
+	const avisoDoTeto = $derived(
+		maximo !== null && quantidade > maximo
+			? `${fraseDoTeto(plano.geral)} Ligue outro tipo para passar de ${maximo}.`
+			: null
+	);
 </script>
 
 <section
@@ -132,12 +142,15 @@
 		</div>
 	</div>
 
-	{#if indisponiveis.size > 0 || plano.geral.length === 0}
+	{#if indisponiveis.size > 0 || plano.geral.length === 0 || avisoDoTeto}
 		<div
 			class="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-base-content/65"
 		>
 			{#if plano.geral.length === 0}
 				<span role="status">Ligue ao menos um tipo de questão para gerar.</span>
+			{/if}
+			{#if avisoDoTeto}
+				<span role="status">{avisoDoTeto}</span>
 			{/if}
 			{#each [...indisponiveis] as [tipo, motivo] (tipo)}
 				<span>{skillLabels[tipo]}: {motivo}.</span>

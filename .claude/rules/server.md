@@ -389,8 +389,11 @@ conteúdo. Na Pronúncia, o runtime a casa com os fonemas do dicionário (`tempo
 (`iniciarGeracao`, `$lib/server/atividades/geracao.ts`), devolvendo na hora. O trabalho
 (`executarGeracao`, testável com tudo por parâmetro) anda em passos — ler os materiais (e o
 dicionário do transcritor, no japonês e no chinês), traduzir as palavras do associar, montar,
-separar pela quantidade, conferir as outras traduções certas, salvar e pedir o áudio — e cada
-passo concluído atualiza o andamento, que a tela "Gerando" pergunta por `progressoDaGeracao`.
+separar pela quantidade (a questão reprovada pelas regras do kernel vai para as de fora), conferir
+as outras traduções certas ("Tradução do material", abaixo), salvar e pedir o áudio — e cada passo
+concluído atualiza o andamento, que a tela "Gerando" pergunta por `progressoDaGeracao`. **Nenhum
+passo usa IA**: quem monta são os geradores do kernel, e quem confere é o kernel e o tradutor do
+serviço de áudio.
 
 - **O andamento mora na memória do processo web**, por atividade e só para o professor dela. É de
   minutos e o resultado (o rascunho) vai para o banco; processo que reinicia no meio aparece como
@@ -577,6 +580,19 @@ recusou: …`), o 503 de sobrecarga ganha UMA nova tentativa, e a tela diz o que
 - **O custo é UMA conta**, `custoDaGeracao` (`$lib/billing/ia.ts`), no botão da tela e no débito:
   as propostas mais a leitura do arquivo (`CUSTO_IA.porImagem`, `CUSTO_IA.porMinutoDeFala` por
   minuto começado). Sem nenhuma proposta que sirva, volta tudo, leitura junto.
+- **O par de frases vem com as VARIAÇÕES da tradução** (`variants`, até `MAX_VARIACOES_DA_IA`, 3):
+  viram resposta aceita na questão de tradução (kernel.md "Respostas aceitas"). `validarProposta`
+  as limpa (sem vazia, sem repetir a tradução nem a frase original) e não grava a chave quando não
+  sobra nenhuma. **A proposta que "traduz" repetindo o original é descartada** (`repeteOOriginal`,
+  o caso da "la cometa") e estornada como qualquer inválida.
+- **A frase que o professor já tem SEM variações é a mesma frase** (`comoNaBiblioteca`): o
+  reaproveitamento compara o material inteiro, e as variações da IA fariam a proposta deixar de
+  casar — aceitar criaria uma segunda linha igual. A proposta vira a que existe, e as variações da
+  IA ficam de fora: o material do professor não muda por causa de uma proposta. Vale ao propor
+  ("você já tem") e ao aceitar.
+- **A IA só gera material.** Conferir questão e traduzir não passam por ela (pedido do dono do
+  repositório, 2026-11-17): são as regras do kernel e o tradutor do serviço de áudio, que roda na
+  nossa máquina. Houve um revisor de IA, pronto e desligado; saiu antes de ser ligado.
 
 ## Tradução do material
 
@@ -601,6 +617,31 @@ de até 32 textos, em sequência, e recusa resposta com contagem diferente da pe
   o material entrava sem as variações que a tela teria mostrado. Falhar nelas não impede gravar.
 - **Lote é tudo ou nada.** Tradutor fora do ar no meio da lista colada = nada gravado e a tela pede
   a tradução depois do separador. Um material avulso falha com `AVISO_SEM_TRADUTOR`, nunca 500.
+- **A tradução é CONFERIDA antes de ser gravada** (`traduzirConferindo`), pelo próprio tradutor e
+  sem IA — o desenho da voz, que é ouvida antes de ir para o bucket ("TTS", acima). Duas regras:
+  - **A que volta IGUAL ao original é reprovada** (o caso da "la cometa" de kernel.md "Conferência
+    de qualidade"), pelo normalizador dos dois perfis: "La cometa." é "la cometa". Vale para frase e
+    para palavra. A palavra igual nas duas línguas ("hotel", "feliz" do espanhol) cai junto: o
+    professor a escreve, e é ele quem diz que é a mesma.
+  - **A da PALAVRA passa pela ida e volta** (`idaEVolta`, o vocabulário). Medido no MADLAD com 88
+    palavras de aula, do espanhol e do inglês: solta, sem contexto, uma em quatro sai errada ("el
+    perro" → "Sobre o cão", "el tenedor" → "com o garfo", "la rata" → "a taxa", "hat" → "O quê?").
+    A certa quase sempre está entre as outras hipóteses do feixe, e o que separa é traduzir de
+    volta. Então o servidor pede as alternativas, traduz de volta até três delas
+    (`CANDIDATAS_POR_PALAVRA`, com as alternativas da volta) e fica com a PRIMEIRA cuja volta dá o
+    original: "o cão", "o garfo". Entre formas que a correção igualaria ("O chefe.", "o chefe"),
+    fica a que tem a forma do original, sem ponto e na mesma caixa — numa questão de escolher, a
+    única alternativa com maiúscula entregaria a resposta. São dois pedidos para a lista inteira.
+  - **Reprovada, fica em BRANCO**, e o professor escreve: tradução errada em silêncio é pior que
+    campo vazio. O material avulso responde "o tradutor automático não soube traduzir …, escreva a
+    tradução"; a linha da lista colada fica de fora e VOLTA ao campo, já com o separador
+    (`semTraducaoDe`); a sugestão ao vivo não preenche.
+  - **O preço, medido junto**: em palavra solta, mais ou menos uma em três fica em branco — as
+    erradas ("la rata", "la playa" → "Perto da praia"), as iguais nas duas línguas e algumas certas
+    que não voltam ("parents" → "pais" volta "country", "eraser" → "borracha" volta "rubber"). Em
+    troca, o que entra está certo. No japonês a qualidade da palavra solta é baixa ("犬" → "Cães."),
+    e a ida e volta não a conserta. Frase não passa pela ida e volta: nela o tradutor acerta
+    (adr-006), e a volta raramente devolve as mesmas palavras.
 - **O par de idiomas**: no wizard, `activity.targetLang` → `activity.sourceLang`; na biblioteca, o
   idioma do material → o `linguaDoAluno` que a página manda num campo escondido (a mesma língua que
   ela usa para a IA). Material "sem idioma" não tem de onde traduzir.
@@ -611,17 +652,35 @@ de até 32 textos, em sequência, e recusa resposta com contagem diferente da pe
 - **Ele também alimenta o "ligue os pares" do fecho**: `gerarItens` chama `paresDasFrases`, que
   escolhe palavras das frases (kernel puro), traduz num pedido e só guarda o par que faz a IDA E
   VOLTA (kernel.md "closing-match"). Sem tradutor ou com ele fora, volta vazio e a geração segue.
-- **E as variantes aceitas da questão de tradução** (kernel.md "Respostas aceitas"): depois de
-  separar pela quantidade, `comVariantesDaTraducao` pega os "traduza para o português" — os que
-  entraram E os de fora, que podem entrar na revisão e não podem chegar lá sem elas —, pede
-  ao serviço as traduções ALTERNATIVAS da frase (`alternatives` no `/v1/translate`: as hipóteses
-  do feixe perto da melhor na pontuação do modelo), filtra pelo tamanho da diferença no kernel e
-  confere o sentido por ida e volta — a variante traduzida de novo tem de dar a frase original ou o
-  mesmo que a resposta do professor dá. Dois pedidos para o lote inteiro, uns 2 a 3 s a mais no
-  "Gerar". Nunca trava a geração: sem tradutor, fora do ar ou serviço antigo, os itens seguem como
-  vieram. Na mesma ida e volta vão as candidatas de SUJEITO EXPLÍCITO (`candidatasComSujeito`):
-  quando a resposta do professor não traz o pronome, cada pronome omitível do idioma vai na frente
-  dela, e fica a que volta com o sentido da frase — kernel.md "Respostas aceitas".
+- **E as variantes aceitas da questão de tradução** (kernel.md "Respostas aceitas",
+  `server/atividades/variantes-aceitas.ts`): depois de separar pela quantidade,
+  `comVariantesDaTraducao` pega os "traduza para o português" — os que entraram E os de fora, que
+  podem entrar na revisão e não podem chegar lá sem elas. Quatro passos, todos no tradutor:
+  1. **O feixe**: as traduções ALTERNATIVAS da frase (`alternatives` no `/v1/translate`, as
+     hipóteses perto da melhor na pontuação do modelo).
+  2. **O tamanho da diferença**, no kernel (`variantesProximas`).
+  3. **O sentido, pela ida e volta**: a variante traduzida de novo tem de dar a frase original, ou
+     o mesmo que a resposta do professor dá. A que não volta ganha uma segunda chance — vale se a
+     frase estiver entre as outras hipóteses da volta.
+  4. **O sujeito explícito, pelo COMEÇO FORÇADO** (`Tradutor.comecandoPor`, o `target_prefix` do
+     `/v1/translate`): quando nenhuma resposta aceita traz o pronome, o modelo traduz a frase
+     obrigado a começar por "Eu" (depois "Nós"), e o pronome só vale se ele escrever a frase do
+     professor, ou uma variante aprovada, depois dele. Era a ida e volta que escolhia, e ela
+     aprovava lixo: o modelo ignora um pronome sobrando, e "Eu onde fica a estação de trem?", "Eu há
+     um gato no jardim" e "Nós está muito frio hoje" viravam resposta aceita (medido: uma frase em
+     três). Começando por "Eu", "There is a cat in the garden" sai "Eu tenho um gato no jardim", e
+     a candidata errada não aparece.
+  - **Medido em 36 frases de aula** (espanhol e inglês para o português): 31 ganham variações e
+    nenhuma sem sentido entra. Custa uns 20 a 25 s para 18 frases, no passo "Conferindo outras
+    traduções certas" da tela "Gerando".
+  - Nunca trava a geração: sem tradutor, fora do ar ou com resposta estranha, os itens seguem como
+    vieram, e o que um passo aprovou não se perde porque o seguinte falhou. **Serviço de áudio
+    anterior ao começo forçado** ignora o campo e devolve a tradução livre: o sujeito só não é
+    proposto. Por isso, num deploy, o serviço de áudio sobe ANTES do app.
+- **"Sugerir outras traduções"** (`sugerirRespostas`, no editor de questão): o mesmo funil para UMA
+  questão de tradução, a pedido do professor — a que ele editou, a de antes desta melhoria, a que
+  foi gerada com o tradutor fora. Não grava: a tela põe as novas em "Também aceitas". Guard e teto
+  por professor (40 em 10 min).
 
 ## Notificações
 

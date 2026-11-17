@@ -1,6 +1,7 @@
 import type { ContentUnitKind } from '$lib/kernel/content/types';
 import { MAX_PALAVRAS_DO_TERMO } from '$lib/kernel/content/vocabulario';
 import type { AnexoDaIa } from './provider';
+import { MAX_VARIACOES_DA_IA } from './schemas';
 
 /**
  * O pedido que vai para o modelo. **Agnóstico de idioma** (CLAUDE.md): os
@@ -34,8 +35,10 @@ export interface PedidoDeMateriais {
 }
 
 const O_QUE_GERAR: Record<ContentUnitKind, (quantos: number) => string> = {
+	// As variações viram resposta aceita na questão de tradução (kernel.md "Respostas
+	// aceitas"): sem elas, o aluno que traduz certo com outras palavras leva "quase".
 	SentencePair: (n) =>
-		`até ${n} pares de frases: cada um com a frase no idioma alvo ("target") e a tradução natural no idioma do aluno ("source"). Frases curtas e completas, uma ideia por frase.`,
+		`até ${n} pares de frases: cada um com a frase no idioma alvo ("target") e a tradução natural no idioma do aluno ("source"). Frases curtas e completas, uma ideia por frase. Em "variants", até ${MAX_VARIACOES_DA_IA} outras traduções igualmente certas no idioma do aluno, como um aluno escreveria: o mesmo sentido, o mesmo tempo verbal e a mesma pessoa, mudando palavras, ordem ou registro. Lista vazia quando não houver outra.`,
 	VocabItem: (n) =>
 		`até ${n} itens de vocabulário: o termo no idioma alvo ("term"), o sentido no idioma do aluno ("translation") e, quando ajudar, uma frase curta de exemplo no idioma alvo ("example"). O termo é uma palavra ou expressão curta, de até ${MAX_PALAVRAS_DO_TERMO} palavras, nunca uma frase; nem o termo nem o sentido levam ponto final, interrogação ou exclamação.`,
 	Passage: (n) =>

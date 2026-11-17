@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { normalize } from '../language/normalize';
+import { tokenize } from '../language/tokenize';
 import { sequenceScore } from '../grading/compare';
 import { assignRuntimeIds } from '../random';
+import { perfilDaResposta, regra, textoVisivel } from '../qualidade/comparar';
+import type { Problema } from '../qualidade/types';
 import { promptSkills } from './skills';
 import type { AssembleRuntime, InteractionType } from './types';
 
@@ -70,5 +73,47 @@ export const assemble: InteractionType<
 		};
 	},
 
-	skills: promptSkills
+	skills: promptSkills,
+
+	conferir: (payload, ctx) => {
+		// A régua é a da CORREÇÃO: o `grade` normaliza com o perfil da resposta.
+		const perfil = perfilDaResposta(ctx);
+		const chave = (texto: string) => normalize(texto, perfil);
+		const problemas: Problema[] = [];
+		if (payload.tokens.length < 2) problemas.push(regra('uma-peca-so', 'aviso'));
+
+		// Cada sequência aceita tem de caber no banco, contando repetição: "the" duas
+		// vezes na frase pede duas peças "the".
+		const banco = new Map<string, number>();
+		for (const peca of [...payload.tokens, ...payload.distractors]) {
+			banco.set(chave(peca), (banco.get(chave(peca)) ?? 0) + 1);
+		}
+		const faltando = new Set<string>();
+		for (const sequencia of payload.accepted) {
+			const usadas = new Map<string, number>();
+			for (const peca of sequencia) {
+				const k = chave(peca);
+				usadas.set(k, (usadas.get(k) ?? 0) + 1);
+				if ((usadas.get(k) ?? 0) > (banco.get(k) ?? 0)) faltando.add(peca);
+			}
+		}
+		for (const peca of faltando) problemas.push(regra('peca-faltando', 'erro', peca));
+
+		// A frase a montar escrita no enunciado: comparada palavra a palavra, pelo
+		// segmentador (regra nº 5) — juntar as peças com espaço quebraria o japonês.
+		const visivel = textoVisivel(ctx.prompt);
+		const principal = payload.accepted[0];
+		if (visivel && principal) {
+			const doEnunciado = tokenize(visivel, perfil).map(chave);
+			const daResposta = principal.map(chave).filter(Boolean);
+			if (
+				daResposta.length > 0 &&
+				doEnunciado.length === daResposta.length &&
+				doEnunciado.every((k, i) => k === daResposta[i])
+			) {
+				problemas.push(regra('resposta-igual-ao-enunciado', 'erro', visivel));
+			}
+		}
+		return problemas;
+	}
 };

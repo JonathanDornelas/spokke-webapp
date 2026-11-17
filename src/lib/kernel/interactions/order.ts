@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { sequenceScore } from '../grading/compare';
 import { assignRuntimeIds } from '../random';
+import { regra, repetidos, vazios } from '../qualidade/comparar';
 import { promptSkills } from './skills';
 import type { InteractionType, OrderRuntime } from './types';
 
@@ -58,5 +59,12 @@ export const order: InteractionType<
 		};
 	},
 
-	skills: promptSkills
+	skills: promptSkills,
+
+	// A correção é pela POSIÇÃO de origem: com duas falas iguais ("Obrigado."),
+	// trocar uma pela outra é a mesma ordem para o aluno e um erro para a nota.
+	conferir: (payload, ctx) => [
+		...vazios(payload.lines, ctx.perfis),
+		...repetidos(payload.lines, ctx.perfis).map((texto) => regra('falas-repetidas', 'erro', texto))
+	]
 };

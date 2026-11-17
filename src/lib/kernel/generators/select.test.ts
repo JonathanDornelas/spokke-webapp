@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ITENS, TETO_POR_HABILIDADE, selectItems, separarPelaQuantidade } from './select';
-import type { GenerationGroup } from './index';
+import {
+	MAX_ITENS,
+	TETO_POR_HABILIDADE,
+	maximoPelosTetos,
+	selectItems,
+	separarPelaQuantidade,
+	tetoCheio,
+	usoDosTetos
+} from './select';
+import { runGenerators, type GenerationGroup, type StoredContentUnit } from './index';
+import { getProfile } from '../language/profiles';
+import { getInteraction } from '../interactions/registry';
 import type { Item } from '../item';
 
 /**
@@ -77,15 +87,16 @@ describe('selectItems', () => {
 	// Cada item de escuta é um par de arquivos de TTS a sintetizar, e cada um de
 	// fala é uma gravação que o aluno precisa de silêncio para fazer.
 	it('limita fala e escuta ao teto de cada uma', () => {
-		const grupos = [
-			grupo(Array.from({ length: 12 }, () => item('fala'))),
-			grupo(Array.from({ length: 12 }, () => item('escuta')))
-		];
-		const escolhidos = selectItems(grupos, { target: MAX_ITENS, skills: [...TODAS] });
-		const fala = escolhidos.filter((i) => i.interaction.type === 'speak').length;
-		const escuta = escolhidos.filter((i) => i.prompt.kind === 'audio').length;
-		expect(fala).toBe(TETO_POR_HABILIDADE.speaking);
-		expect(escuta).toBe(TETO_POR_HABILIDADE.listening);
+		// Com o teto de 10 cada, só um material de um tipo só passa dele numa
+		// atividade de 15: misturados, o rodízio fica em 8 e 7.
+		const fala = [grupo(Array.from({ length: 14 }, () => item('fala')))];
+		expect(selectItems(fala, { target: MAX_ITENS, skills: [...TODAS] })).toHaveLength(
+			TETO_POR_HABILIDADE.speaking!
+		);
+		const escuta = [grupo(Array.from({ length: 14 }, () => item('escuta')))];
+		expect(selectItems(escuta, { target: MAX_ITENS, skills: [...TODAS] })).toHaveLength(
+			TETO_POR_HABILIDADE.listening!
+		);
 	});
 
 	// "Ouça e escreva" é listening + writing: quem desmarcou escrita não quer
@@ -283,3 +294,70 @@ describe('separarPelaQuantidade', () => {
 		expect(fora).not.toContain(fecho);
 	});
 });
+
+/** Uma atividade só de fala, com N vocabulários de espanhol, pelos geradores de verdade. */
+function soDeFala(quantosTermos: number, pedidas: number) {
+	const materiais: StoredContentUnit[] = Array.from({ length: quantosTermos }, (_, i) => ({
+		id: `voc_${i}`,
+		kind: 'VocabItem',
+		data: { term: `palabra${i}`, translation: `sentido ${i}` }
+	}));
+	const { groups, closing } = runGenerators(materiais, {
+		targetProfile: getProfile('es-ES'),
+		sourceProfile: getProfile('pt-BR'),
+		seed: 'atv_teto',
+		capabilities: { tts: false, asr: true },
+		pedidasPara: () => ['speaking']
+	});
+	return separarPelaQuantidade(groups, { target: pedidas, skills: ['speaking'] }, closing);
+}
+
+/**
+ * O teto de fala e escuta, e o que as telas dizem dele. O caso que trouxe isto:
+ * sete vocabulários, só Fala ligada, 10 questões pedidas. Com o teto em 5 entravam
+ * 5, e a revisão dizia que as outras duas "passaram da quantidade pedida (10)". O
+ * dono do repositório subiu o teto para 10.
+ */
+describe('o teto de fala e escuta', () => {
+	it('o caso do professor: sete vocabulários, só fala, 10 pedidas — entram as sete', () => {
+		const { dentro, fora } = soDeFala(7, 10);
+		expect(TETO_POR_HABILIDADE.speaking).toBe(10);
+		expect(dentro).toHaveLength(7);
+		expect(fora).toHaveLength(0);
+	});
+
+	it('passando do teto, as de fora ficam pelo teto, não pela quantidade', () => {
+		const { dentro, fora } = soDeFala(12, MAX_ITENS);
+		expect(dentro).toHaveLength(TETO_POR_HABILIDADE.speaking!);
+		expect(fora).toHaveLength(12 - TETO_POR_HABILIDADE.speaking!);
+		const uso = usoDosTetos(dentro.map((i) => skillsDe(i)));
+		expect(fora.every((i) => tetoCheio(skillsDe(i), uso) === 'speaking')).toBe(true);
+	});
+
+	it('com vaga no teto, nada barra', () => {
+		const teto = TETO_POR_HABILIDADE.listening!;
+		expect(tetoCheio(['reading', 'speaking'], { speaking: teto - 1 })).toBeNull();
+		expect(tetoCheio(['reading', 'writing'], { speaking: teto })).toBeNull();
+		expect(tetoCheio(['listening', 'writing'], { listening: teto })).toBe('listening');
+	});
+
+	it('o máximo pelos tipos: a soma dos tetos, até o teto da atividade', () => {
+		expect(maximoPelosTetos(['speaking'])).toBe(10);
+		// 10 de escuta e 10 de fala passariam das 15 questões de uma atividade.
+		expect(maximoPelosTetos(['listening', 'speaking'])).toBe(MAX_ITENS);
+		// Com um tipo sem teto, quem limita é o material.
+		expect(maximoPelosTetos(['speaking', 'writing'])).toBeNull();
+		expect(maximoPelosTetos([])).toBeNull();
+	});
+
+	it('com só tipos de teto, a seleção nunca passa da soma deles', () => {
+		const grupos = Array.from({ length: 12 }, () => grupo([item('fala'), item('escuta')]));
+		expect(selectItems(grupos, { target: 15, skills: ['listening', 'speaking'] })).toHaveLength(
+			maximoPelosTetos(['listening', 'speaking'])!
+		);
+	});
+});
+
+function skillsDe(i: Item) {
+	return getInteraction(i.interaction.type).skills(i.prompt);
+}
