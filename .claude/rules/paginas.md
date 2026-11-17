@@ -117,6 +117,14 @@ no formulário só sem material**: quem volta da revisão quer ver o que já est
 "Adicionar material". Depois de enviar, o formulário rola até o resultado ("3 adicionados" ou o
 erro), que no celular ficava abaixo da dobra.
 
+**No celular o rodapé da etapa 2 cabe SEMPRE numa linha, até em 320px** (pedido do dono do
+repositório: "o botão de adicionar material está ficando com um grande espaço em branco abaixo").
+Com o formulário aberto há duas barras embaixo — a do "Adicionar à atividade" e o rodapé da casca
+—, e com três ações o "Cancelar" descia sozinho para uma segunda linha quase vazia, espremendo o
+formulário. Agora são duas ações por vez: com o formulário aberto, "Biblioteca" e "Gerar" (o
+"Cancelar" sai, `WizardShell cancelarNoCelular`, e continua a um toque, na lista); na lista, "Gerar"
+e "Cancelar" (a biblioteca ali já é o botão do topo da lista). No desktop, os três, como sempre.
+
 **"Tipo do Material": quatro cartões só com o nome** (Sentença, Vocabulário, Texto, Diálogo —
 "Sentença" era "Par de frases", e o título era "O que o aluno vai fazer"; os dois mudaram a pedido
 do dono do repositório): a descrição sob cada um saiu na limpeza das frases redundantes. **Cada
@@ -168,6 +176,13 @@ alvo aparece na prévia com "tradução automática" (não riscada), e o resulta
 traduções vieram do tradutor, para ele conferir na lista. Na biblioteca o destino é a língua do
 aluno da página (a mesma da IA), e material "sem idioma" não tem de onde traduzir. Sem tradutor,
 tudo volta ao de antes: a tradução é obrigatória e a linha sem separador fica de fora.
+**A tradução que não passa na conferência não é gravada** (server.md "Tradução do material"): a
+que volta IGUAL à frase (o caso da "la cometa") e, no vocabulário, a que não faz a ida e volta
+("la rata" → "a taxa"). A sugestão ao vivo deixa o campo em branco, e salvar diz "o tradutor
+automático não soube traduzir …, escreva a tradução". **Na lista colada, a linha fica de fora e
+VOLTA ao campo**: uma faixa âmbar diz quantas e quais, e "Escrever a tradução delas" as põe no
+campo, cada uma já com o separador e o cursor no lugar — o professor só escreve a tradução. Em
+palavra solta isso é mais ou menos uma linha em três; o que entra, entra certo.
 
 **"Gerar com IA" é o terceiro modo de entrada, ao lado de digitar e colar** — não um lugar
 separado. Três fontes: o **prompt** (o professor descreve), a **foto** de uma página e a **fala de
@@ -289,7 +304,10 @@ quebrava em três linhas), os seletores de idioma não têm frase embaixo, e no 
 da direita têm altura fixa e o chip "inglês · B2" (como no desenho: o idioma sem a região) reserva
 o lugar do nível mesmo sem nível. O nível diz que é rótulo e que pesa em dois pontos: do B2 em
 diante o aluno ouve o diálogo sem ler, e a Pronúncia corrige com mais rigor nos níveis altos (o
-"calibra o vocabulário" do desenho não é verdade aqui).
+"calibra o vocabulário" do desenho não é verdade aqui). **No celular a etapa 1 é só o formulário**
+(`WizardShell asideSoNoDesktop`, pedido do dono do repositório): "O que sai daqui" é ilustração, e
+empilhado sob os campos alongava a tela e passava por cima do botão de continuar. O rodapé da casca
+tem `z-10` pelo mesmo motivo: a ação principal fica por cima do que rola sob ela.
 
 **QUANTAS questões e de QUAIS tipos é a etapa 2, logo acima da lista** (`BlocoDeGeracao.svelte`).
 Isso não contradiz "o professor nunca escolhe a habilidade": ele não marca a habilidade de cada
@@ -312,7 +330,7 @@ os geradores produziram (kernel.md "O corte"). O pedido do dono do repositório,
 - **A quantidade não corta nada nesta tela.** A geração é para todos; o que passar do número fica
   "fora" na revisão, e o professor troca o que entra e o que sai.
 
-Fala e escuta mostram "máx. 5" no chip, ligadas ou não, e o chip tem sempre a largura do texto em
+Fala e escuta mostram "máx. 10" no chip, ligadas ou não, **e o botão diz quantas vão ENTRAR, não quantas foram pedidas** (`maximoPelosTetos`): com só Fala ligada e 15 pedidas, é "Gerar 10 questões", e uma linha no bloco diz por quê e como passar disso ("Ligue outro tipo para passar de 10"). Prometer mais do que entra foi um relato do dono do repositório, quando o teto era 5. O chip tem sempre a largura do texto em
 negrito — sumindo o "máx." ou trocando o peso no clique, os vizinhos andavam. A trilha do "Gerar" ocupa o resto da linha e não anda (os chips não mudam de largura),
 com o trecho escolhido na cor da marca (`.range`). Sem voz no idioma ou sem transcrição, o tipo aparece desligado com o motivo.
 **No wizard cada material é um cartão** (o desenho: tipo, conteúdo, "Editar" e remover numa
@@ -343,8 +361,9 @@ existiam.
 
 **"Gerando" é uma tela de verdade, passo a passo.** `gerarItens` só COMEÇA a geração (em segundo
 plano, server.md "Geração das questões") e a revisão mostra cada passo: os materiais lidos, as
-palavras traduzidas para o associar, as questões montadas, quantas entram e quantas ficam de fora,
-as outras traduções certas e o salvar. O passo que anda tem a `fila` e o texto, o que já terminou
+palavras traduzidas para o associar, as questões montadas, quantas entram e quantas ficam de fora
+(e, quando há, quantas com problema — as que a conferência reprovou), as outras traduções certas
+e o salvar. O passo que anda tem a `fila` e o texto, o que já terminou
 ganha o check com o número que descobriu, e o que ainda não começou é `skeleton` — a `orbita`
 lenta fica no título. O passo que não vale (sem tradutor, sem par de frases) nem aparece. A tela
 diz que dá para sair: o trabalho continua, e as questões estão lá na volta. Falhou, ela diz por
@@ -385,10 +404,23 @@ pedido do dono do repositório). Duas colunas no desktop, cada uma rolando por d
   é gravado. Fala e escrita livre não se corrigem ali, e o rodapé do celular diz por quê (o
   microfone; a correção é do professor).
 - **As de fora vêm numa seção à parte**, "Ficaram de fora · N" — não no fio do roteiro: podem ser
-  vinte, e o roteiro é o que o aluno faz. Cada uma tem "Aceitar", que a põe no FIM do roteiro.
+  vinte, e o roteiro é o que o aluno faz. **A frase acima dela diz o motivo de VERDADE**
+  (`motivoDasDeFora`, `$lib/atividades/de-fora.ts`): o teto de fala e escuta ("A geração põe no
+  máximo 10 questões de fala por atividade"), a quantidade pedida, o descarte do professor e a
+  conferência, cada um só quando está na lista. Ela dizia sempre "passaram da quantidade pedida", e
+  com 5 de 10 dentro a frase não fechava com o roteiro. Cada uma tem "Aceitar", que a põe no FIM do roteiro.
   O teto de 15 vale ao aceitar, ao criar do zero e ao publicar.
 - O check de aceita é na cor da MARCA, não verde (verde é correção), e o "Gerando" continua numa
   coluna de 560px no meio da tela.
+- **A conferência aparece SEM tomar a tela** (pedido do dono do repositório: "avisar em tela, nada
+  muito intrusivo"; kernel.md "Conferência de qualidade"). A
+  linha com problema ganha uma marca pequena, um triângulo — vermelho no que corrige errado
+  ("1 problema"), âmbar no que vale olhar ("2 pontos para conferir") —, com o texto no `title` e
+  para o leitor de tela. A linha ESCOLHIDA diz o que é, antes da resposta
+  (`revisar/ProblemasDaQuestao.svelte`, no desenho do `Alert`, em corpo menor): a frase do
+  problema e onde está. Vale para a questão gerada e para a que o professor criou ou editou. **A reprovada pelas
+  regras fica no FIM das de fora**, e aceitar continua sendo decisão dele: nada é bloqueado, nem
+  aceitar, nem publicar.
 
 Esse progresso é o único número do wizard que muda **sem o professor fazer nada** — quem
 sintetiza é o worker, noutro processo. Por isso a etapa 4 recarrega sozinha enquanto falta
@@ -787,6 +819,15 @@ Pendências dentro do que já está ligado:
   - **Fechar com mudança não salva pergunta antes** ("Continuar editando" ou "Fechar sem
     salvar"), pelo X, pelo Esc ou pelo véu. "Salvar e ir para a próxima" anda pela lista; "Descartar"
     e "Aceitar" (as palavras do roteiro) valem dali mesmo.
+  - **A conferência acompanha o que está no formulário** (kernel.md "Conferência de qualidade"):
+    as regras do kernel vêm junto da prévia, enquanto o professor escreve, e aparecem logo depois
+    da moldura da resposta certa — é sobre ela que falam. O rodapé do modal diz quantos são e leva
+    até lá ("1 problema nesta questão. Ver"), rolando só a coluna do formulário. **No aviso de "só
+    uma tradução é aceita" há "Sugerir outras traduções"** (só com tradutor): pede ao tradutor as
+    outras formas certas daquela resposta (`sugerirRespostas`, o funil da geração, sem IA) e as põe
+    em "Também aceitas", cada uma com o X de remover. É um pedido do professor, nunca automático: no
+    editor, o que ele escreveu, ele decide. Sem nenhuma, a linha diz que o tradutor não achou outra
+    forma segura. Nada disso trava o salvar.
 - `Prompt.instruction` é o enunciado que o professor escreve no editor; sem ele vale a copy
   padrão da `instructionKey`. Quem resolve os dois num só é `promptInstruction()`
   (`server/player/runtime.ts`) — a prévia e o Player têm que mostrar a mesma frase.
@@ -1440,7 +1481,7 @@ por dentro e abre na fase atual.
   avatar do aluno como personagem, e a fonte pixel só em rótulo decorativo (design-system.md).
 - Cada fase tem ícone e texto de estado: concluída (azul, nunca verde), em andamento, liberada,
   trancada com a data em que abre, encerrada. Por baixo do desenho há uma `<ol>`.
-- Tocar abre a folha da fase; "Jogar" e "Continuar" vão pelo link pessoal do convite, para a
+- Tocar abre a folha da fase; "Começar" e "Continuar" vão pelo link pessoal do convite, para a
   tentativa contar. **O mapa não tranca o link**: a ordem é sugestão.
 - **Estrelas só onde o professor liberou o resultado**; sem isso, "concluída · sem placar".
 - O avatar anda uma vez quando o aluno avançou e a festa do módulo concluído toca uma vez,

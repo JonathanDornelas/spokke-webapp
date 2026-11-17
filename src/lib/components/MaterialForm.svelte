@@ -75,6 +75,10 @@
 				ignored: number;
 				/** Linhas cuja tradução veio do tradutor automático. */
 				traduzidas?: number;
+				/** Linhas que o tradutor não soube traduzir: ficaram de fora. */
+				semTraducao?: number;
+				/** O texto dessas linhas, para a tela devolvê-las ao professor. */
+				semTraducaoDe?: string[];
 				foraDoLimite?: number;
 				aviso?: string | null;
 				motivo?: MotivoDoBloqueio | null;
@@ -160,7 +164,9 @@
 		onsugerirTraducao?: (
 			texto: string,
 			de: string,
-			para: string
+			para: string,
+			/** O texto é um termo de vocabulário: a tradução passa pela ida e volta. */
+			palavra: boolean
 		) => Promise<SugestaoDeTraducao | null>;
 	} = $props();
 
@@ -193,6 +199,21 @@
 	let falas = $state<Fala[]>(FALAS_INICIAIS.map((f) => ({ ...f })));
 	let lote = $state('');
 	let textareaLote = $state<HTMLTextAreaElement | null>(null);
+
+	/**
+	 * As linhas que o tradutor não soube traduzir voltam ao campo, cada uma já com o
+	 * separador, e o cursor para depois do primeiro: o professor só escreve a tradução.
+	 */
+	async function completarSemTraducao(linhas: string[]) {
+		lote = linhas.map((linha) => `${linha} - `).join('\n');
+		await tick();
+		const campo = textareaLote;
+		if (!campo) return;
+		const fim = (linhas[0]?.length ?? 0) + 3;
+		campo.focus();
+		campo.setSelectionRange(fim, fim);
+		campo.scrollIntoView({ block: 'nearest' });
+	}
 	let primeiroCampo = $state<HTMLInputElement | null>(null);
 
 	const kernelKind = $derived(KIND_TO_KERNEL[kind]);
@@ -223,7 +244,7 @@
 		if (!onsugerirTraducao || !linguaDoAluno) return;
 		const meu = ++pedidoDaTraducao;
 		traduzindo = true;
-		const sugestao = await onsugerirTraducao(texto, tagConteudo, linguaDoAluno);
+		const sugestao = await onsugerirTraducao(texto, tagConteudo, linguaDoAluno, kind === 'vocab');
 		if (meu !== pedidoDaTraducao) return;
 		traduzindo = false;
 		semTradutor = sugestao === null;
@@ -2086,6 +2107,33 @@
 							: `${resultado.traduzidas} traduções vieram do tradutor automático: confira na lista.`}
 					{/if}
 				</p>
+				{#if resultado.semTraducao}
+					<!-- As linhas cuja tradução não passou na conferência ficaram de fora:
+					     gravar uma tradução errada daria questões sem sentido. A tela as
+					     devolve ao campo, com o separador, para o professor completar. -->
+					<div
+						class="mt-2 rounded-field border-s-[3px] border-warning bg-base-200 px-3 py-2.5 text-[13px]"
+						role="status"
+					>
+						<p>
+							{resultado.semTraducao === 1
+								? 'O tradutor automático não soube traduzir uma linha, e ela ficou de fora.'
+								: `O tradutor automático não soube traduzir ${resultado.semTraducao} linhas, e elas ficaram de fora.`}
+						</p>
+						{#if resultado.semTraducaoDe?.length}
+							<p class="mt-1 font-content text-base-content/70" dir="auto">
+								{resultado.semTraducaoDe.join(' · ')}
+							</p>
+							<button
+								type="button"
+								class="mt-1.5 inline-flex min-h-8 items-center text-[13px] font-bold text-primary"
+								onclick={() => completarSemTraducao(resultado.semTraducaoDe ?? [])}
+							>
+								Escrever a tradução {resultado.semTraducao === 1 ? 'dela' : 'delas'}
+							</button>
+						{/if}
+					</div>
+				{/if}
 				{#if resultado.aviso}
 					<!-- As linhas que não couberam no estoque do plano: dizer QUANTAS, e o
 				     caminho, em vez de deixar o contador subir menos sem explicação. -->

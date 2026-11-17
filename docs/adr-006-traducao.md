@@ -107,6 +107,72 @@ A IA continua sendo o modo "Gerar com IA", que já devolve o material traduzido.
 um dia fizer sentido (uma revisão mais caprichada, por exemplo), entra como decisão de cobrança, não
 como detalhe de tela.
 
+### 6. O tradutor confere a si mesmo, sem IA (2026-11-17)
+
+O dono do repositório achou questões cuja resposta não fazia sentido (vocabulário de espanhol em
+que "la cometa" tinha "la cometa" como tradução) e pediu uma conferência "como a dos áudios", com
+uma condição: **usar as ferramentas que já temos; a IA fica só em gerar material**. Um revisor de
+IA chegou a ser escrito e saiu antes de ser ligado. O que ficou é o MADLAD conferindo o que ele
+mesmo produz, de três jeitos, todos medidos no serviço de áudio (int8, 2 threads).
+
+**A palavra solta, pela ida e volta.** Com 88 palavras de aula (44 do espanhol, 44 do inglês, para
+o português), a tradução direta erra mais ou menos uma em quatro, quase sempre do mesmo jeito: a
+palavra vira um pedaço de frase ("el perro" → "Sobre o cão", "el tenedor" → "com o garfo", "la
+playa" → "Perto da praia", "to eat" → "O que comer"), vira outra palavra ("la rata" → "a taxa",
+"tap" → "Encontrar") ou não é traduzida ("hat" → "O quê?" e, na alternativa, "Hat"). A certa
+costuma estar entre as outras hipóteses do feixe, e traduzir de volta separa: "o cão" volta "el
+perro", "Sobre o cão" volta "Sobre el perro". Regra: fica a primeira hipótese (de até três) cuja
+volta, ou uma alternativa da volta, dá o original; nenhuma voltou, o campo fica em branco.
+
+|                                                                   | espanhol (44) | inglês (44) |
+| ----------------------------------------------------------------- | ------------- | ----------- |
+| entram, e certas                                                  | 28            | 27          |
+| em branco: erradas de verdade                                     | 8             | 8           |
+| em branco: iguais nas duas línguas ("feliz", "hotel")             | 5             | 2           |
+| em branco: certas que não voltam ("parents" → "pais" → "country") | 3             | 7           |
+
+O preço é esse: mais ou menos uma palavra em três fica para o professor escrever, e parte delas
+estava certa. Em troca, o que entra está certo — e a alternativa, medida, era uma em quatro errada
+em silêncio. Custa uns 15 s para 44 palavras (3 s sem a conferência) e menos de 1 s para uma.
+**No japonês a palavra solta é fraca** ("犬" → "Cães.", "先生" → "Sr.") e a ida e volta não a
+conserta: ali o professor confere. Frase não passa por isso: nela o tradutor acerta, e a volta
+raramente devolve as mesmas palavras.
+
+**As outras traduções certas, com duas mudanças.** O funil das variações (o feixe, o tamanho da
+diferença, a ida e volta) deixava metade das frases de iniciante sem nenhuma. O filtro de tamanho
+era uma proporção (Dice ≥ 0,7), e proporção pune frase curta: "Não tenho fome" para "Não estou com
+fome" dava 0,57. Entrou uma segunda régua — até duas palavras trocadas, com as outras na mesma
+ordem — e uma segunda chance na ida e volta: vale a variante cuja frase original está entre as
+outras hipóteses da volta. Em 36 frases de aula, 31 ganham variações ("Não tenho fome", "Amanhã
+vamos para a praia", "Eu te ligo mais tarde") e continuam de fora "Temos de ir agora" (ir não é
+sair) e "com a lição" (não é a tarefa).
+
+**O sujeito que a língua omite, pelo começo forçado.** "Estou ansioso" e "Eu estou ansioso" são a
+mesma resposta, e o feixe não traz a segunda. O servidor montava a forma com cada pronome e a ida
+e volta escolhia — e ela aprovava lixo, porque o modelo ignora um pronome sobrando: "Eu onde fica a
+estação de trem?", "Eu há um gato no jardim" e "Nós está muito frio hoje" voltavam iguais à frase
+certa e viravam resposta aceita. Medido: uma frase em três. Nenhuma combinação das voltas separa os
+dois casos (o pronome certo e o ignorado têm a mesma assinatura). O que separa é pedir a tradução
+da frase original COMEÇANDO pelo pronome — `target_prefix`, um campo novo e opcional do
+`/v1/translate`, que vira o `target_prefix` do CTranslate2:
+
+| frase                               | começando por "Eu"                     | "Eu" + resposta do professor |
+| ----------------------------------- | -------------------------------------- | ---------------------------- |
+| I'm looking forward to the weekend. | Eu estou ansioso para o fim de semana. | igual: entra                 |
+| I forgot my keys at home.           | Eu esqueci minhas chaves em casa.      | igual: entra                 |
+| There is a cat in the garden.       | Eu tenho um gato no jardim.            | "Eu há um gato…": cai        |
+| It is very cold today.              | Eu estou muito frio hoje.              | "Eu está muito frio…": cai   |
+| Where is the train station?         | Eu quero ir para a estação de trem.    | "Eu onde fica…": cai         |
+
+Nas mesmas 36 frases, nenhuma variante sem sentido entrou. Um serviço de áudio anterior ao campo o
+ignora e devolve a tradução livre: o sujeito só deixa de ser proposto. O passo inteiro (feixe,
+volta, segunda chance e um pedido por pronome) leva uns 20 a 25 s para 18 frases.
+
+**O que ficou de fora, e por quê.** Conferir com o tradutor se outra alternativa de uma questão de
+escolher também está certa, ou se o gabarito de um vocabulário está errado: em palavra solta ele
+não é juiz confiável (a tabela acima), e a questão gerada usa a tradução que o professor escreveu
+ou a que já passou pela ida e volta. Isso continua sendo do professor, na revisão.
+
 ## Consequências
 
 - O "ligue os pares" que fecha a atividade passou a sair também das PALAVRAS das frases, quando o

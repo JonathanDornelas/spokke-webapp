@@ -307,6 +307,12 @@ function gradingDe(campos: CamposDaQuestao, gravada: Gravada | null): Grading {
 	const tolerancia = gravada?.grading.tolerance ?? 0.9;
 	switch (campos.interacao) {
 		case 'choice':
+			// "Escolha a tradução" responde na língua do aluno, e isso fica: é o que a
+			// conferência lê para saber que o sentido igual ao áudio não foi traduzido.
+			return {
+				mode: 'exact',
+				answerLang: gravada?.interaction.type === 'choice' ? gravada.grading.answerLang : 'target'
+			};
 		case 'select':
 			return { mode: 'exact', answerLang: 'target' };
 		case 'assemble':

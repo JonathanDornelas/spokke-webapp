@@ -1,7 +1,18 @@
 import { z } from 'zod';
 import { tolerantScore } from '../grading/compare';
+import { tokenize } from '../language/tokenize';
+import { regra, respostaNoEnunciado, textoVisivel, vazios } from '../qualidade/comparar';
+import type { Problema } from '../qualidade/types';
 import { promptSkills } from './skills';
 import type { InteractionType, TextRuntime } from './types';
+
+/**
+ * A partir de quantas palavras uma tradução com UMA resposta aceita vira aviso.
+ * Abaixo disso quase não há outro jeito de dizer ("Bom dia"), e o aviso seria
+ * ruído; numa frase, uma resposta só é o que reprova o aluno que acertou
+ * escrevendo diferente (kernel.md "Respostas aceitas").
+ */
+export const MIN_PALAVRAS_PARA_PEDIR_VARIANTES = 3;
 
 /**
  * Digitar a resposta inteira. Toda questão aceita várias respostas válidas
@@ -43,5 +54,34 @@ export const type: InteractionType<
 		value: tolerantScore(answer.text, payload.accepted, profile)
 	}),
 
-	skills: (prompt) => [...promptSkills(prompt), 'writing']
+	skills: (prompt) => [...promptSkills(prompt), 'writing'],
+
+	conferir: (payload, ctx) => {
+		// Escrita livre: o professor corrige em cima da resposta, e o que está em
+		// `accepted` é referência dele, não gabarito.
+		if (ctx.modo === 'rubric') return [];
+		const problemas: Problema[] = [...vazios(payload.accepted, ctx.perfis)];
+		for (const aceita of payload.accepted) {
+			const noEnunciado = respostaNoEnunciado(aceita, ctx);
+			if (noEnunciado) {
+				problemas.push(noEnunciado);
+				break;
+			}
+		}
+		// "Traduza para o português" com uma resposta só: quem traduz certo com
+		// outras palavras leva "quase". As outras traduções certas vêm do revisor,
+		// na geração (server.md "Conferência das questões").
+		const visivel = textoVisivel(ctx.prompt);
+		const [principal] = payload.accepted;
+		if (
+			visivel &&
+			principal &&
+			ctx.answerLang === 'source' &&
+			payload.accepted.length === 1 &&
+			tokenize(principal, ctx.perfis.origem).length >= MIN_PALAVRAS_PARA_PEDIR_VARIANTES
+		) {
+			problemas.push(regra('resposta-unica-na-traducao', 'aviso'));
+		}
+		return problemas;
+	}
 };

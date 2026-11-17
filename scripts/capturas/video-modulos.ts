@@ -117,7 +117,7 @@ try {
 	async function entrarNaFase(numero: number) {
 		await abrirMapa(ana);
 		await ana.getByRole('button', { name: new RegExp(`^Fase ${numero} de 4`) }).click();
-		await ana.getByRole('link', { name: /^(Jogar|Continuar)$/ }).click();
+		await ana.getByRole('link', { name: /^(Começar|Continuar)$/ }).click();
 		await ana.waitForURL(/\/a\/[^/]+(\/q\/\d+)?$/, { timeout: 30_000 });
 		await ana.waitForLoadState('networkidle');
 		if (!/\/q\/\d+$/.test(ana.url())) {
@@ -193,9 +193,9 @@ try {
 
 	// ── 06 a 08: a Ana joga a fase 2 e fica em dia ──
 	await ana.getByRole('button', { name: /^Fase 2 de 4/ }).click();
-	await ana.getByRole('link', { name: 'Jogar', exact: true }).waitFor();
+	await ana.getByRole('link', { name: 'Começar', exact: true }).waitFor();
 	await foto(ana, V, '06-folha-da-fase', 'celular');
-	await ana.getByRole('link', { name: 'Jogar', exact: true }).click();
+	await ana.getByRole('link', { name: 'Começar', exact: true }).click();
 	await ana.waitForURL(/\/a\/[^/]+(\/q\/\d+)?$/, { timeout: 30_000 });
 	await ana.waitForLoadState('networkidle');
 	if (!/\/q\/\d+$/.test(ana.url())) {

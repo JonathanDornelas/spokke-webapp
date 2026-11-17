@@ -41,14 +41,69 @@ function filasDo(groups: GenerationGroup[], plan: GenerationPlan): Item[][] {
  * fala é uma gravação que o aluno precisa de silêncio para fazer. Uma
  * atividade inteira de qualquer um dos dois não é o que o professor quer, e é
  * o que sai por acidente quando o material é todo do mesmo tipo.
+ *
+ * Eram 5 cada; o dono do repositório subiu para 10 (2026-11-17), depois de uma
+ * atividade só de fala com sete vocabulários entregar 5 e deixar 2 de fora. Com
+ * o teto duro de 15 (`MAX_ITENS`), fala e escuta juntas continuam deixando vaga
+ * para leitura e escrita só quando o professor pede menos de 15.
  */
 export const TETO_POR_HABILIDADE: Partial<Record<Skill, number>> = {
-	speaking: 5,
-	listening: 5
+	speaking: 10,
+	listening: 10
 };
 
 /** O teto duro de questões por atividade — acima disso o aluno abandona no meio. */
 export const MAX_ITENS = 15;
+
+/** Quantas questões de cada habilidade COM TETO já estão nestas listas de habilidades. */
+export function usoDosTetos(listas: readonly (readonly Skill[])[]): Partial<Record<Skill, number>> {
+	const uso: Partial<Record<Skill, number>> = {};
+	for (const skills of listas) {
+		for (const skill of skills) {
+			if (TETO_POR_HABILIDADE[skill] !== undefined) uso[skill] = (uso[skill] ?? 0) + 1;
+		}
+	}
+	return uso;
+}
+
+/**
+ * A habilidade com teto que já está CHEIA para uma questão destas habilidades, ou
+ * nula. É a regra que `selectItems` aplica, e a revisão a usa para dizer por que
+ * uma questão ficou de fora: "passou da quantidade pedida" seria mentira quando
+ * entraram 5 de 10 e o que barrou foi o teto de fala.
+ */
+export function tetoCheio(
+	skills: readonly Skill[],
+	uso: Partial<Record<Skill, number>>
+): Skill | null {
+	return (
+		skills.find((skill) => {
+			const teto = TETO_POR_HABILIDADE[skill];
+			return teto !== undefined && (uso[skill] ?? 0) >= teto;
+		}) ?? null
+	);
+}
+
+/**
+ * O máximo de questões que estes TIPOS rendem juntos, pelos tetos: a soma dos
+ * tetos quando todo tipo ligado tem um (só fala, só escuta, as duas), limitada
+ * ao teto duro da atividade (`MAX_ITENS`), e nulo quando algum não tem — aí o
+ * limite é o que o material rende.
+ *
+ * Toda questão que entra exige ao menos um tipo ligado (`querido`), então com só
+ * tipos de teto cada uma gasta ao menos uma vaga de algum deles. É o que deixa a
+ * etapa de materiais dizer "Gerar 10" em vez de prometer 15 que não vão entrar.
+ */
+export function maximoPelosTetos(tipos: readonly Skill[]): number | null {
+	if (tipos.length === 0) return null;
+	let soma = 0;
+	for (const tipo of new Set(tipos)) {
+		const teto = TETO_POR_HABILIDADE[tipo];
+		if (teto === undefined) return null;
+		soma += teto;
+	}
+	return Math.min(soma, MAX_ITENS);
+}
 
 function skillsOf(item: Item): Skill[] {
 	return getInteraction(item.interaction.type).skills(item.prompt);
@@ -136,11 +191,7 @@ export function selectItems(
 		// O teto vale por habilidade do item, e um item de escuta+escrita
 		// consome a cota de escuta — é a escuta que custa o TTS.
 		const skills = skillsOf(item);
-		const estouraria = skills.some((skill) => {
-			const teto = TETO_POR_HABILIDADE[skill];
-			return teto !== undefined && (usados[skill] ?? 0) >= teto;
-		});
-		if (estouraria) return false;
+		if (tetoCheio(skills, usados)) return false;
 
 		for (const skill of skills) usados[skill] = (usados[skill] ?? 0) + 1;
 		dentro.add(item.id);
@@ -211,22 +262,50 @@ export function selectItems(
  * é a escolha de `selectItems` (o número pedido, os tetos, o rodízio justo);
  * `fora` é todo o resto que o professor quis, na ordem do rodízio (o primeiro
  * de cada material, depois o segundo…), para ele trocar na revisão o que entra.
+ *
+ * **A questão REPROVADA na conferência não entra sozinha** (`reprovado`, kernel.md
+ * "Conferência de qualidade"): a que mostra a resposta no enunciado ou tem duas
+ * alternativas iguais sai do sorteio e vai para o FIM das de fora, onde a revisão
+ * a mostra com o motivo — como o áudio reprovado é trocado antes de ir ao bucket.
+ * O professor ainda pode aceitá-la; o sistema só não a escolhe por ele.
  */
 export function separarPelaQuantidade(
 	groups: GenerationGroup[],
 	plan: GenerationPlan,
-	closing: Item | null = null
+	closing: Item | null = null,
+	reprovado: (item: Item) => boolean = () => false
 ): { dentro: Item[]; fora: Item[] } {
-	const dentro = selectItems(groups, plan, closing);
+	const reprovados = new Set(
+		[...groups.flatMap((g) => g.items), ...(closing ? [closing] : [])]
+			.filter((item) => reprovado(item))
+			.map((item) => item.id)
+	);
+	const so = (aprovado: boolean) =>
+		groups.map((g) => ({
+			...g,
+			items: g.items.filter((item) => reprovados.has(item.id) !== aprovado)
+		}));
+	const fechoReprovado = closing !== null && reprovados.has(closing.id);
+
+	const aprovados = so(true);
+	const dentro = selectItems(aprovados, plan, fechoReprovado ? null : closing);
 	const ja = new Set(dentro.map((item) => item.id));
-	const filas = filasDo(groups, plan).map((fila) => fila.filter((item) => !ja.has(item.id)));
-	const maior = filas.reduce((max, fila) => Math.max(max, fila.length), 0);
-	const fora: Item[] = [];
-	for (let rodada = 0; rodada < maior; rodada++) {
-		for (const fila of filas) {
-			const item = fila[rodada];
-			if (item) fora.push(item);
+	const emRodizio = (grupos: GenerationGroup[]): Item[] => {
+		const filas = filasDo(grupos, plan).map((fila) => fila.filter((item) => !ja.has(item.id)));
+		const maior = filas.reduce((max, fila) => Math.max(max, fila.length), 0);
+		const saida: Item[] = [];
+		for (let rodada = 0; rodada < maior; rodada++) {
+			for (const fila of filas) {
+				const item = fila[rodada];
+				if (item) saida.push(item);
+			}
 		}
-	}
+		return saida;
+	};
+	const fora = [
+		...emRodizio(aprovados),
+		...emRodizio(so(false)),
+		...(fechoReprovado && closing ? [closing] : [])
+	];
 	return { dentro, fora };
 }

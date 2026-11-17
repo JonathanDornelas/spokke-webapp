@@ -93,7 +93,7 @@ caminho normal. O progresso sai das tentativas que já existem (`repos/mapa-alun
 coleta nova e sem nada de outro aluno.
 
 - Cada fase está concluída, em andamento, liberada, trancada (com a data em que abre) ou
-  encerrada. "Jogar" e "Continuar" levam pelo link pessoal do convite, para a tentativa contar.
+  encerrada. "Começar" e "Continuar" levam pelo link pessoal do convite, para a tentativa contar.
 - **O mapa não tranca o link.** A ordem é sugestão; quem tranca é só a programação.
 - **Estrelas só onde o professor liberou o resultado** (3 a partir de 90%, 2 a partir de 60%,
   1 para concluída). Com o resultado desligado, a fase é "concluída · sem placar".

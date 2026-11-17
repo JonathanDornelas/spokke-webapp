@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { setScore } from '../grading/compare';
 import { assignRuntimeIds } from '../random';
+import { mesmoTexto, regra, repetidos, vazios } from '../qualidade/comparar';
+import type { Problema } from '../qualidade/types';
 import { promptSkills } from './skills';
 import type { InteractionType, MatchRuntime } from './types';
 
@@ -87,5 +89,24 @@ export const match: InteractionType<
 		return { ok: true, value: { ...score, feedback: '', marks } };
 	},
 
-	skills: promptSkills
+	skills: promptSkills,
+
+	conferir: (payload, ctx) => {
+		const esquerdos = payload.pairs.map((p) => p.left);
+		const direitos = payload.pairs.map((p) => p.right);
+		const problemas: Problema[] = [...vazios([...esquerdos, ...direitos], ctx.perfis)];
+		// Dois "livro" à direita: duas ligações ficam igualmente certas, e a correção
+		// (pelo par de origem) dá uma delas como errada.
+		for (const texto of [...repetidos(esquerdos, ctx.perfis), ...repetidos(direitos, ctx.perfis)]) {
+			problemas.push(regra('pares-repetidos', 'erro', texto));
+		}
+		// "hotel" ↔ "hotel": o par se liga sozinho. Um em cinco não estraga a
+		// questão, mas não testa nada.
+		for (const par of payload.pairs) {
+			if (mesmoTexto(par.left, par.right, ctx.perfis)) {
+				problemas.push(regra('par-igual-nos-dois-lados', 'aviso', par.left));
+			}
+		}
+		return problemas;
+	}
 };

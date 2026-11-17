@@ -87,10 +87,10 @@ Pílula em "Seu aluno". Volta o mapa: a fase 1 concluída (bandeira e estrelas a
 liberada (o nó aceso, uma vez só), as fases 3 e 4 com cadeado e **"abre qua 25/11"** e
 **"abre qua 02/12"**.
 
-### Bloco 5 · 19 a 23 s · Jogar e ficar em dia (aluno)
+### Bloco 5 · 19 a 23 s · Começar e ficar em dia (aluno)
 
 A Ana toca na fase 2. Sobe a folha da fase com o título, o idioma, o nível, o número de questões
-e o botão **"Jogar"**. Corte rápido para uma questão respondida com **"Correto."** e de volta ao
+e o botão **"Começar"**. Corte rápido para uma questão respondida com **"Correto."** e de volta ao
 mapa: a fase 2 ganha a bandeira de concluída e aparece o aviso **"Você está em dia."** com
 **"A próxima fase abre qua 25/11."** O avatar fica onde está: a fase 3 ainda não abriu.
 
@@ -141,7 +141,7 @@ fim desta seção). Use as frases exatamente; nenhuma outra legenda entra.
 | 9     | Do seu lado, quantos abriram e quantos terminaram.          |                                                 |
 | 10    | Você monta a sequência uma vez. A turma avança fase a fase. | Teste grátis por 14 dias · spokke.com.br        |
 
-Os textos DENTRO das telas ("MUNDO 1", "Jogar", "Você está em dia.", "abre qua 25/11",
+Os textos DENTRO das telas ("MUNDO 1", "Começar", "Você está em dia.", "abre qua 25/11",
 "concluída · sem placar", "Módulo concluído.") são os do produto e estão no roteiro.
 
 **Palavras que o vídeo não usa**, nem na legenda nem em texto solto: gamificação, gamificado,
@@ -185,7 +185,7 @@ de verdade da professora.
 | `04-adicionar-turmas-marcada@computador` | 3     | a mesma, com o 9º C marcado (o seed já tem o módulo no 7º B e no 8º A)                                                                                 |
 | `05a-programacao-ritmo@computador`       | 3     | programação do 8º A: "Por semana", quarta, 08:00                                                                                                       |
 | `05b-programacao-previa@computador`      | 3     | a prévia: qua 11/11 liberada, qua 18/11, qua 25/11 (com o aviso de rascunho), qua 02/12                                                                |
-| `06-folha-da-fase@celular`               | 5     | a folha da fase 2, com "Jogar"                                                                                                                         |
+| `06-folha-da-fase@celular`               | 5     | a folha da fase 2, com "Começar"                                                                                                                         |
 | `07-questao-correta@celular`             | 5     | "Monte a frase." da Frutas 2, com "Correto."                                                                                                           |
 | `08-mapa-em-dia@celular`                 | 5     | fase 2 concluída; "Você está em dia. A próxima fase abre qua 25/11."                                                                                   |
 | `09-mapa-fase-3-liberada@celular`        | 6     | fase 3 liberada, o avatar já nela                                                                                                                      |

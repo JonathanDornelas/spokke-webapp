@@ -5,6 +5,7 @@ import { getProfile } from '$lib/kernel/language/profiles';
 import type { LanguageProfile } from '$lib/kernel/language/profile';
 import type { Transcritor } from '$lib/kernel/language/escrita';
 import { typeAuthoringSchema } from '$lib/kernel/interactions/type';
+import { conferirItem, temErro } from '$lib/kernel/qualidade';
 import { lerTiposGerais, lerTiposPorMaterial } from '$lib/atividades/tipos-por-material';
 import { nivelOuNulo } from '$lib/atividades/nivel';
 import type { FoneticaDe } from '$lib/server/pronuncia';
@@ -101,11 +102,11 @@ export async function executarGeracao<Gravado>(
 		aoMudar(progresso);
 		return progresso;
 	};
-	const concluir = (id: PassoDaGeracao, numero?: number, outro?: number) => {
+	const concluir = (id: PassoDaGeracao, numero?: number, outro?: number, terceiro?: number) => {
 		const indice = passos.findIndex((p) => p.id === id);
 		passos = passos.map((p, i) =>
 			i === indice
-				? { ...p, estado: 'feito', numero, outro }
+				? { ...p, estado: 'feito', numero, outro, ...(terceiro ? { terceiro } : {}) }
 				: i === indice + 1
 					? { ...p, estado: 'andando' }
 					: p
@@ -157,14 +158,24 @@ export async function executarGeracao<Gravado>(
 	const montadas = groups.reduce((total, g) => total + g.items.length, 0) + (closing ? 1 : 0);
 	concluir('montando', montadas);
 
-	// 4. O que entra e o que fica de fora.
+	// 4. O que entra e o que fica de fora. A questão REPROVADA pelas regras do
+	// kernel (a resposta no enunciado, duas alternativas iguais) não entra sozinha:
+	// vai para o fim das de fora, e a revisão mostra o motivo (kernel.md
+	// "Conferência de qualidade").
+	const reprovado = (item: Item) => temErro(conferirItem(item, { alvo, origem }));
 	const separadas = separarPelaQuantidade(
 		groups,
 		{ target: activity.itemTarget, ...plano },
-		closing
+		closing,
+		reprovado
 	);
 	if (separadas.dentro.length === 0) throw new NadaParaGerar();
-	concluir('separando', separadas.dentro.length, separadas.fora.length);
+	concluir(
+		'separando',
+		separadas.dentro.length,
+		separadas.fora.length,
+		separadas.fora.filter(reprovado).length
+	);
 
 	// 5. As outras traduções certas, nas que entraram E nas de fora — a de fora
 	// pode entrar na revisão, e não pode chegar lá sem elas.

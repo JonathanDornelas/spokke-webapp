@@ -38,6 +38,7 @@
 	import { untrack } from 'svelte';
 	import { DURACAO } from '$lib/movimento';
 	import type { Skill } from '$lib/kernel/interactions/types';
+	import { maximoPelosTetos } from '$lib/kernel/generators/select';
 	import {
 		alternarNoGeral,
 		alternarNoMaterial,
@@ -198,10 +199,11 @@
 	async function sugerir(
 		texto: string,
 		de: string,
-		para: string
+		para: string,
+		palavra: boolean
 	): Promise<SugestaoDeTraducao | null> {
 		try {
-			const r = await sugerirTraducao({ texto, de, para });
+			const r = await sugerirTraducao({ texto, de, para, palavra });
 			return r.ok ? { traducao: r.traducao, alternativas: r.alternativas } : null;
 		} catch {
 			return null;
@@ -427,7 +429,11 @@
 	const total = $derived(data.materials.length);
 	const daBiblioteca = $derived(data.materials.filter((m) => m.daBiblioteca).length);
 	const podeGerar = $derived(total > 0 && plano.geral.length > 0);
-	const palavraQuestoes = $derived(quantidade === 1 ? 'questão' : 'questões');
+	// Com só tipos de teto ligados (só fala, só escuta), entram no máximo os tetos:
+	// o botão diz o número que vai entrar, não o pedido (`maximoPelosTetos`).
+	const maximo = $derived(maximoPelosTetos(plano.geral));
+	const entram = $derived(maximo === null ? quantidade : Math.min(quantidade, maximo));
+	const palavraQuestoes = $derived(entram === 1 ? 'questão' : 'questões');
 	const statusTexto = $derived(`${total} ${total === 1 ? 'material' : 'materiais'}`);
 	// O X do formulário no celular. "Ver os 0 materiais" e "Ver os 1 material" não
 	// eram português.
@@ -441,8 +447,8 @@
 				: plano.geral.length === 0
 					? 'Ligue ao menos um tipo de questão para gerar.'
 					: total === 1
-						? `${quantidade} ${palavraQuestoes} deste material. O resto fica de fora na revisão, para você trocar.`
-						: `${quantidade} ${palavraQuestoes} em rodízio entre os ${statusTexto}: nenhum repete antes de todos entrarem. O resto fica de fora na revisão, para você trocar.`)
+						? `${entram} ${palavraQuestoes} deste material. O resto fica de fora na revisão, para você trocar.`
+						: `${entram} ${palavraQuestoes} em rodízio entre os ${statusTexto}: nenhum repete antes de todos entrarem. O resto fica de fora na revisão, para você trocar.`)
 	);
 </script>
 
@@ -455,6 +461,7 @@
 	status={statusTexto}
 	hint={hintTexto}
 	rolagem="colunas"
+	cancelarNoCelular={!formAberto}
 >
 	<div class="flex min-h-0 flex-1 flex-col lg:flex-row">
 		<!-- O formulário é coluna fixa no desktop; no celular cobre a lista até o
@@ -605,10 +612,17 @@
 	</div>
 
 	{#snippet actions()}
+		<!-- No celular o rodapé cabe SEMPRE numa linha, até em 320px: com o
+		     formulário aberto são "Biblioteca" e "Gerar" (o "Cancelar" sai, pela casca);
+		     na lista, "Gerar" e "Cancelar" — a biblioteca ali já é o botão do topo da
+		     lista. Com as três ações, o "Cancelar" descia para uma segunda linha quase
+		     vazia, logo abaixo do botão de adicionar. -->
 		<button
 			type="button"
 			onclick={abrirBiblioteca}
-			class="btn h-[46px] flex-1 motion-tap btn-neutral lg:flex-none"
+			class="btn h-[46px] flex-1 motion-tap btn-neutral lg:inline-flex lg:flex-none {formAberto
+				? ''
+				: 'hidden'}"
 		>
 			<span class="lg:hidden">Biblioteca</span>
 			<span class="hidden lg:inline">Usar da biblioteca</span>
@@ -625,8 +639,8 @@
 			{:else if total > 0 && plano.geral.length === 0}
 				Ligue um tipo
 			{:else}
-				<span class="lg:hidden">Gerar {quantidade}</span>
-				<span class="hidden lg:inline">Gerar {quantidade} {palavraQuestoes}</span>
+				<span class="lg:hidden">Gerar {entram}</span>
+				<span class="hidden lg:inline">Gerar {entram} {palavraQuestoes}</span>
 				<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 					<path
 						d="M5 12h13M13 6l6 6-6 6"

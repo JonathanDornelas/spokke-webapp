@@ -3,7 +3,7 @@
 	// celular (as medidas do celular da home) mostrando a questão escolhida como
 	// o aluno a vê; à direita o ROTEIRO do aluno, as questões na ordem em que ele
 	// responde — arrastar muda a sequência — e, embaixo, as que ficaram de fora
-	// pela quantidade pedida. A linha escolhida abre a resposta (só o professor
+	// (pela quantidade pedida, pelo teto de fala e escuta ou pela conferência). A linha escolhida abre a resposta (só o professor
 	// vê), mover, editar e aceitar ou descartar. `+page@.svelte` reseta para o
 	// layout raiz.
 	//
@@ -34,6 +34,9 @@
 		type HabilidadeDaResumida
 	} from '$lib/atividades/questao-resumida';
 	import EditorDeQuestao from './EditorDeQuestao.svelte';
+	import ProblemasDaQuestao from './ProblemasDaQuestao.svelte';
+	import { rotuloDaMarca } from '$lib/atividades/qualidade';
+	import { motivoDasDeFora } from '$lib/atividades/de-fora';
 	import { KERNEL_TO_KIND, PILL_TONE, tipoDe } from '$lib/components/material-form';
 	import {
 		aceitarTodosItens,
@@ -61,6 +64,16 @@
 	const total = $derived(data.questoes.length);
 	const cheia = $derived(roteiro.length >= data.maxItens);
 	const navegacao = $derived([...roteiro, ...fora]);
+	// Por que as de fora estão de fora, no estado de agora (`$lib/atividades/de-fora.ts`).
+	const porQueDeFora = $derived(
+		motivoDasDeFora(
+			fora.map((q) => ({
+				teto: q.foraPeloTeto,
+				erro: q.problemas.some((p) => p.gravidade === 'erro')
+			})),
+			{ dentro: roteiro.length, alvo: data.alvo }
+		)
+	);
 
 	let erro = $state<string | null>(null);
 
@@ -330,6 +343,8 @@
 <!-- Uma linha do roteiro (ou das de fora). A escolhida abre a resposta e as ações. -->
 {#snippet linha(q: Questao, posicao: number | null)}
 	{@const ativa = escolhida?.id === q.id}
+	{@const marca = rotuloDaMarca(q.problemas)}
+	{@const temErro = q.problemas.some((p) => p.gravidade === 'erro')}
 	<div class="flex items-stretch">
 		{#if posicao}
 			<span
@@ -393,6 +408,19 @@
 					{/if}
 				</span>
 			</span>
+			<!-- A marca da CONFERÊNCIA: um triângulo pequeno, âmbar no que vale olhar e
+			     vermelho no que corrige errado. O que é, a linha escolhida diz embaixo. -->
+			{#if marca}
+				<span
+					class="grid size-6 shrink-0 place-items-center rounded-full {temErro
+						? 'bg-error/12 text-error'
+						: 'bg-warning/15 text-warning'}"
+					title={marca}
+				>
+					{@render icone('M12 3.5l9.5 16.5H2.5zM12 9.5v4.5M12 17h.01', 'size-[13px]')}
+					<span class="sr-only">{marca}</span>
+				</span>
+			{/if}
 			<span
 				class="hidden shrink-0 text-[12px] font-semibold whitespace-nowrap text-base-content/65 sm:inline"
 				>{ROTULO_DA_HABILIDADE[q.habilidade]}</span
@@ -419,6 +447,13 @@
 		</button>
 	</div>
 	{#if ativa}
+		<!-- O que a conferência achou desta questão, antes da resposta: é o motivo
+		     de abrir o editor. Sem problema, não aparece nada. -->
+		{#if q.problemas.length > 0}
+			<div class="px-2.5 ps-16 pb-2 lg:ps-[106px]">
+				<ProblemasDaQuestao problemas={q.problemas} />
+			</div>
+		{/if}
 		<!-- No celular o painel começa depois da bolha (64px): a 10px da borda, o
 		     fio do roteiro, que passa por trás da linha escolhida, cortava a
 		     palavra "Resposta". -->
@@ -824,8 +859,7 @@
 						<div class="mt-7 mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
 							<h2 class="text-[15px] font-bold">Ficaram de fora · {fora.length}</h2>
 							<p class="text-[12.5px] text-base-content/65">
-								Passaram da quantidade pedida ({data.alvo}) ou você descartou. Aceite uma para ela
-								entrar no fim do roteiro.
+								{porQueDeFora}
 							</p>
 						</div>
 						<ol class="grid list-none gap-0.5 p-0" aria-label="Questões de fora">

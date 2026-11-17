@@ -215,7 +215,7 @@ atividade** (`materiaisDisponiveis`):
    profiles de idioma e as capacidades do servidor: **sem TTS configurado não sai item de
    escuta, sem ASR não sai item de fala**.
 3. Corta pelo plano da etapa 1 (`selectItems`): quantas questões (teto de 15) e quais
-   habilidades. Fala e escuta ficam em 5 cada. **O rodízio é justo entre os materiais**: um
+   habilidades. Fala e escuta ficam em 10 cada. **O rodízio é justo entre os materiais**: um
    material só ganha o segundo exercício depois de todos terem o primeiro — quem cola vinte
    frases quer as vinte na atividade, não sete variações das mesmas três. Com mais materiais do
    que vagas, alguns ficam de fora.

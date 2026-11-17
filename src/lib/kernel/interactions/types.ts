@@ -2,6 +2,7 @@ import type { z, ZodType } from 'zod';
 import type { LanguageProfile } from '../language/profile';
 import type { RigorDaPronuncia } from '../language/pronuncia';
 import type { Result, Score } from '../grading/result';
+import type { ContextoDaConferencia, Problema } from '../qualidade/types';
 
 export type PromptKind = 'text' | 'audio' | 'image' | 'composite';
 
@@ -150,6 +151,13 @@ export interface InteractionType<
 		seed: string
 	) => Result<Score>;
 	skills: (prompt: Prompt) => Skill[];
+	/**
+	 * A CONFERÊNCIA de qualidade da questão (kernel.md "Conferência de qualidade"):
+	 * o que este formato consegue dizer de errado sobre si mesmo sem saber idioma
+	 * nenhum — a resposta escrita no enunciado, duas alternativas iguais, a peça
+	 * que falta no banco. Formato novo traz a sua, como traz o `toRuntime`.
+	 */
+	conferir: (payload: z.infer<AuthoringSchema>, ctx: ContextoDaConferencia) => Problema[];
 }
 
 /**
@@ -171,4 +179,6 @@ export interface RegisteredInteraction {
 		seed: string
 	) => Result<Score>;
 	skills: (prompt: Prompt) => Skill[];
+	/** O payload que não passa no schema volta como um problema `formato-invalido`, nunca exceção. */
+	conferir: (payload: unknown, ctx: ContextoDaConferencia) => Problema[];
 }

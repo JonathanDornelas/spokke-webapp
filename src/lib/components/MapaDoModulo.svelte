@@ -724,7 +724,7 @@
 						: 'Você terminou esta fase. O professor não liberou o placar desta atividade, então o mapa só marca que ela foi feita.'
 					: folha.estado === 'doing'
 						? 'Você parou no meio. Continuar abre pelo seu link pessoal, do ponto onde parou, e a fase acende quando você terminar.'
-						: 'Esta fase já chegou para a sua turma. Jogar abre pelo seu link pessoal, para a tentativa contar no mapa.'}
+						: 'Esta fase já chegou para a sua turma. Começar abre pelo seu link pessoal, para a tentativa contar no mapa.'}
 			</p>
 			{#if folha.href}
 				<!-- eslint-disable svelte/no-navigation-without-resolve -- o href vem pronto do servidor: o link pessoal do convite (/e/<token>) ou o resultado da publicação. -->
@@ -739,7 +739,7 @@
 						? 'Ver o resultado'
 						: folha.estado === 'doing'
 							? 'Continuar'
-							: 'Jogar'}
+							: 'Começar'}
 				</a>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			{/if}

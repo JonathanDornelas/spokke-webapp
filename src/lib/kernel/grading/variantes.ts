@@ -18,7 +18,7 @@ import { sujeitoNoInicio } from './sujeito';
  */
 
 /** No máximo isto de variantes novas por questão: a lista é para conferir, não para ler. */
-export const MAX_VARIANTES = 3;
+export const MAX_VARIANTES = 4;
 
 /**
  * Dice sobre as palavras (`wordSimilarity`). Entram "Onde está a estação de
@@ -28,7 +28,7 @@ export const MAX_VARIANTES = 3;
  * já foi concluído" contra "Eles já terminaram o relatório" (0,60): a frase
  * virou outra, ainda que diga o mesmo.
  *
- * Esta régua mede o TAMANHO da diferença, não o sentido. Quem confere o sentido
+ * Estas réguas medem o TAMANHO da diferença, não o sentido. Quem confere o sentido
  * é o servidor, traduzindo cada variante de volta (`server/atividades/
  * variantes-aceitas.ts`) — "Eu adoro ler" passa aqui contra "Eu gosto muito de
  * ler" (0,71) e cai lá.
@@ -37,6 +37,48 @@ const LIMIAR = 0.7;
 
 /** Palavras a mais ou a menos que uma variante pode ter. */
 const MAX_PALAVRAS_DE_DIFERENCA = 2;
+
+/**
+ * A segunda régua, para a frase CURTA: até duas palavras trocadas, com as outras
+ * na mesma ordem.
+ *
+ * O Dice é uma proporção, e proporção pune frase curta: trocar "estou com" por
+ * "tenho" em "Não estou com fome" dá 0,57, e "Amanhã vamos para a praia" contra
+ * "Amanhã vamos à praia" dá 0,67 — as duas caíam, e são exatamente as frases de
+ * uma aula de iniciante. Medido com o MADLAD em dezesseis frases de aula: o
+ * limiar sozinho cortava a variante mais natural em metade delas, e o retorno do
+ * dono do repositório foi "não está gerando variações".
+ *
+ * A ORDEM é o que separa a troca pequena da frase reescrita: em "O relatório já
+ * foi concluído" contra "Eles já terminaram o relatório" as palavras em comum
+ * mudaram de lugar, e ela continua de fora. Quem confere o sentido das duas
+ * réguas é a ida e volta do servidor.
+ */
+const MAX_PALAVRAS_TROCADAS = 2;
+
+/** Quantas palavras as duas frases têm em comum NA MESMA ORDEM (subsequência comum). */
+function palavrasNaMesmaOrdem(a: string[], b: string[]): number {
+	let anterior = new Array<number>(b.length + 1).fill(0);
+	for (const palavra of a) {
+		const linha = [0];
+		for (let j = 1; j <= b.length; j++) {
+			linha.push(
+				palavra === b[j - 1]
+					? (anterior[j - 1] ?? 0) + 1
+					: Math.max(anterior[j] ?? 0, linha[j - 1] ?? 0)
+			);
+		}
+		anterior = linha;
+	}
+	return anterior[b.length] ?? 0;
+}
+
+/** A diferença entre as duas frases é pequena, por uma das duas réguas. */
+function diferencaPequena(a: string[], b: string[], dice: number): boolean {
+	if (dice >= LIMIAR) return true;
+	const emOrdem = palavrasNaMesmaOrdem(a, b);
+	return emOrdem >= 1 && Math.max(a.length, b.length) - emOrdem <= MAX_PALAVRAS_TROCADAS;
+}
 
 /**
  * As `candidatas` que valem como variante da `principal`, na ordem em que
@@ -58,7 +100,7 @@ export function variantesProximas(
 	const chave = (texto: string) => normalize(texto, profile).trim();
 	const base = chave(principal);
 	if (!base) return [];
-	const palavrasDaBase = tokenize(base, profile).length;
+	const palavrasDaBase = tokenize(base, profile);
 
 	const vistas = new Set([base, ...jaAceitas.map(chave)]);
 	const saida: string[] = [];
@@ -68,9 +110,11 @@ export function variantesProximas(
 		const n = chave(texto);
 		if (!n || vistas.has(n)) continue;
 		vistas.add(n);
-		const palavras = tokenize(n, profile).length;
-		if (Math.abs(palavras - palavrasDaBase) > MAX_PALAVRAS_DE_DIFERENCA) continue;
-		if (wordSimilarity(texto, principal, profile) < LIMIAR) continue;
+		const palavras = tokenize(n, profile);
+		if (Math.abs(palavras.length - palavrasDaBase.length) > MAX_PALAVRAS_DE_DIFERENCA) continue;
+		if (!diferencaPequena(palavras, palavrasDaBase, wordSimilarity(texto, principal, profile))) {
+			continue;
+		}
 		saida.push(texto);
 	}
 	return saida;

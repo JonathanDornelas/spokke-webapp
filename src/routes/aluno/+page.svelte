@@ -501,7 +501,7 @@
 										/></svg
 									>
 									{r.proxima.tipo === 'jogar'
-										? `${r.proxima.fase.estado === 'doing' ? 'Continuar' : 'Jogar'} ${r.proxima.fase.titulo}`
+										? `${r.proxima.fase.estado === 'doing' ? 'Continuar' : 'Começar'} ${r.proxima.fase.titulo}`
 										: r.proxima.tipo === 'fim'
 											? 'Módulo concluído'
 											: r.proxima.abre

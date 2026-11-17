@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { assignRuntimeIds } from '../random';
+import { mesmoTexto, regra, repetidos, respostaNoEnunciado, vazios } from '../qualidade/comparar';
+import type { Problema } from '../qualidade/types';
 import { promptSkills } from './skills';
 import type { ChoiceRuntime, InteractionType } from './types';
 
@@ -48,5 +50,27 @@ export const choice: InteractionType<
 		};
 	},
 
-	skills: promptSkills
+	skills: promptSkills,
+
+	conferir: (payload, ctx) => {
+		const problemas: Problema[] = [...vazios(payload.options, ctx.perfis)];
+		// A correção é pelo ÍNDICE: com duas alternativas iguais, quem escolhe a
+		// "outra" leva errado por ter acertado.
+		for (const texto of repetidos(payload.options, ctx.perfis)) {
+			problemas.push(regra('alternativas-repetidas', 'erro', texto));
+		}
+		const certa = payload.options[payload.correctIndex];
+		if (certa === undefined) return problemas;
+		const noEnunciado = respostaNoEnunciado(certa, ctx);
+		if (noEnunciado) problemas.push(noEnunciado);
+		// "Ouça e escolha o SENTIDO": a resposta é na língua do aluno, e uma
+		// alternativa certa igual ao que se ouve é a palavra que não foi traduzida.
+		// Em "ouça e escolha o que ouviu" (resposta no idioma alvo) ser igual ao
+		// áudio é a própria questão.
+		const ouvido = ctx.prompt.kind === 'audio' ? ctx.prompt.text?.trim() : undefined;
+		if (ouvido && ctx.answerLang === 'source' && mesmoTexto(certa, ouvido, ctx.perfis)) {
+			problemas.push(regra('resposta-igual-ao-enunciado', 'erro', certa));
+		}
+		return problemas;
+	}
 };

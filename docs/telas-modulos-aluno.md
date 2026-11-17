@@ -104,7 +104,7 @@ Cada nó tem ícone, número e texto, nunca só cor:
 | ---------------- | ------------------------------------------------------------- | --------------------------------------- | --------------- |
 | **Concluída**    | ele terminou ao menos uma tentativa                           | bandeira hasteada no nó                 | ver o resultado |
 | **Em andamento** | começou e não terminou                                        | o avatar, com "continuar"               | **Continuar**   |
-| **Liberada**     | a turma recebeu e ele ainda não abriu                         | o nó aceso, uma vez, sem loop           | **Jogar**       |
+| **Liberada**     | a turma recebeu e ele ainda não abriu                         | o nó aceso, uma vez, sem loop           | **Começar**       |
 | **Trancada**     | ainda não foi enviada para a turma (programação do professor) | cadeado e **a data em que abre**        | nenhuma         |
 | **Encerrada**    | foi arquivada depois de enviada, e ele não começou            | nó apagado e "encerrada pelo professor" | nenhuma         |
 
@@ -118,7 +118,7 @@ Cada nó tem ícone, número e texto, nunca só cor:
 ### Tocar numa fase
 
 Abre uma folha (de baixo, no celular) com o título, o idioma e o nível, `N questões`, o estado e a
-ação. **"Jogar" e "Continuar" levam pelo link pessoal do convite** (`e/[token]`), não pelo link
+ação. **"Começar" e "Continuar" levam pelo link pessoal do convite** (`e/[token]`), não pelo link
 aberto: é isso que liga a tentativa à ficha do aluno e faz o progresso contar. Pelo link aberto
 ele responderia como anônimo e a fase não acenderia.
 

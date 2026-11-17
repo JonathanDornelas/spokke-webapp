@@ -4,7 +4,8 @@ import { acessoDoProfessor } from '$lib/server/billing/acesso';
 import { concederCreditos, debitar } from '$lib/server/billing/creditos';
 import { CUSTO_IA, LIMITES } from '$lib/billing/catalogo';
 import { languageProfiles } from '$lib/kernel/language/profiles';
-import { gerarPropostas } from './gerar';
+import { materiais } from '$lib/server/db/repos/content-units';
+import { comoNaBiblioteca, gerarPropostas } from './gerar';
 import { instrucoesDoSistema, mensagemDoProfessor } from './prompt';
 import {
 	FalhaDoProvedor,
@@ -129,6 +130,63 @@ describe('geração por IA', () => {
 			outputTokens: 120,
 			thoughtsTokens: 30
 		});
+	});
+
+	// A IA manda as outras traduções certas junto de cada frase (kernel.md
+	// "Respostas aceitas"). Elas entram limpas, e não podem fazer a frase que o
+	// professor JÁ TEM virar uma segunda linha na biblioteca.
+	it('as variações da tradução vêm com a proposta, e a frase que já existe é reaproveitada', async () => {
+		// O professor `midia`, e não o `outro`: o saldo do `outro` é conferido inteiro mais abaixo.
+		const repo = materiais({ id: ids.midia });
+		await repo.create('SentencePair', { source: 'Eu moro aqui.', target: 'I live here.' }, 'en-US');
+
+		const r = await gerarPropostas(
+			{ id: ids.midia },
+			{ ...pedidoBase, requestId: crypto.randomUUID(), tags: { alvo: 'en-US', origem: 'pt-BR' } },
+			falso({
+				propostas: [
+					{
+						source: 'Ela vai ligar para você mais tarde.',
+						target: 'She will call you later.',
+						variants: ['Ela vai te ligar mais tarde.', '', 'She will call you later.']
+					},
+					// Já existe, sem variações: é a MESMA frase.
+					{ source: 'Eu moro aqui.', target: 'I live here.', variants: ['Moro aqui.'] },
+					// A "tradução" que repete o original não é proposta.
+					{ source: 'Hello there.', target: 'Hello there.' }
+				]
+			})
+		);
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.propostas.map((p) => [p.dados, p.reused])).toEqual([
+			[
+				{
+					source: 'Ela vai ligar para você mais tarde.',
+					target: 'She will call you later.',
+					variants: ['Ela vai te ligar mais tarde.']
+				},
+				false
+			],
+			[{ source: 'Eu moro aqui.', target: 'I live here.' }, true]
+		]);
+
+		expect(
+			await comoNaBiblioteca({ id: ids.midia }, 'SentencePair', {
+				source: 'Eu moro aqui.',
+				target: 'I live here.',
+				variants: ['Moro aqui.']
+			})
+		).toEqual({ dados: { source: 'Eu moro aqui.', target: 'I live here.' }, reused: true });
+		// De outro professor, a mesma frase não é "a que já existe".
+		expect(
+			(
+				await comoNaBiblioteca({ id: ids.basico }, 'SentencePair', {
+					source: 'Eu moro aqui.',
+					target: 'I live here.'
+				})
+			).reused
+		).toBe(false);
 	});
 
 	it('provedor fora do ar devolve tudo, e não há uso a gravar', async () => {

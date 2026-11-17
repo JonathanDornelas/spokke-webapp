@@ -3,6 +3,8 @@ import type { Item } from '$lib/kernel/item';
 import type { StoredContentUnit } from '$lib/kernel/generators';
 import type { ProgressoDaGeracao } from '$lib/atividades/geracao';
 import type { Tradutor } from '$lib/server/traducao';
+import { conferirItem, temErro } from '$lib/kernel/qualidade';
+import { getProfile } from '$lib/kernel/language/profiles';
 import {
 	esquecerGeracoes,
 	executarGeracao,
@@ -139,6 +141,43 @@ describe('executarGeracao', () => {
 		});
 		await expect(executarGeracao(f, () => {})).rejects.toThrow();
 		expect(gravar).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * A CONFERÊNCIA na geração (kernel.md "Conferência de qualidade"): as regras do
+ * kernel tiram do sorteio a questão que corrige errado.
+ */
+describe('a conferência na geração', () => {
+	const espanhol = {
+		id: 'atv_es',
+		targetLang: 'es-ES',
+		sourceLang: 'pt-BR',
+		itemTarget: 15,
+		skills: ['reading', 'writing'],
+		tiposPorMaterial: null
+	};
+	const vocabulario: StoredContentUnit[] = [
+		// O tradutor devolveu o termo sem traduzir: a "la cometa".
+		{ id: 'v1', kind: 'VocabItem', data: { term: 'la cometa', translation: 'la cometa' } },
+		{ id: 'v2', kind: 'VocabItem', data: { term: 'el perro', translation: 'o cachorro' } },
+		{ id: 'v3', kind: 'VocabItem', data: { term: 'la casa', translation: 'a casa' } }
+	];
+	const reprovado = (item: Item) =>
+		temErro(conferirItem(item, { alvo: getProfile('es-ES'), origem: getProfile('pt-BR') }));
+
+	it('a questão que mostra a resposta não entra sozinha: vai para as de fora', async () => {
+		const { f, gravado } = fontes({ activity: espanhol, materiais: async () => vocabulario });
+		const fim = await executarGeracao(f, () => {});
+		expect(gravado.dentro.length).toBeGreaterThan(0);
+		expect(gravado.dentro.some(reprovado)).toBe(false);
+		const reprovadas = gravado.fora.filter(reprovado);
+		expect(reprovadas.length).toBeGreaterThan(0);
+		expect(reprovadas.every((i) => i.sourceContentId === 'v1')).toBe(true);
+		// A tela "Gerando" diz quantas ficaram de fora por problema.
+		expect(fim.passos.find((p) => p.id === 'separando')).toMatchObject({
+			terceiro: reprovadas.length
+		});
 	});
 });
 
