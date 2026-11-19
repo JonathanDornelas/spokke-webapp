@@ -240,7 +240,9 @@ repositório, e o desenho é o que a regra acima exige de qualquer coleta nova:
 
 O consentimento vale por TENTATIVA, não pelo aluno: ele autorizou aquela atividade, naquele dia.
 Refazer pergunta de novo. Apagar a tentativa leva a linha junto (`onDelete: Cascade`), e o objeto
-some no prazo.
+some no prazo. **Refazer, quando a publicação deixa (`allowRetake`), apaga NA HORA**: entregue a
+refeita, a anterior sai e o prefixo `fala/<id>/` dela sai do bucket junto
+(`server/player/refazer.ts`) — a resposta a que a gravação pertencia deixou de existir.
 
 **O AVATAR é o segundo campo novo na conta do aluno, e também passou pelo dono do repositório.**
 `StudentAccount.avatar` guarda dezoito números (`$lib/avatar/montar.ts`). O que o aprovou, contra

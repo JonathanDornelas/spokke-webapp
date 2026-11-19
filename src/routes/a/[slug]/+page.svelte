@@ -21,6 +21,7 @@
 		iniciarTentativa,
 		naoSouEu,
 		recomecarTentativa,
+		refazerTentativa,
 		retomarTentativa
 	} from './player.remote';
 
@@ -36,6 +37,8 @@
 		when: string;
 		respondidas: number;
 		acertos: number;
+		/** O professor deixou responder de novo — a nova substitui esta ao ser entregue. */
+		podeRefazer: boolean;
 	}
 	interface PageData {
 		activity: {
@@ -92,6 +95,35 @@
 		Fala: 'bg-accent'
 	};
 </script>
+
+{#snippet autorizarGravacao(formulario: string)}
+	<!-- **A autorização para guardar a gravação. Opt-in, sem exceção.**
+	     Vem DESMARCADA e o exercício funciona igual sem ela: a fala é
+	     transcrita e o áudio descartado, como sempre foi. O que muda
+	     marcando é o professor conseguir ouvir e comentar.
+
+	     O prazo vai escrito no rótulo, não num link de política: quem
+	     está prestes a gravar a própria voz merece saber quanto tempo
+	     ela fica, na mesma linha em que decide. -->
+	<label
+		class="mb-5 flex cursor-pointer items-start gap-3 rounded-field border border-line bg-base-100 p-3.5"
+	>
+		<input
+			form={formulario}
+			type="checkbox"
+			name="guardarAudio"
+			value="sim"
+			class="mt-px checkbox shrink-0 checkbox-primary"
+		/>
+		<span class="text-[13px] leading-snug">
+			<span class="font-semibold">Deixar meu professor ouvir minhas gravações</span>
+			<span class="mt-1 block text-base-content/65">
+				Nas questões de fala. Elas são apagadas depois de 7 dias, e sem marcar aqui o exercício
+				funciona igual — a gravação é usada só para corrigir e descartada na hora.
+			</span>
+		</span>
+	</label>
+{/snippet}
 
 <Metadados
 	titulo={data.activity.title}
@@ -187,10 +219,28 @@
 				     desligado o resultado, e a tela de resultado é quem sabe disso.
 				     Adiantar o número aqui seria a porta dos fundos daquele
 				     interruptor. -->
-				<p class="text-[12.5px] leading-snug text-base-content/65">
-					Quer responder de novo? Fale com seu professor — ele decide se a atividade abre outra vez
-					para você.
-				</p>
+				{#if data.concluida.podeRefazer}
+					<!-- O professor deixou responder de novo. A tentativa nova substitui
+					     esta só na ENTREGA (server/player/refazer.ts): desistir no meio
+					     não apaga nada, e a frase diz isso sem a mecânica. -->
+					<form id="form-refazer" {...refazerTentativa}>
+						<input type="hidden" name="slug" value={page.params.slug} />
+					</form>
+					<p class="mb-5 text-[12.5px] leading-snug text-base-content/65">
+						Seu professor deixou responder de novo, quantas vezes você quiser. Quando você entregar
+						a nova tentativa, ela fica no lugar desta.
+					</p>
+					{#if data.activity.temFala}
+						<!-- A autorização vale por TENTATIVA (auth.md): refazer pergunta de
+						     novo, desmarcada como na primeira vez. -->
+						{@render autorizarGravacao('form-refazer')}
+					{/if}
+				{:else}
+					<p class="text-[12.5px] leading-snug text-base-content/65">
+						Quer responder de novo? Fale com seu professor — ele decide se a atividade abre outra
+						vez para você.
+					</p>
+				{/if}
 			{:else if data.resumable}
 				<h1 class="mb-2.5 font-display text-title font-semibold tracking-[-0.025em] text-pretty">
 					Você já começou esta atividade
@@ -374,32 +424,7 @@
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				{/if}
 				{#if data.activity.temFala}
-					<!-- **A autorização para guardar a gravação. Opt-in, sem exceção.**
-					     Vem DESMARCADA e o exercício funciona igual sem ela: a fala é
-					     transcrita e o áudio descartado, como sempre foi. O que muda
-					     marcando é o professor conseguir ouvir e comentar.
-
-					     O prazo vai escrito no rótulo, não num link de política: quem
-					     está prestes a gravar a própria voz merece saber quanto tempo
-					     ela fica, na mesma linha em que decide. -->
-					<label
-						class="mb-5 flex cursor-pointer items-start gap-3 rounded-field border border-line bg-base-100 p-3.5"
-					>
-						<input
-							form="form-comecar"
-							type="checkbox"
-							name="guardarAudio"
-							value="sim"
-							class="mt-px checkbox shrink-0 checkbox-primary"
-						/>
-						<span class="text-[13px] leading-snug">
-							<span class="font-semibold">Deixar meu professor ouvir minhas gravações</span>
-							<span class="mt-1 block text-base-content/65">
-								Nas questões de fala. Elas são apagadas depois de 7 dias, e sem marcar aqui o
-								exercício funciona igual — a gravação é usada só para corrigir e descartada na hora.
-							</span>
-						</span>
-					</label>
+					{@render autorizarGravacao('form-comecar')}
 				{/if}
 
 				<p class="mb-5 flex items-center gap-2 text-[12.5px] leading-snug text-base-content/65">
@@ -442,7 +467,42 @@
 	<footer
 		class="flex shrink-0 items-center gap-4 border-t border-line px-5 pt-3.5 pb-[22px] lg:px-16 lg:pt-5 lg:pb-[26px]"
 	>
-		{#if data.concluida}
+		{#if data.concluida?.podeRefazer}
+			<!-- Com o refazer liberado, duas portas: a que olha para trás neutra, a
+			     que segue em frente na cor da marca. No celular uma sobre a outra, a
+			     principal embaixo, perto do polegar (como no resultado): lado a lado
+			     a 390px, "Responder de novo" saía cortado. -->
+			<div class="hidden flex-1 lg:block"></div>
+			<div class="flex w-full flex-col gap-2.5 lg:w-auto lg:flex-row lg:gap-4">
+				<a
+					href={resolve('/a/[slug]/resultado', { slug: page.params.slug ?? '' })}
+					class="btn btn-lg min-h-[50px] w-full motion-tap btn-neutral text-base font-semibold no-underline lg:w-auto"
+				>
+					Ver meu resultado
+				</a>
+				<button
+					type="submit"
+					form="form-refazer"
+					class="btn btn-lg min-h-[52px] w-full motion-tap gap-2.5 btn-primary text-[17px] font-bold lg:w-auto lg:px-[30px]"
+				>
+					Responder de novo
+					<svg
+						class="hidden size-[18px] lg:block"
+						viewBox="0 0 24 24"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="M5 12h13M13 6l6 6-6 6"
+							stroke="currentColor"
+							stroke-width="2.2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+			</div>
+		{:else if data.concluida}
 			<div class="hidden flex-1 lg:block"></div>
 			<a
 				href={resolve('/a/[slug]/resultado', { slug: page.params.slug ?? '' })}

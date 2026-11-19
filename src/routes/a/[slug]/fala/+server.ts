@@ -7,6 +7,7 @@ import { guardarResposta, hashDoAudio, respostaGuardada } from '$lib/server/asr/
 import { vocabulario } from '$lib/server/asr/vocabulario';
 import { ouvirFala } from '$lib/server/pronuncia';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
+import { avancoDaTentativa, questaoAbre } from '$lib/server/player/sequencia';
 import { getInteraction } from '$lib/kernel/interactions/registry';
 import { getProfile } from '$lib/kernel/language/profiles';
 import { gradingSchema, interactionSchema, localeSchema } from '$lib/kernel/item';
@@ -85,8 +86,16 @@ export const POST: RequestHandler = async ({ request, params }) => {
 	}
 	if (attempt.finishedAt) error(409, 'esta tentativa já foi entregue');
 
-	const item = attempt.publication.activityVersion.items.find((linha) => linha.id === itemId);
+	const items = attempt.publication.activityVersion.items;
+	const indice = items.findIndex((linha) => linha.id === itemId);
+	const item = items[indice];
 	if (!item) error(404, 'item não pertence a esta atividade');
+	// A questão tem de estar no caminho, como em `responderItem`
+	// (`server/player/sequencia.ts`) — também para só ouvir, que é ASR pago.
+	const posicao = indice + 1;
+	if (!questaoAbre(posicao, avancoDaTentativa(attempt), items.length)) {
+		error(409, 'responda as questões na ordem');
+	}
 
 	const interaction = interactionSchema.parse(item.interaction);
 	if (interaction.type !== 'speak') error(400, 'este item não é de fala');
@@ -155,6 +164,7 @@ export const POST: RequestHandler = async ({ request, params }) => {
 		resultado.value.value,
 		Number.isFinite(ms) ? ms : 0
 	);
+	await playerRepo.avancarAte(attemptId, posicao);
 
 	// **A gravação só é guardada com autorização do aluno.** Sem ela, os bytes
 	// morrem com esta requisição — que é o comportamento de sempre e continua

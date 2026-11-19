@@ -49,8 +49,9 @@ questão (`questaoParaEditar`,
 `(studio)/atividades/[id]/previa/previa.remote.ts` (`corrigirResposta`: a correção da PRÉVIA DO
 ALUNO, sem gravar nada, pelo `corrigirNaPrevia` de `$lib/server/atividades/previa.ts`, com a seed da
 versão — a fala vai pelo endpoint `previa/fala`) e
-`a/[slug]/player.remote.ts` (as três funções do aluno, mais a validação do código de acesso, as
-duas da retomada, o `naoSouEu` do link pessoal e o `relatarProblema` — sem sessão, com a tentativa
+`a/[slug]/player.remote.ts` (as três funções do aluno, mais o `pularQuestao`, a validação do código
+de acesso, as duas da retomada, o `refazerTentativa`, o `naoSouEu` do link pessoal e o
+`relatarProblema` — sem sessão, com a tentativa
 como prova de origem, teto por IP e a lógica testável em `$lib/server/relatos`) e
 `(studio)/turmas/turmas.remote.ts` (turmas, alunos e o envio de convite).
 E `aluno/aluno.remote.ts` (`adotarMinhasTentativas` e `gravarMeuAvatar`, as duas escritas da área
@@ -146,6 +147,22 @@ Regras:
   devolvido antes disso.
 - O item devolvido **nunca** contém `accepted`, `tokens` originais em ordem, ou qualquer campo
   do payload de autoria. Só o que `toRuntime()` produziu.
+- **A tentativa é um caminho, conferido em toda porta** (`server/player/sequencia.ts`,
+  `Attempt.avanco`): a questão `n` só abre, recebe resposta, fala ou pulo com `n ≤ avanco + 1`
+  (`itemNoCaminho` no `.remote.ts`, a mesma conta no `POST /fala` e no loader da `/q/[n]`), e
+  `finalizarTentativa` só entrega com o caminho feito. Responder e pular movem o avanço por
+  `avancarAte`, que só cresce. **O avanço que vale é o gravado ou a última questão respondida, o
+  maior** (`avancoDaTentativa`): resposta gravada pelo web ANTIGO, no meio de um deploy, não move o
+  avanço, e sem isso o aluno parava numa questão respondida cuja "Próxima" voltava para ela.
+  Tentativa entregue não recebe mais resposta (409). `pularQuestao` existe porque pular não grava
+  resposta, e só aceita a questão de fala (`sePula`).
+- **Responder de novo** (`refazerTentativa`, com `allowRetake` na publicação) cria uma tentativa
+  NOVA com `substituiId` apontando para a entregue, achada pelo `anonId` ou pela conta — nunca por
+  um id do formulário. A troca é na ENTREGA (`trocarPelaRefeita`, `server/player/refazer.ts`):
+  `finishAttempt` diz se foi a primeira chamada (`updateMany` condicionado), e só ela troca —
+  apaga a anterior (da mesma publicação e entregue, condição no `where`), passa os relatos dela
+  para a nova e apaga o prefixo `fala/<id>/` do bucket. Banco primeiro; se o bucket falhar, a regra
+  de 7 dias de `fala/` leva o resto.
 
 ## E-mail
 
@@ -610,8 +627,9 @@ de até 32 textos, em sequência, e recusa resposta com contagem diferente da pe
   biblioteca. A sugestão ao vivo do formulário (`materiais/traducao.remote.ts`, `sugerirTraducao`)
   é conforto: não grava nada, tem guard e teto por professor (120 em 10 min — cada pedido é CPU do
   serviço que também transcreve a fala dos alunos), e pode falhar à vontade.
-- **As variações vêm junto quando é o SERVIDOR quem traduz** — a lista colada, e a frase salva
-  antes de a sugestão chegar (o botão não espera): `preencherTraducao` e `traduzirLote` pedem
+- **As variações vêm junto quando é o SERVIDOR quem traduz** — a lista colada, e a frase que chega
+  em branco (a tela não deixa mais salvar sem a tradução aplicada, mas um POST direto
+  pode): `preencherTraducao` e `traduzirLote` pedem
   também as variações (`variantesDasFrases`, o mesmo funil das questões de tradução, dois pedidos
   para a lista inteira) e as gravam em `SentencePair.variants`, somadas às do professor. Sem isso
   o material entrava sem as variações que a tela teria mostrado. Falhar nelas não impede gravar.

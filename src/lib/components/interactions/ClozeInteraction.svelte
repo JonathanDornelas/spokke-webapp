@@ -95,10 +95,14 @@
 
 {#if item.teclado}
 	<LeituraDoCampo teclado={item.teclado} texto={value} />
-	{#if item.teclado.formato === 'barra' || !tecladoNaTela}
+	<!-- A barra fica sob o campo também no Player (quem a abre é o "Acentos" do
+	     rodapé, por isso `docado`), e sai depois de responder: não há mais o que
+	     digitar. A grade, no Player, é a tela que desenha. -->
+	{#if item.teclado.formato === 'barra' ? !feedback : !tecladoNaTela}
 		<TecladoVirtual
 			teclado={item.teclado}
 			bind:aberto={tecladoAberto}
+			docado={tecladoNaTela}
 			desativado={!!feedback}
 			onacao={(acao) => campo.aplicar(value, acao, (novo) => (value = novo))}
 		/>

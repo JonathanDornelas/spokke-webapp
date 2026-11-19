@@ -453,6 +453,25 @@ model Attempt {
   /// ele autorizou esta atividade, neste dia. Refazer pergunta de novo.
   audioConsent Boolean @default(false)
 
+  /// Até onde o aluno chegou NA SEQUÊNCIA: quantas questões, da primeira em
+  /// diante, ele já deixou para trás — respondendo ou pulando. A questão `n`
+  /// só abre com `n ≤ avanco + 1` (`server/player/sequencia.ts`): trocar o
+  /// número na URL não pula para a frente. Mora aqui, e não sai das respostas,
+  /// porque pular não grava resposta nenhuma.
+  avanco Int @default(0)
+
+  /// A tentativa ENTREGUE que esta refaz, quando a publicação deixa responder
+  /// de novo (`allowRetake`). Ao entregar esta, aquela sai — com as gravações
+  /// de fala — e esta fica no lugar (`server/player/refazer.ts`). Até lá as
+  /// duas existem: quem desiste no meio do refazer não perde o que entregou.
+  /// Sem FK: a antiga é apagada justamente por causa desta.
+  substituiId String?
+
+  /// Que vez é esta para a mesma pessoa: 1, ou a da que ela substitui mais um.
+  /// É o "Tentativa 3" do resultado, que sem isto voltaria a 1 a cada refazer
+  /// (a anterior não existe mais para ser contada).
+  vez Int @default(1)
+
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
 

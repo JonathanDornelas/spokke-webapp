@@ -234,11 +234,22 @@
 			(kind === 'pair' || kind === 'vocab')
 	);
 	let traducaoAuto = $state<string | null>(null);
+	/** A frase que a tradução automática traduziu: mudou a frase, ela não vale mais. */
+	let traducaoAutoDe = $state<string | null>(null);
 	let traduzindo = $state(false);
 	let semTradutor = $state(false);
 	/** Cada pedido ganha um número; resposta de pedido velho é descartada. */
 	let pedidoDaTraducao = 0;
 	const traducaoEhAutomatica = $derived(!!traducaoAuto && traducao === traducaoAuto);
+	/**
+	 * A tradução está APLICADA: o professor a escreveu, ou o tradutor a trouxe para a
+	 * frase que está na tela. É o que libera "Adicionar" (pedido do dono do
+	 * repositório): o material entra com a tradução que o professor viu, nunca com uma
+	 * feita às cegas pelo servidor depois do clique, nem com a da frase anterior.
+	 */
+	const traducaoAplicada = $derived(
+		traducao.trim() !== '' && (!traducaoEhAutomatica || traducaoAutoDe === alvo.trim())
+	);
 
 	async function pedirTraducao(texto: string, forcar = false) {
 		if (!onsugerirTraducao || !linguaDoAluno) return;
@@ -248,12 +259,24 @@
 		if (meu !== pedidoDaTraducao) return;
 		traduzindo = false;
 		semTradutor = sugestao === null;
-		if (sugestao === null || alvo.trim() !== texto) return;
+		if (alvo.trim() !== texto) return;
 		// O professor pode ter começado a escrever a tradução enquanto esperava.
 		const doProfessor = traducao.trim() !== '' && traducao !== traducaoAuto;
+		if (sugestao === null) {
+			// A automática que está no campo é da frase de ANTES: ela sai, e o campo
+			// vazio pede a do professor. A dele fica.
+			if (!doProfessor) {
+				traducao = '';
+				traducaoAuto = null;
+				traducaoAutoDe = null;
+				variacoes = variacoes.filter((v) => !v.auto);
+			}
+			return;
+		}
 		if (doProfessor && !forcar) return;
 		traducao = sugestao.traducao;
 		traducaoAuto = sugestao.traducao;
+		traducaoAutoDe = texto;
 		if (kind === 'pair') trocarVariacoesAutomaticas(sugestao.alternativas);
 	}
 
@@ -326,6 +349,7 @@
 				traduzindo = false;
 				if (traducaoEhAutomatica) traducao = '';
 				traducaoAuto = null;
+				traducaoAutoDe = null;
 				variacoes = variacoes.filter((v) => !v.auto);
 				return;
 			}
@@ -341,6 +365,7 @@
 		alvo = '';
 		traducao = '';
 		traducaoAuto = null;
+		traducaoAutoDe = null;
 		semTradutor = false;
 		pedidoDaTraducao++;
 		traduzindo = false;
@@ -387,6 +412,7 @@
 		// A tradução gravada é do professor (ou ele já a conferiu): editar a frase
 		// não a troca sozinha — "Traduzir de novo" está ali se ele quiser.
 		traducaoAuto = null;
+		traducaoAutoDe = null;
 		semTradutor = false;
 		raw = m.raw;
 		exemplo = m.example;
@@ -810,10 +836,9 @@
 					? alvo.trim().length > 0 && raw.trim().length > 0
 					: kind === 'dialogue'
 						? falas.filter((f) => f.text.trim()).length >= 2
-						: // Com o tradutor ligado, a tradução em branco é feita ao salvar.
-							alvo.trim().length > 0 &&
-							(traducao.trim().length > 0 || podeTraduzir) &&
-							!problemaDoTermo;
+						: // Só com a tradução aplicada, digitada ou já vinda do tradutor
+							// para esta frase: enquanto ela não chega, o botão espera.
+							alvo.trim().length > 0 && traducaoAplicada && !problemaDoTermo;
 		}
 	});
 	const saveLabel = $derived(
@@ -1246,7 +1271,7 @@
 										<Loading variant="fila" size={10} label="Traduzindo" />
 										<span>Traduzindo…</span>
 									{:else if semTradutor && !traducao.trim()}
-										<span>O tradutor não respondeu agora. Escreva a tradução.</span>
+										<span>O tradutor não trouxe uma tradução. Escreva a sua.</span>
 									{:else if alvo.trim() && traducao.trim() && !traducaoEhAutomatica}
 										<button
 											type="button"

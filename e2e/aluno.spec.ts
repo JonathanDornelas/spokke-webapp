@@ -10,7 +10,9 @@ import { GABARITO } from './semente.ts';
  * 2. o mesmo com o resultado DESLIGADO, conferindo que nada do gabarito chega
  *    ao navegador — nem no HTML, nem nas respostas das remote functions;
  * 3. determinismo: recarregar a questão não muda a ordem das alternativas;
- * 4. cada questão cabe na tela sem rolar, no celular e no notebook.
+ * 4. cada questão cabe na tela sem rolar, no celular e no notebook;
+ * 5. a atividade é um caminho: trocar o número na URL não pula para a frente;
+ * 6. responder de novo, quando a publicação deixa, substitui a entrega anterior.
  */
 
 const slugCom = () => process.env.E2E_SLUG_COM_RESULTADO ?? '';
@@ -197,6 +199,81 @@ test('relatar um problema manda a questão e a resposta para a equipe, sem o nom
 			payload: { path: ['assunto'], string_contains: 'E2E com resultado' }
 		}
 	});
+});
+
+/**
+ * A atividade é um caminho (paginas.md "Player"): trocar o número na URL não
+ * pula para a frente, nem `/resultado` pula o resto. Para trás continua livre.
+ */
+test('trocar o número da questão na URL não pula para a frente', async ({ page }) => {
+	const slug = slugCom();
+	await comecar(page, slug, 'Caminho E2E');
+
+	await page.goto(`/a/${slug}/q/3`);
+	await expect(page).toHaveURL(new RegExp(`/a/${slug}/q/1$`));
+	await page.goto(`/a/${slug}/resultado`);
+	await expect(page).toHaveURL(new RegExp(`/a/${slug}/q/1$`));
+
+	await page.getByRole('button', { name: new RegExp(GABARITO.escolha) }).click();
+	await page.getByRole('button', { name: 'Verificar' }).click();
+	await seguir(page, 2);
+
+	// Respondida a 1, a 2 abre; a 3 ainda não.
+	await page.goto(`/a/${slug}/q/3`);
+	await expect(page).toHaveURL(new RegExp(`/a/${slug}/q/2$`));
+	// Voltar é livre, e a respondida volta com o veredito dela.
+	await page.goto(`/a/${slug}/q/1`);
+	await expect(page).toHaveURL(new RegExp(`/a/${slug}/q/1$`));
+	await expect(page.getByRole('button', { name: 'Próxima questão' })).toBeVisible();
+});
+
+/**
+ * Responder de novo (`allowRetake`): fica a ÚLTIMA entrega. Errada da primeira
+ * vez, certa da segunda — e o professor fica com uma tentativa só, a nova.
+ */
+test('responder de novo substitui a entrega anterior', async ({ page }) => {
+	const { prisma } = await import('../src/lib/server/db/client.ts');
+	const slug = process.env.E2E_SLUG_REFAZER ?? '';
+
+	async function responderTudo(certo: boolean) {
+		await page
+			.getByRole('button', { name: new RegExp(certo ? GABARITO.escolha : 'orange juice') })
+			.click();
+		await page.getByRole('button', { name: 'Verificar' }).click();
+		await seguir(page, 2);
+		for (const palavra of GABARITO.montar) await palavraDisponivel(page, palavra).click();
+		await page.getByRole('button', { name: 'Verificar' }).click();
+		await seguir(page, 3);
+		await page
+			.getByPlaceholder('Digite sua resposta')
+			.fill(certo ? GABARITO.digitar : 'Green dancing horses');
+		await page.getByRole('button', { name: 'Verificar' }).click();
+		await seguir(page, 'resultado');
+	}
+
+	await comecar(page, slug, 'Rita E2E');
+	await responderTudo(false);
+	await expect(page.getByText('Você acertou 1 de 3')).toBeVisible();
+
+	// O resultado leva à entrada, que confirma.
+	await page.getByRole('link', { name: 'Responder de novo' }).click();
+	await expect(page).toHaveURL(new RegExp(`/a/${slug}$`));
+	await expect(page.getByText('Você já respondeu esta atividade')).toBeVisible();
+	await page.getByRole('button', { name: 'Responder de novo' }).click();
+	await expect(page).toHaveURL(new RegExp(`/a/${slug}/q/1$`));
+
+	await responderTudo(true);
+	await expect(page.getByText('Você acertou 3 de 3')).toBeVisible();
+	await expect(page.getByText(/Tentativa 2 de 2/).first()).toBeVisible();
+
+	// No banco: uma tentativa da Rita, a nova, entregue.
+	const tentativas = await prisma.attempt.findMany({
+		where: { publication: { slug }, name: 'Rita E2E' },
+		include: { items: { select: { score: true } } }
+	});
+	expect(tentativas).toHaveLength(1);
+	expect(tentativas[0]).toMatchObject({ vez: 2, finishedAt: expect.any(Date) });
+	expect(tentativas[0]!.items.every((i) => i.score >= 1)).toBe(true);
 });
 
 /**

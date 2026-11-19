@@ -27,6 +27,7 @@ import { tecladoDe, type Teclado } from '$lib/kernel/language/teclado';
 import { skillLabels } from '$lib/kernel/interactions/skill-schema';
 import { ttsHash } from '$lib/server/tts';
 import { instructionText } from '$lib/atividades/enunciados';
+import { sePula } from './sequencia';
 
 /**
  * A ÚNICA porta por onde um item chega no browser do aluno — regra
@@ -450,6 +451,6 @@ export function buildRuntimeItem(
 		audio: url(doPrompt, 0),
 		audioSlow: url(doPrompt, 1),
 		gradedLater: grading.mode === 'rubric' || undefined,
-		skippable: interaction.type === 'speak' || undefined
+		skippable: sePula(interaction.type) || undefined
 	};
 }

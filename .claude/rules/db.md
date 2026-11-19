@@ -19,7 +19,7 @@ Teacher ─┬─ Activity ─┬─ ActivityVersion (imutável) ─── Item
 
 Attempt (audioConsent) ─ AttemptItem (answer, score, ms, audioKey, audioExpiresAt)   [7 dias]
 
-Publication ─── Attempt (name, anonId, seed) ─── AttemptItem (answer, score, ms)
+Publication ─── Attempt (name, anonId, seed, avanco, substituiId, vez) ─── AttemptItem (answer, score, ms)
 
 Teacher ─┬─ Classroom ─── Student ─┬─ Invite ─── Delivery ─── Publication
          │                         └─ Attempt (studentId, opcional)
@@ -108,6 +108,14 @@ com `accountInviteSentAt` marcando quando o e-mail saiu); `Attempt.accountId` gu
 independentes de `studentId`: dá para responder logado sem estar na chamada de ninguém, e para
 estar na chamada sem ter conta. Os três campos são `SetNull` — apagar conta ou aluno não apaga a
 resposta de terceiro.
+
+**`Attempt.avanco`** é quantas questões, da primeira em diante, o aluno já deixou para trás
+(respondendo ou pulando): a questão `n` só abre com `n ≤ avanco + 1` (server.md "A fronteira de
+segurança do Player"). Não sai das respostas porque pular não grava resposta. A migration
+`tentativa_em_sequencia_e_refazer` o preencheu nas que existiam (a última respondida; a entregue,
+todas). **`substituiId`** é a entrega que esta tentativa REFAZ (`allowRetake`), sem FK: a antiga é
+apagada quando esta é entregue (`server/player/refazer.ts`). **`vez`** é que vez é esta para a
+mesma pessoa (a da substituída mais um) — o "Tentativa 3" do resultado, que sem ela voltaria a 1.
 
 `Attempt.studentId` é **opcional, e nulo é o caminho normal**: o aluno entrou pelo link aberto e
 a tentativa vale igual no relatório. Ele só chega preenchido quando o aluno veio por um link

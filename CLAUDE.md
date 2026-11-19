@@ -204,7 +204,9 @@ Decisões e histórico ficam em `docs/`. Não replique aqui.
   não pede cartão, e nenhuma tela promete "sem cartão".
 - **Teclado virtual** em toda questão de escrever no idioma alvo, e só nela: grade para japonês
   (kana), mandarim (pinyin com tom), árabe e híndi, encaixada acima do rodapé do Player; barra de
-  acentos para pt/es/fr/it; nada para inglês (`LanguageProfile.input`, kernel.md "Entrada"). O
+  acentos para pt/es/fr/it; nada para inglês (`LanguageProfile.input`, kernel.md "Entrada"). As
+  duas nascem OCULTAS e o aluno as abre pelo rodapé ("Teclado", "Acentos"): a barra à vista era
+  lida como alternativas de resposta quebradas. O
   desenho é o protótipo "Player Teclado" do Claude Design — dos alfabetos dele só o japonês é do
   Kokoro. **Em japonês e mandarim o aluno escreve a LEITURA**, e ela é certa porque o servidor a
   põe no gabarito (`server/escrita`: kuromoji e pinyin-pro, 18 MB de dicionário, só no

@@ -170,8 +170,13 @@ material", adr-006): o professor escreve a frase no idioma que ensina e o campo 
 preenchido depois de uma pausa na digitação, sem frase de apoio em volta (o "sai sozinha, você
 confere" e o "Tradução automática. Confira…" saíram por redundantes). **A dele nunca é trocada**: escreveu,
 o campo é dele, e a sugestão não volta por cima mesmo que a frase mude — "Traduzir de novo"
-troca a pedido. O botão de salvar não espera a tradução: o que chegar em branco é traduzido no
-servidor. Colando uma lista, a tradução depois do separador vira OPCIONAL: a linha só no idioma
+troca a pedido. **Um de cada vez, "Adicionar" só libera com a tradução APLICADA** (pedido do dono
+do repositório): a que o professor escreveu, ou a que o tradutor trouxe para a frase que está na
+tela (`traducaoAplicada`). Enquanto ela não chega o botão espera, e a automática da frase anterior
+não conta: mudar a frase pede outra. O tradutor que não traz nada (fora do ar, ou a palavra que não
+passou na conferência) limpa a automática que estava no campo, e a linha do rótulo diz "Escreva a
+sua". O servidor continua traduzindo o que chegar em branco, para quem chega por um POST direto.
+Colando uma lista, a tradução depois do separador vira OPCIONAL: a linha só no idioma
 alvo aparece na prévia com "tradução automática" (não riscada), e o resultado diz quantas
 traduções vieram do tradutor, para ele conferir na lista. Na biblioteca o destino é a língua do
 aluno da página (a mesma da IA), e material "sem idioma" não tem de onde traduzir. Sem tradutor,
@@ -276,7 +281,9 @@ as habilidades treinadas (derivadas, com a contagem), as BANDEJAS "Enviar para t
 um material, porque nascer com a altura toda empurrava as opções 300px num quadro —, com linhas
 com a etiqueta e a caixa de marcar, e **nada vem marcado**: enviar é decisão, nunca padrão) e as
 opções (código de acesso: **ligar já sorteia as 4 letras**, e um código que já existia fica —
-religar não troca o que talvez já esteja no quadro; "Sortear" troca; mostrar o resultado). **Cada
+religar não troca o que talvez já esteja no quadro; "Sortear" troca; mostrar o resultado; deixar
+responder de novo, que diz o que o professor perde ao ligar: fica a última entrega, e a anterior
+sai com as gravações — "Player", abaixo). **Cada
 bandeja mostra no MÁXIMO SEIS linhas** (pedido do dono do repositório): as marcadas sempre entram,
 as outras completam na ordem da lista, e o resto se acha pela busca, que aparece a partir de sete,
 com "Mais N turmas: busque pelo nome". À direita, numa coluna de 400px: o QR com o link e o
@@ -517,6 +524,17 @@ aparelho. Numa questão já respondida a ação vira "Próxima questão", porque
 verificar de novo, e o veredito só volta se o professor deixou `showResult` ligado — voltar não
 pode ser a porta dos fundos para descobrir se acertou.
 
+**A atividade é um CAMINHO: trocar o número na URL não pula para a frente** (pedido do dono do
+repositório, 2026-11-18). `Attempt.avanco` guarda quantas questões, da primeira em diante, já ficaram
+para trás — respondidas ou puladas —, e a questão `n` só abre com `n ≤ avanco + 1`
+(`server/player/sequencia.ts`). Para trás abre sempre; quem tenta passar da questão da vez volta para
+ela. A conferência é do SERVIDOR em todas as portas: o loader da `/q/[n]`, `responderItem`, o
+`POST /fala`, o `pularQuestao` e a entrega (`finalizarTentativa` só entrega com o caminho feito).
+`/resultado` e `/revisao` de uma tentativa pela metade levam à questão da vez, e a `/q/[n]` de uma
+entregue leva ao resultado: entregue, as questões fecharam. **Pular avisa o servidor**
+(`pularQuestao`) antes de seguir — pular não grava resposta, e sem o aviso a seguinte não abriria —,
+e só a questão de fala se pula (`sePula`, a mesma regra do `skippable` do botão).
+
 **Toda troca de questão passa por `trocarPara`, inclusive o "Anterior"** (que por isso é botão,
 não `<a>`). O `saindoDe` guarda o CAMINHO de onde se saiu: com o índice, voltar devolvia o mesmo
 número de onde se tinha saído e a questão anterior reaparecia transparente e deslocada — a
@@ -598,7 +616,9 @@ mandarim (pinyin com tom), árabe e híndi a questão de digitar mostra a grade 
 **encaixada acima do rodapé**, no lugar do teclado do aparelho — a questão rola por cima dela e
 ela não sai do lugar. **Toda questão começa com ela OCULTA**: o aluno a chama pelo botão
 "Teclado" do rodapé, e ela sobe de baixo como a de um celular. Em português, espanhol,
-francês e italiano, uma barra de acentos sob o campo (components.md "Teclado virtual"). Sob o
+francês e italiano, uma barra de acentos sob o campo, **também oculta**: o botão do rodapé é
+"Acentos", e ela desce sob o campo com "Ocultar" na ponta (components.md "Teclado virtual") —
+sempre à vista, a fileira de letras acentuadas era lida como alternativas quebradas. Sob o
 campo da grade vem a **"Leitura"** do que o aluno digitou (`おはよう` → `ohayou`), junto da chave
 "Pronúncia nas teclas"; no pinyin as duas somem, porque o texto já é a pronúncia. Em japonês e
 mandarim o aluno escreve a LEITURA da frase e ela é certa: o servidor a põe no gabarito
@@ -648,8 +668,21 @@ no servidor deixaria sem recurso quem limpou o navegador ou trocou de celular �
 do professor, que pode pedir para refazer. `iniciarTentativa` continua aceitando uma tentativa
 nova; o que mudou é o que a tela oferece primeiro.
 
+**Responder de novo é opção da publicação** ("Deixar responder de novo", `allowRetake`, desligada
+por padrão; pedido do dono do repositório, 2026-11-18). Ligada, a entrada de quem já entregou troca o
+"fale com seu professor" por "Responder de novo" (com "Ver meu resultado" ao lado), e o resultado
+ganha o mesmo botão, que leva à entrada. **Fica a ÚLTIMA entrega**: `refazerTentativa` abre uma
+tentativa nova (seed nova, o nome e a ficha da anterior, a autorização de gravação perguntada de
+novo, desmarcada), e é ao ser ENTREGUE que ela toma o lugar da anterior — a anterior sai com as
+respostas, e as gravações de fala dela saem do bucket na hora (`server/player/refazer.ts`). Até a
+entrega as duas existem: quem desiste no meio não perde o que entregou. Os relatos de problema da
+anterior passam para a nova (são da equipe). O resultado conta a vez pela própria tentativa
+(`Attempt.vez`): a anterior não existe mais para ser contada. Quem refaz é achado pelo aparelho ou
+pela conta, como na entrada — nunca por um id vindo do formulário —, e não digita o código de novo.
+
 A tela de resultado acompanha: sem o cookie da tentativa, ela procura a terminada pelo mesmo
-caminho, senão "Ver meu resultado" devolvia para a entrada, em círculo.
+caminho, senão "Ver meu resultado" devolvia para a entrada, em círculo. Com o cookie de uma
+tentativa que já não existe (a refeita, entregue noutro aparelho, tomou o lugar dela), também.
 
 **O resultado tem quatro blocos, em ordem de pergunta**: quanto eu fiz (anel de acerto, a trilha
 por item e a legenda em texto), como foi meu percurso, em que eu fui bem, e o que aconteceu em cada
@@ -660,7 +693,8 @@ dono do repositório). Logado: "Ir para o meu painel" (`/aluno`). Sem conta: "Cr
 (`/cadastro?como=aluno`) com "Já tenho conta" ao lado, e a frase do porquê — guardar este resultado e
 ver tudo o que já respondeu. É o único lugar do Player que oferece a conta, e só depois de a
 atividade acabar: antes seria pré-requisito, que é o oposto do produto (auth.md "A conta do aluno").
-"Rever minhas respostas" fica no mesmo rodapé quando o professor liberou o resultado. As tentativas
+"Rever minhas respostas" fica no mesmo rodapé quando o professor liberou o resultado, e "Responder
+de novo" quando ele deixou refazer (leva à entrada, que confirma). As tentativas
 deste aparelho continuam soltas até a área do aluno oferecer adotá-las — criar a conta não as leva
 sozinha.
 

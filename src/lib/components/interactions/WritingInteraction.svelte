@@ -68,6 +68,7 @@
 		<TecladoVirtual
 			teclado={item.teclado}
 			bind:aberto={tecladoAberto}
+			docado={tecladoNaTela}
 			onacao={(acao) => campo.aplicar(value, acao, (novo) => (value = novo), item.maxLength)}
 		/>
 	{/if}

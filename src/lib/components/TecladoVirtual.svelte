@@ -14,9 +14,9 @@
 	//   fica ENCAIXADA acima do rodapé (`docado`), como o teclado de um celular:
 	//   a questão rola por cima dela, e ela não sai do lugar.
 	//
-	// **A grade nasce OCULTA** — pedido do dono do repositório. Aberta por
-	// padrão ela ocupava metade da tela do celular antes de o aluno ler a
-	// pergunta. Quem abre é o aluno ("Teclado", no rodapé do Player), e ela sobe
+	// **Os dois nascem OCULTOS** — pedido do dono do repositório. A grade aberta
+	// por padrão ocupava metade da tela do celular antes de o aluno ler a
+	// pergunta; a barra à vista, sem rótulo, parecia uma fileira de alternativas. Quem abre é o aluno ("Teclado", no rodapé do Player), e ela sobe
 	// de baixo como o teclado de um celular (`teclado-in`/`teclado-out`, no
 	// `app.css`); "Ocultar" a desce. Oculta, o campo devolve o teclado do sistema
 	// — quem já tem o do idioma no celular não precisa deste.
@@ -27,6 +27,7 @@
 	import { untrack } from 'svelte';
 	import type { Acao } from './campo-com-teclado.svelte';
 	import { pronuncia } from '$lib/client/pronuncia.svelte';
+	import { desdobrar, recolher } from '$lib/client/transicoes';
 	import {
 		teclasDoGrupo,
 		type GrupoDeTeclas,
@@ -43,13 +44,14 @@
 		onocultar
 	}: {
 		teclado: Teclado;
-		/** Só vale para a grade. Escondida, o campo devolve o teclado do sistema. */
+		/** A grade ou a barra à vista. A grade escondida devolve o teclado do sistema ao campo. */
 		aberto?: boolean;
 		desativado?: boolean;
 		/**
-		 * Encaixado no rodapé da tela (Player). Aí quem oferece "Teclado" para
-		 * reabrir é a TELA, no rodapé; solto (prévia, catálogo), o próprio
-		 * componente deixa o botão no lugar.
+		 * Encaixado no rodapé da tela (Player). Aí quem oferece "Teclado" (ou
+		 * "Acentos", para a barra) para reabrir é a TELA, no rodapé; solto (prévia,
+		 * catálogo), o próprio componente deixa o botão no lugar. A barra continua
+		 * sob o campo nos dois casos: só a grade é desenhada pela tela.
 		 */
 		docado?: boolean;
 		onacao: (acao: Acao) => void;
@@ -226,29 +228,73 @@
 {/snippet}
 
 {#if teclado.formato === 'barra'}
-	<!-- Uma linha só. Se não couber, rola na horizontal — quebrar em duas linhas
-	     empurraria o botão de verificar para baixo da dobra. O `contain` é o que
-	     faz ela ROLAR em vez de alargar a tela: sem ele, as dezoito teclas do
-	     francês viram a largura mínima de todo item de flex ou grid acima dela, e
-	     a página inteira passava a rolar de lado no celular. -->
-	<div
-		role="group"
-		aria-label="Acentos do {nomeDoIdioma}"
-		dir={teclado.dir}
-		class="-mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-1 [contain:inline-size]"
-	>
-		{#each grupo ? teclasDoGrupo(grupo) : [] as t (t.char)}
+	<!-- **A barra também nasce OCULTA** (pedido do dono do repositório): sempre à
+	     vista, sem rótulo, a fileira "á à â ã ç" sob o campo era lida como
+	     alternativas de resposta quebradas. Quem a abre é o aluno — no Player, pelo
+	     "Acentos" do rodapé (`docado`); solta, pelo botão daqui. Ela desce como
+	     sanfona, porque empurra o que vem embaixo, e o "Ocultar" fica na ponta. -->
+	{#if aberto}
+		<div class="flex items-center gap-1.5 pt-2.5" in:desdobrar out:recolher>
+			<!-- Uma linha só. Se não couber, rola na horizontal — quebrar em duas
+			     linhas empurraria o botão de verificar para baixo da dobra. O `contain`
+			     é o que faz ela ROLAR em vez de alargar a tela: sem ele, as dezoito
+			     teclas do francês viram a largura mínima de todo item de flex ou grid
+			     acima dela, e a página inteira passava a rolar de lado no celular. -->
+			<div
+				role="group"
+				aria-label="Acentos do {nomeDoIdioma}"
+				dir={teclado.dir}
+				class="-ms-1 flex min-w-0 flex-1 gap-1.5 overflow-x-auto ps-1 pe-1 pb-1 [contain:inline-size]"
+			>
+				{#each grupo ? teclasDoGrupo(grupo) : [] as t (t.char)}
+					<button
+						type="button"
+						lang={teclado.lang}
+						disabled={desativado}
+						onpointerdown={naoRoubarFoco}
+						onclick={() => tocar(t)}
+						class="{letra} h-11 min-w-10 shrink-0 text-[17px] lg:text-[19px]"
+						>{t.label ?? t.char}</button
+					>
+				{/each}
+			</div>
 			<button
 				type="button"
-				lang={teclado.lang}
-				disabled={desativado}
+				aria-expanded="true"
+				aria-label="Ocultar os acentos"
 				onpointerdown={naoRoubarFoco}
-				onclick={() => tocar(t)}
-				class="{letra} h-11 min-w-10 shrink-0 text-[17px] lg:text-[19px]"
-				>{t.label ?? t.char}</button
+				onclick={ocultar}
+				class="mb-1 flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold text-base-content/65
+				       transition-colors hover:text-base-content"
 			>
-		{/each}
-	</div>
+				<svg class="size-[15px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+					<path
+						d="M18 15l-6-6-6 6"
+						stroke="currentColor"
+						stroke-width="2.2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+				<span class="hidden sm:inline">Ocultar</span>
+			</button>
+		</div>
+	{:else if !docado}
+		<button
+			type="button"
+			aria-expanded="false"
+			onpointerdown={naoRoubarFoco}
+			onclick={() => (aberto = true)}
+			class="mt-3 flex min-h-11 items-center gap-2 rounded-field border border-line bg-base-200 px-3.5
+			       text-[13.5px] font-semibold transition-colors hover:bg-base-300"
+		>
+			<svg class="size-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<rect x="2.5" y="6" width="19" height="12" rx="3" stroke="currentColor" stroke-width="2" />
+				<path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+			</svg>
+			Mostrar os acentos
+		</button>
+	{/if}
 {:else if montado}
 	<!-- A moldura recorta: o painel sobe DENTRO dela e nunca passa por cima do
 	     rodapé nem do campo. -->

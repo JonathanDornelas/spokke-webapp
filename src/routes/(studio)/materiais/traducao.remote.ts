@@ -12,10 +12,10 @@ import { getProfile } from '$lib/kernel/language/profiles';
  * (biblioteca e etapa 2 do wizard — os dois usam esta função).
  *
  * **Não grava nada.** É só o texto traduzido, para o campo da tradução vir
- * preenchido e o professor conferir antes de salvar. Quem grava continua sendo
- * a remote function do formulário, que também traduz o que chegar em branco —
- * então esta aqui pode falhar à vontade: o professor escreve, ou salva e a
- * tradução sai do servidor.
+ * preenchido e o professor conferir antes de salvar — a tela só libera
+ * "Adicionar" com a tradução no campo. Falhar aqui é normal: o campo fica em
+ * branco e o professor escreve. Quem grava continua sendo a remote function do
+ * formulário, que também traduz o que chegar em branco por um POST direto.
  *
  * **Toda remote function é um endpoint público** (regra nº 3): guard de sessão
  * primeiro, e um teto por professor — cada chamada é CPU do serviço de áudio,

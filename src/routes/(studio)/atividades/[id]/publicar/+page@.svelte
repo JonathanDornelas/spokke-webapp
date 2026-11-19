@@ -702,6 +702,29 @@
 								class="toggle shrink-0 toggle-primary"
 							/>
 						</label>
+						<!-- Refazer substitui: o professor vê uma tentativa por aluno, a última
+						     entregue, e as gravações da anterior saem do bucket junto
+						     (server/player/refazer.ts). A descrição diz as duas coisas,
+						     porque é o que ele perde ao ligar. -->
+						<label
+							class="flex cursor-pointer items-center justify-between gap-3.5 rounded-[13px] border border-line bg-base-200 px-4 py-3.5"
+						>
+							<span class="min-w-0">
+								<span class="mb-[3px] block text-[14px] font-semibold"
+									>Deixar responder de novo</span
+								>
+								<span class="block text-[12.5px] leading-[1.45] text-base-content/65"
+									>Quantas vezes o aluno quiser. Fica a última entrega: a anterior sai, com as
+									gravações.</span
+								>
+							</span>
+							<input
+								type="checkbox"
+								name="allowRetake"
+								checked={data.access.allowRetake}
+								class="toggle shrink-0 toggle-primary"
+							/>
+						</label>
 
 						{#if publicarAtividade.result && !publicarAtividade.result.ok}
 							<div

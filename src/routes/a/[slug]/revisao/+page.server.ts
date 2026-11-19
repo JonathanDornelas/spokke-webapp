@@ -3,6 +3,7 @@ import { resolve } from '$app/paths';
 import type { PageServerLoad } from './$types';
 import { playerRepo } from '$lib/server/db/repos/player';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
+import { avancoDaTentativa, questaoDaVez } from '$lib/server/player/sequencia';
 import { readableAnswer } from '$lib/server/player/readable-answer';
 import { instructionText, promptInstruction } from '$lib/server/player/runtime';
 import { rotuloDoItem } from '$lib/server/player/rotulo';
@@ -30,6 +31,16 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 
 	const attempt = await playerRepo.attemptById(attemptId);
 	if (!attempt) error(404, { message: 'Perdemos sua sessão', reason: 'attemptLost' });
+
+	// Rever é depois de entregar. No meio do caminho, de volta à questão da vez
+	// (`server/player/sequencia.ts`): a revisão não é atalho para o fim.
+	if (!attempt.finishedAt) {
+		const n = questaoDaVez(
+			avancoDaTentativa(attempt),
+			attempt.publication.activityVersion.items.length
+		);
+		redirect(303, resolve('/a/[slug]/q/[n]', { slug: params.slug, n: String(n) }));
+	}
 
 	const settings = publicationSettingsSchema.parse(attempt.publication.settings);
 	if (!settings.showResult) redirect(303, resolve('/a/[slug]/resultado', { slug: params.slug }));

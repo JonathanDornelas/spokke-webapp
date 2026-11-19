@@ -164,7 +164,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		access: {
 			requireCode: settings?.requireCode ?? false,
 			code: settings?.code ?? '',
-			showResult: settings?.showResult ?? true
+			showResult: settings?.showResult ?? true,
+			allowRetake: settings?.allowRetake ?? false
 		},
 		questoes,
 		skills: [...habilidades.entries()].map(([skill, count]) => ({

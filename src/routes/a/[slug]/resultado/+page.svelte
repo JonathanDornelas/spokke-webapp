@@ -49,6 +49,8 @@
 	}
 	interface PageData {
 		showFeedback: boolean;
+		/** O professor deixou responder de novo; o botão leva à entrada, que confirma. */
+		podeRefazer: boolean;
 		activity: { title: string; itemCount: number; slug: string; dir: 'ltr' | 'rtl' };
 		student: { name: string; initials: string; temConta: boolean; avatar: string | null };
 		duration: string;
@@ -64,6 +66,7 @@
 
 	const MOCK: PageData = {
 		showFeedback: true,
+		podeRefazer: false,
 		activity: {
 			title: 'Present perfect — turma B',
 			itemCount: 8,
@@ -722,13 +725,39 @@
 		</p>
 	{/if}
 	<div class="flex flex-col gap-2.5 lg:flex-row lg:items-center">
-		{#if data.showFeedback}
-			<a
-				href={resolve('/a/[slug]/revisao', { slug: data.activity.slug })}
-				class="btn btn-lg min-h-[50px] w-full motion-tap gap-2.5 btn-outline text-base font-bold no-underline lg:w-auto lg:px-[26px]"
-			>
-				Rever minhas respostas
-			</a>
+		<!-- As secundárias. No celular, com as duas, elas dividem UMA linha com o
+		     rótulo curto (o nome inteiro fica no `aria-label`): empilhadas, o rodapé
+		     passava de um terço da tela. No desktop o invólucro some (`contents`). -->
+		{#if data.podeRefazer || data.showFeedback}
+			<div class="flex gap-2.5 lg:contents">
+				{#if data.podeRefazer}
+					<!-- Leva à ENTRADA, não direto a uma tentativa nova: é lá que se confirma
+				     (a nova fica no lugar desta) e que a autorização de guardar a
+				     gravação é perguntada de novo, como manda auth.md. -->
+					<a
+						href={resolve('/a/[slug]', { slug: data.activity.slug })}
+						aria-label="Responder de novo"
+						class="btn btn-lg min-h-[50px] flex-1 motion-tap gap-2.5 btn-outline text-base font-bold no-underline lg:flex-none lg:px-[26px]"
+					>
+						<span class="lg:hidden">Refazer</span>
+						<span class="hidden lg:inline">Responder de novo</span>
+					</a>
+				{/if}
+				{#if data.showFeedback}
+					<a
+						href={resolve('/a/[slug]/revisao', { slug: data.activity.slug })}
+						aria-label="Rever minhas respostas"
+						class="btn btn-lg min-h-[50px] flex-1 motion-tap gap-2.5 btn-outline text-base font-bold no-underline lg:flex-none lg:px-[26px]"
+					>
+						{#if data.podeRefazer}
+							<span class="lg:hidden">Rever respostas</span>
+							<span class="hidden lg:inline">Rever minhas respostas</span>
+						{:else}
+							Rever minhas respostas
+						{/if}
+					</a>
+				{/if}
+			</div>
 		{/if}
 		{#if data.student.temConta}
 			<a

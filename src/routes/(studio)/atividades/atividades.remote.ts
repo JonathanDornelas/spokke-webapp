@@ -1200,12 +1200,21 @@ export const publicarAtividade = form(
 		// opcional em vez de boolean (é o que o `form()` do SvelteKit exige).
 		requireCode: z.string().optional(),
 		showResult: z.string().optional(),
+		/** Responder de novo quantas vezes quiser; fica a última entrega. */
+		allowRetake: z.string().optional(),
 		/** As 4 letras que o professor dita. Vazio = o servidor sorteia. */
 		accessCode: z.string().optional()
 	}),
-	async ({ activityId, requireCode: requireCodeRaw, showResult: showResultRaw, accessCode }) => {
+	async ({
+		activityId,
+		requireCode: requireCodeRaw,
+		showResult: showResultRaw,
+		allowRetake: allowRetakeRaw,
+		accessCode
+	}) => {
 		const requireCode = requireCodeRaw !== undefined;
 		const showResult = showResultRaw !== undefined;
+		const allowRetake = allowRetakeRaw !== undefined;
 		const { teacher, activity } = await activityOr404(activityId);
 		if (activity.archivedAt) {
 			return { ok: false, error: 'Esta atividade está arquivada. Desarquive para publicar.' };
@@ -1296,7 +1305,8 @@ export const publicarAtividade = form(
 		const publication = await atividades(teacher).publishDraft(activityId, slug, {
 			requireCode,
 			code: codigo,
-			showResult
+			showResult,
+			allowRetake
 		});
 		if (!publication) return { ok: false, error: 'Nada para publicar.' };
 

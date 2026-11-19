@@ -2,10 +2,11 @@ import 'dotenv/config';
 import { prisma } from '../src/lib/server/db/client.ts';
 
 /**
- * A semente do E2E do aluno (testing.md "E2E"): um professor descartável e DUAS
+ * A semente do E2E do aluno (testing.md "E2E"): um professor descartável e TRÊS
  * atividades publicadas, iguais, só de texto (sem áudio, para não depender da
- * fila de TTS) — uma com o resultado liberado e outra sem. Três interações
- * diferentes: escolher, montar a frase e digitar.
+ * fila de TTS) — uma com o resultado liberado, outra sem, e a terceira que deixa
+ * responder de novo. Três interações diferentes: escolher, montar a frase e
+ * digitar.
  *
  * Grava no banco do `.env`, como o resto do `preview`; tudo nasce com um prefixo
  * da rodada e sai no teardown — inclusive as tentativas que os cenários criarem.
@@ -52,9 +53,19 @@ const ITENS = [
 	}
 ];
 
+/**
+ * As três publicações: com o resultado, sem ele, e com o resultado e o refazer
+ * ligado (`allowRetake`) — a nova entrega substitui a anterior.
+ */
+const PUBLICACOES = [
+	{ sufixo: 'com', titulo: 'E2E com resultado', showResult: true, allowRetake: false },
+	{ sufixo: 'sem', titulo: 'E2E sem resultado', showResult: false, allowRetake: false },
+	{ sufixo: 'refazer', titulo: 'E2E refazer', showResult: true, allowRetake: true }
+] as const;
+
 export async function semear(
 	rodada: string
-): Promise<{ comResultado: string; semResultado: string }> {
+): Promise<{ comResultado: string; semResultado: string; refazer: string }> {
 	const teacherId = `e2e-${rodada}`;
 	await prisma.teacher.create({
 		data: {
@@ -66,10 +77,10 @@ export async function semear(
 		}
 	});
 	const slugs: string[] = [];
-	for (const showResult of [true, false]) {
+	for (const { sufixo, titulo, showResult, allowRetake } of PUBLICACOES) {
 		const atividade = await prisma.activity.create({
 			data: {
-				title: showResult ? 'E2E com resultado' : 'E2E sem resultado',
+				title: titulo,
 				teacherId,
 				sourceLang: 'pt-BR',
 				targetLang: 'en-US'
@@ -88,17 +99,17 @@ export async function semear(
 				}
 			});
 		}
-		const slug = `e2e-${rodada}-${showResult ? 'com' : 'sem'}`;
+		const slug = `e2e-${rodada}-${sufixo}`;
 		await prisma.publication.create({
 			data: {
 				slug,
-				settings: { requireCode: false, code: null, showResult },
+				settings: { requireCode: false, code: null, showResult, allowRetake },
 				activityVersionId: versao.id
 			}
 		});
 		slugs.push(slug);
 	}
-	return { comResultado: slugs[0]!, semResultado: slugs[1]! };
+	return { comResultado: slugs[0]!, semResultado: slugs[1]!, refazer: slugs[2]! };
 }
 
 export async function limpar(rodada: string): Promise<void> {

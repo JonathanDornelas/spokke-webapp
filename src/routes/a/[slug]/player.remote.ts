@@ -16,6 +16,15 @@ import { payloadParaCorrigir } from '$lib/server/escrita';
 import { criarLimite } from '$lib/server/limite-por-ip';
 import { registrarRelato } from '$lib/server/relatos';
 import { relatoSchema } from '$lib/server/relatos/schema';
+import {
+	avancoDaTentativa,
+	avancoEfetivo,
+	caminhoFeito,
+	questaoAbre,
+	questaoDaVez,
+	sePula
+} from '$lib/server/player/sequencia';
+import { trocarPelaRefeita } from '$lib/server/player/refazer';
 import { dev, version } from '$app/environment';
 import type { Prisma } from '../../../../generated/prisma/client.ts';
 
@@ -173,14 +182,73 @@ export const retomarTentativa = form(z.object({ slug: z.string() }), async ({ sl
 	});
 
 	// A próxima questão é a primeira sem resposta, não a seguinte à última
-	// gravada: pular uma questão não pode deixar buraco no meio.
+	// gravada: pular uma questão não pode deixar buraco no meio. Ela está sempre
+	// dentro do avanço (todas antes dela foram respondidas), e o teto é a da vez.
 	const respondidos = new Set(anterior.items.map((linha) => linha.itemId));
 	const itens = publication.activityVersion.items;
 	const proximo = itens.findIndex((item) => !respondidos.has(item.id));
-	const n = String(proximo === -1 ? itens.length : proximo + 1);
+	const daVez = questaoDaVez(avancoEfetivo(anterior.avanco, itens, anterior.items), itens.length);
+	const n = String(proximo === -1 ? daVez : Math.min(proximo + 1, daVez));
 
 	redirect(303, resolve('/a/[slug]/q/[n]', { slug, n }));
 });
+
+/**
+ * "Responder de novo", quando o professor deixou (`allowRetake`). É uma
+ * tentativa NOVA, que substitui a entregue só quando for entregue
+ * (`server/player/refazer.ts`) — desistir no meio não custa o que já estava lá.
+ *
+ * Quem refaz é quem entregou: a tentativa anterior é achada pelo aparelho ou
+ * pela conta, nunca por um id vindo do formulário, e o nome e a ficha vêm dela
+ * — a tela não pede o nome de novo. A autorização de guardar a gravação, sim:
+ * ela vale por tentativa (auth.md), e por isso vem do formulário, desmarcada.
+ *
+ * O código de acesso não é pedido de novo: quem tem uma entrega neste aparelho
+ * ou nesta conta já passou por ele — é a mesma regra da entrada para rever o
+ * que fez (`precisaDoCodigo`).
+ */
+export const refazerTentativa = form(
+	z.object({ slug: z.string(), guardarAudio: z.string().optional() }),
+	async ({ slug, guardarAudio }) => {
+		const publication = await publicacaoAbertaOr410(slug);
+		const settings = publicationSettingsSchema.parse(publication.settings);
+		const entrada = resolve('/a/[slug]', { slug });
+		if (!settings.allowRetake) redirect(303, entrada);
+		await ensureAudioReady(publication);
+
+		const { cookies, locals } = getRequestEvent();
+		const aparelho = anonId();
+		// Uma pela metade neste aparelho: a entrada oferece continuar, não uma terceira.
+		if (await playerRepo.resumableAttempt(publication.id, aparelho)) redirect(303, entrada);
+
+		const entregue = await playerRepo.concludedAttempt(publication.id, {
+			anonId: aparelho,
+			accountId: locals.aluno?.id
+		});
+		if (!entregue) redirect(303, entrada);
+
+		const attempt = await playerRepo.createAttempt(
+			publication.id,
+			entregue.name,
+			aparelho,
+			// Seed nova: outra ordem de alternativas e de peças, como numa tentativa
+			// nova de verdade (regra nº 8 vale DENTRO da tentativa).
+			crypto.randomUUID(),
+			entregue.studentId,
+			locals.aluno?.id ?? entregue.accountId,
+			guardarAudio !== undefined,
+			{ id: entregue.id, vez: entregue.vez }
+		);
+
+		cookies.set(`spokke_attempt_${slug}`, attempt.id, {
+			path: '/',
+			httpOnly: true,
+			sameSite: 'lax',
+			maxAge: 60 * 60 * 24 * 7
+		});
+		redirect(303, resolve('/a/[slug]/q/[n]', { slug, n: '1' }));
+	}
+);
 
 export const recomecarTentativa = form(z.object({ slug: z.string() }), async ({ slug }) => {
 	const publication = await publicacaoAbertaOr410(slug);
@@ -230,6 +298,27 @@ async function attemptOr404(attemptId: string) {
 	return attempt;
 }
 
+type Attempt = Awaited<ReturnType<typeof attemptOr404>>;
+
+/**
+ * O item desta tentativa que o aluno quer responder ou pular, e a POSIÇÃO dele
+ * no roteiro — conferidos aqui, porque a tela não segura nada (regra nº 3):
+ * a tentativa entregue não recebe mais resposta, e a questão tem de estar no
+ * caminho (`server/player/sequencia.ts`). Sem isso, chamar `responderItem` com
+ * o id da 9ª valia o mesmo que trocar o número na URL.
+ */
+function itemNoCaminho(attempt: Attempt, itemId: string) {
+	if (attempt.finishedAt) error(409, 'Esta tentativa já foi entregue.');
+	const items = attempt.publication.activityVersion.items;
+	const indice = items.findIndex((i) => i.id === itemId);
+	if (indice === -1) error(404, 'Item não pertence a esta tentativa');
+	const posicao = indice + 1;
+	if (!questaoAbre(posicao, avancoDaTentativa(attempt), items.length)) {
+		error(409, 'Responda as questões na ordem.');
+	}
+	return { item: items[indice]!, posicao };
+}
+
 /**
  * A correção acontece AQUI, no servidor — regra inviolável nº 2. O cliente
  * nunca decide certo/errado, nem otimisticamente.
@@ -244,9 +333,7 @@ export const responderItem = command(
 	async ({ attemptId, itemId, answer, ms }) => {
 		const attempt = await attemptOr404(attemptId);
 		const settings = publicationSettingsSchema.parse(attempt.publication.settings);
-
-		const item = attempt.publication.activityVersion.items.find((i) => i.id === itemId);
-		if (!item) error(404, 'Item não pertence a esta tentativa');
+		const { item, posicao } = itemNoCaminho(attempt, itemId);
 
 		const interaction = interactionSchema.parse(item.interaction);
 		const grading = gradingSchema.parse(item.grading);
@@ -265,6 +352,7 @@ export const responderItem = command(
 		// professor (kernel.md "Correção", nível 4).
 		if (grading.mode === 'rubric') {
 			await playerRepo.recordAnswer(attemptId, itemId, paraGravar, 0, ms);
+			await playerRepo.avancarAte(attemptId, posicao);
 			// O sino do professor (docs/notificacoes.md). Sem `await`: o aluno não
 			// espera o aviso de outra pessoa, e uma falha ali não custa a resposta.
 			const atividade = attempt.publication.activityVersion.activity;
@@ -288,6 +376,7 @@ export const responderItem = command(
 		if (!result.ok) error(400, result.error);
 
 		await playerRepo.recordAnswer(attemptId, itemId, paraGravar, result.value.value, ms);
+		await playerRepo.avancarAte(attemptId, posicao);
 
 		// Sem "mostrar resultado", o aluno não recebe veredito nenhum — nem
 		// por item, senão dá para deduzir a nota mesmo assim.
@@ -313,18 +402,59 @@ export const responderItem = command(
 	}
 );
 
+/**
+ * "Pular esta questão". Não grava resposta — o professor vê a questão como não
+ * respondida —, mas a deixa para trás no caminho (`Attempt.avanco`): sem isto a
+ * seguinte não abriria, porque a sequência só anda por aqui ou respondendo.
+ *
+ * Só a questão de fala se pula (`sePula`), a mesma regra do botão na tela: sem
+ * conferir aqui, um POST direto pulava qualquer uma.
+ */
+export const pularQuestao = command(
+	z.object({ attemptId: z.string(), itemId: z.string() }),
+	async ({ attemptId, itemId }) => {
+		const attempt = await attemptOr404(attemptId);
+		const { item, posicao } = itemNoCaminho(attempt, itemId);
+		if (!sePula(interactionSchema.parse(item.interaction).type)) {
+			error(400, 'Esta questão não se pula: responda para seguir.');
+		}
+		await playerRepo.avancarAte(attemptId, posicao);
+		return { ok: true };
+	}
+);
+
 export const finalizarTentativa = command(
 	z.object({ attemptId: z.string() }),
 	async ({ attemptId }) => {
 		const attempt = await attemptOr404(attemptId);
-		await playerRepo.finishAttempt(attemptId);
+		// Entregar é a última porta do caminho: só depois de todas as questões
+		// ficarem para trás. Sem isto, chamar a entrega da questão 2 pulava o resto.
+		const total = attempt.publication.activityVersion.items.length;
+		if (!attempt.finishedAt && !caminhoFeito(avancoDaTentativa(attempt), total)) {
+			error(409, 'Ainda há questões pela frente.');
+		}
+		const primeiraVez = await playerRepo.finishAttempt(attemptId);
 
 		// O sino do professor (docs/notificacoes.md), só na PRIMEIRA vez: recarregar a
 		// tela final chama isto de novo, e não pode contar o mesmo aluno duas vezes.
 		// Sem esperar — o aluno não espera o sino de outra pessoa.
-		if (attempt.finishedAt === null) {
+		if (primeiraVez) {
 			const atividade = attempt.publication.activityVersion.activity;
 			void avisarTentativaTerminada(atividade.teacherId, atividade, attempt.name);
+
+			// Refeita: ela toma o lugar da entrega anterior, gravações incluídas. Com
+			// espera — o resultado que vem a seguir conta as entregas —, mas sem
+			// derrubar a entrega: a resposta do aluno já está gravada.
+			if (attempt.substituiId) {
+				try {
+					if (await trocarPelaRefeita(attempt)) {
+						// A anterior podia ter escrita esperando correção.
+						void atualizarCorrecao(atividade.teacherId, atividade, { criar: false });
+					}
+				} catch (erro) {
+					console.error('[refazer] a troca pela tentativa refeita falhou', erro);
+				}
+			}
 		}
 
 		const settings = publicationSettingsSchema.parse(attempt.publication.settings);

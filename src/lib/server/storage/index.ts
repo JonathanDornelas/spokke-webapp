@@ -1,6 +1,7 @@
 import {
 	DeleteObjectCommand,
 	GetObjectCommand,
+	ListObjectsV2Command,
 	PutObjectCommand,
 	S3Client
 } from '@aws-sdk/client-s3';
@@ -61,6 +62,40 @@ export function publicUrl(key: string): string {
  */
 export async function apagarObjeto(key: string): Promise<void> {
 	await s3().send(new DeleteObjectCommand({ Bucket: process.env.STORAGE_BUCKET, Key: key }));
+}
+
+/**
+ * Apaga TUDO sob um prefixo e devolve quantos objetos saíram. É como as
+ * gravações de uma tentativa saem de uma vez (`fala/<attemptId>/`): listar o
+ * bucket, e não confiar só nas chaves do banco, pega também a gravação que
+ * subiu e cuja chave não chegou a ser gravada.
+ *
+ * O prefixo tem de terminar em `/`: sem a barra, `fala/abc` levaria junto
+ * `fala/abcd/`. A recusa é aqui, e não em quem chama, porque o erro custaria a
+ * gravação de outra pessoa.
+ */
+export async function apagarPrefixo(prefixo: string): Promise<number> {
+	if (!prefixo.endsWith('/') || prefixo === '/') {
+		throw new Error(`prefixo sem a barra final: "${prefixo}"`);
+	}
+	let apagados = 0;
+	let continuacao: string | undefined;
+	do {
+		const pagina = await s3().send(
+			new ListObjectsV2Command({
+				Bucket: process.env.STORAGE_BUCKET,
+				Prefix: prefixo,
+				ContinuationToken: continuacao
+			})
+		);
+		for (const objeto of pagina.Contents ?? []) {
+			if (!objeto.Key) continue;
+			await apagarObjeto(objeto.Key);
+			apagados++;
+		}
+		continuacao = pagina.IsTruncated ? pagina.NextContinuationToken : undefined;
+	} while (continuacao);
+	return apagados;
 }
 
 /**

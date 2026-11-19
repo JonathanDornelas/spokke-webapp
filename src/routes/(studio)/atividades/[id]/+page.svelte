@@ -663,6 +663,9 @@
 						{:else}
 							O aluno não vê o resultado ao terminar.
 						{/if}
+						{#if data.access.allowRetake}
+							Ele pode responder de novo quantas vezes quiser, e fica a última entrega.
+						{/if}
 					</p>
 				</div>
 			</div>

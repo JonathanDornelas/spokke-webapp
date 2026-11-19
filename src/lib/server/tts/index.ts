@@ -66,7 +66,12 @@ export function falaExpiraEm(from = new Date()): Date {
  * "a resposta daquele aluno naquela questão".
  */
 export function falaObjectKey(attemptId: string, itemId: string, extensao: string): string {
-	return `fala/${attemptId}/${itemId}.${extensao}`;
+	return `${falaDaTentativa(attemptId)}${itemId}.${extensao}`;
+}
+
+/** Onde moram TODAS as gravações de uma tentativa — o que sai junto quando ela é refeita. */
+export function falaDaTentativa(attemptId: string): string {
+	return `fala/${attemptId}/`;
 }
 
 /**

@@ -20,7 +20,7 @@
 	import { viewport } from '$lib/client/viewport.svelte';
 	import { som } from '$lib/client/sons.svelte';
 	import { Gravacao } from '$lib/client/gravacao.svelte';
-	import { finalizarTentativa, responderItem } from '../../player.remote';
+	import { finalizarTentativa, pularQuestao, responderItem } from '../../player.remote';
 	import AmbientShapes from '$lib/components/AmbientShapes.svelte';
 	import AnswerFeedback from '$lib/components/interactions/AnswerFeedback.svelte';
 	import ContextoDaQuestao from '$lib/components/ContextoDaQuestao.svelte';
@@ -191,6 +191,15 @@
 	const gradeNaTela = $derived(
 		(data.item.interaction === 'type' || data.item.interaction === 'cloze') &&
 			data.item.teclado?.formato === 'grade'
+			? data.item.teclado
+			: null
+	);
+	/**
+	 * O teclado que o rodapé abre: a grade ("Teclado") ou a barra de acentos
+	 * ("Acentos"). Os dois nascem ocultos; a barra, aberta, mora sob o campo.
+	 */
+	const tecladoDoRodape = $derived(
+		(data.item.interaction === 'type' || data.item.interaction === 'cloze') && data.item.teclado
 			? data.item.teclado
 			: null
 	);
@@ -605,9 +614,21 @@
 		return resposta.json();
 	}
 
+	/**
+	 * Pular AVISA o servidor antes de seguir: a atividade é um caminho, e a
+	 * questão seguinte só abre depois de esta ficar para trás (`Attempt.avanco`,
+	 * `server/player/sequencia.ts`). Navegar direto cairia de volta aqui.
+	 */
+	let pulando = $state(false);
 	async function pular() {
 		if (ocupado) return;
 		anotar('pular', `pulou a questão ${data.index}`);
+		pulando = true;
+		try {
+			await pularQuestao({ attemptId: data.attemptId, itemId: data.itemId });
+		} finally {
+			pulando = false;
+		}
 		await avancar();
 	}
 
@@ -678,7 +699,7 @@
 	 * voltar, atalho de teclado — porque enquanto isso a tela não é confiável.
 	 * É diferente de "já respondida": ocupado é temporário.
 	 */
-	const ocupado = $derived(checking || saindo);
+	const ocupado = $derived(checking || pulando || saindo);
 
 	/**
 	 * A questão já tem resposta: ou o aluno acabou de responder (`feedback`), ou
@@ -1128,7 +1149,7 @@
 		class="flex items-center gap-2.5 border-t border-line px-5 pt-3.5 pb-[22px] lg:gap-4 lg:px-16
 		       lg:pt-5 lg:pb-[26px] max-lg:baixa:pt-3 max-lg:baixa:pb-3.5 lg:baixa:pt-3.5 lg:baixa:pb-4"
 	>
-		{#if gradeNaTela && !jaRespondida && !tecladoAberto}
+		{#if tecladoDoRodape && !jaRespondida && !tecladoAberto}
 			<!-- Oculto, o teclado volta por aqui — o mesmo lugar do "Pular", porque
 			     é no rodapé que o polegar está. -->
 			<button
@@ -1149,7 +1170,7 @@
 					/>
 					<path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 				</svg>
-				Teclado
+				{tecladoDoRodape.formato === 'barra' ? 'Acentos' : 'Teclado'}
 			</button>
 		{/if}
 		{#if data.item.skippable && !jaRespondida}

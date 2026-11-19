@@ -4,6 +4,7 @@ import type { PageServerLoad } from './$types';
 import { playerRepo, linhasPorHash } from '$lib/server/db/repos/player';
 import { buildRuntimeItem, itemAudioHashes } from '$lib/server/player/runtime';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
+import { avancoDaTentativa, questaoAbre, questaoDaVez } from '$lib/server/player/sequencia';
 
 /**
  * Uma questão. O item vai para o browser JÁ PASSADO por `toRuntime()` — é a
@@ -17,11 +18,29 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
 	const attempt = await playerRepo.attemptById(attemptId);
 	if (!attempt) error(404, { message: 'Perdemos sua sessão', reason: 'attemptLost' });
 
+	// Entregue, as questões fecharam: o que ele fez está no resultado. Sem isto,
+	// voltar pela URL a uma questão pulada a reabria depois do gabarito à vista.
+	if (attempt.finishedAt) redirect(303, resolve('/a/[slug]/resultado', { slug: params.slug }));
+
 	const { activityVersion } = attempt.publication;
 	const items = activityVersion.items;
 	const index = Number(params.n);
 	const item = items[index - 1];
 	if (!item) error(404, { message: 'Questão não existe', reason: 'notFound' });
+
+	// **A atividade é um caminho** (`server/player/sequencia.ts`): trocar o número
+	// na URL não pula para a frente. Para trás abre sempre; para a frente, só a
+	// questão da vez — e é para ela que volta quem tentou passar dela.
+	const avanco = avancoDaTentativa(attempt);
+	if (!questaoAbre(index, avanco, items.length)) {
+		redirect(
+			303,
+			resolve('/a/[slug]/q/[n]', {
+				slug: params.slug,
+				n: String(questaoDaVez(avanco, items.length))
+			})
+		);
+	}
 
 	// A URL do áudio é derivada do hash — não fica guardada no item, o que
 	// evita `UPDATE` numa versão publicada (regra inviolável nº 7).

@@ -560,6 +560,14 @@ componente só diz o que foi tocado.
   `blur` antes do `focus`: trocar o `inputmode` para `none` num campo já focado não recolhe o
   teclado do aparelho, só um foco novo lê o valor novo. "Ocultar" tira o foco (`onocultar`),
   senão o teclado do aparelho saltava no lugar do virtual.
+- **A barra também nasce OCULTA** (pedido do dono do repositório, depois dos relatos R-5K4FR0 e
+  outros: sempre à vista e sem rótulo, a fileira "á à â ã ç" sob o campo era lida como alternativas
+  de resposta quebradas). No Player e na prévia do aluno quem a chama é o botão "Acentos" do rodapé,
+  no lugar do "Teclado" (`docado` só tira o botão de dentro do componente: a barra continua sob o
+  campo, porque completa o teclado do aparelho). Solta (prévia do editor, catálogo), "Mostrar os
+  acentos" fica no lugar dela. Aberta, ela desce como SANFONA (`desdobrar`/`recolher`: empurra o que
+  vem embaixo), com "Ocultar" na ponta, fora da faixa que rola, e o ocultar NÃO tira o foco — o
+  teclado do aparelho é o que o aluno usa junto com ela. Respondida a questão, ela sai.
 - **Ela SOBE e DESCE, não aparece.** `teclado-in` (`media`, 300 ms, desacelerando) e `teclado-out` (`curta`, 200 ms,
   acelerando), no `app.css`, só `transform` e `opacity`. O painel desliza dentro de uma moldura
   `overflow: hidden`, então nunca passa por cima do rodapé nem do campo; e continua montado até o

@@ -7,8 +7,9 @@ import { semear } from './semente.ts';
  */
 export default async function globalSetup(): Promise<void> {
 	const rodada = String(Date.now());
-	const { comResultado, semResultado } = await semear(rodada);
+	const { comResultado, semResultado, refazer } = await semear(rodada);
 	process.env.E2E_RODADA = rodada;
 	process.env.E2E_SLUG_COM_RESULTADO = comResultado;
 	process.env.E2E_SLUG_SEM_RESULTADO = semResultado;
+	process.env.E2E_SLUG_REFAZER = refazer;
 }

@@ -3,6 +3,7 @@ import { resolve } from '$app/paths';
 import type { PageServerLoad } from './$types';
 import { playerRepo } from '$lib/server/db/repos/player';
 import { publicationSettingsSchema } from '$lib/server/player/settings';
+import { avancoDaTentativa, questaoDaVez } from '$lib/server/player/sequencia';
 import { readableAnswer } from '$lib/server/player/readable-answer';
 import { rotuloDoItem } from '$lib/server/player/rotulo';
 import { getProfile } from '$lib/kernel/language/profiles';
@@ -37,17 +38,21 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 	// entregou: é o caminho de quem volta pelo link depois, ou de quem abre a
 	// atividade noutro celular estando logado. Sem isso, "Ver meu resultado"
 	// da entrada devolvia para a própria entrada, em círculo.
-	const attempt = attemptId
-		? await playerRepo.attemptById(attemptId)
-		: await (async () => {
-				const publication = await playerRepo.publicationBySlug(params.slug);
-				if (!publication) return null;
-				const anterior = await playerRepo.concludedAttempt(publication.id, {
-					anonId: cookies.get('spokke_anon'),
-					accountId: locals.aluno?.id
-				});
-				return anterior ? playerRepo.attemptById(anterior.id) : null;
-			})();
+	//
+	// E também quando o cookie aponta para uma tentativa que já não existe: a
+	// refeita, entregue noutro aparelho, toma o lugar da anterior
+	// (`server/player/refazer.ts`), e o resultado que vale é o dela.
+	const attempt =
+		(attemptId ? await playerRepo.attemptById(attemptId) : null) ??
+		(await (async () => {
+			const publication = await playerRepo.publicationBySlug(params.slug);
+			if (!publication) return null;
+			const anterior = await playerRepo.concludedAttempt(publication.id, {
+				anonId: cookies.get('spokke_anon'),
+				accountId: locals.aluno?.id
+			});
+			return anterior ? playerRepo.attemptById(anterior.id) : null;
+		})());
 
 	if (!attempt) {
 		// Nada para mostrar: a entrada é quem sabe o que oferecer (começar,
@@ -59,6 +64,13 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 	const settings = publicationSettingsSchema.parse(attempt.publication.settings);
 	const { activityVersion } = attempt.publication;
 	const items = activityVersion.items;
+
+	// O resultado é de quem ENTREGOU. No meio do caminho, de volta à questão da
+	// vez (`server/player/sequencia.ts`): abrir `/resultado` pela URL pulava o resto.
+	if (!attempt.finishedAt) {
+		const n = questaoDaVez(avancoDaTentativa(attempt), items.length);
+		redirect(303, resolve('/a/[slug]/q/[n]', { slug: params.slug, n: String(n) }));
+	}
 	const { sourceLang, targetLang } = activityVersion.activity;
 	const dir = getProfile(targetLang).direction;
 
@@ -83,7 +95,12 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 		accountId: attempt.accountId ?? undefined
 	});
 	const estaEntrega = entregas.findIndex((e) => e.id === attempt.id);
-	const numeroDaTentativa = estaEntrega >= 0 ? estaEntrega + 1 : entregas.length + 1;
+	// Refeita, a anterior não existe mais para ser contada: quem diz que vez é
+	// esta é a própria tentativa (`Attempt.vez`, server/player/refazer.ts).
+	const numeroDaTentativa = Math.max(
+		estaEntrega >= 0 ? estaEntrega + 1 : entregas.length + 1,
+		attempt.vez
+	);
 	const primeira = entregas[0];
 	const acertosNaPrimeira =
 		entregas.length > 1 && primeira && primeira.id !== attempt.id
@@ -92,6 +109,9 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 
 	const base = {
 		showFeedback: settings.showResult,
+		// O professor deixou responder de novo (`allowRetake`) e o link segue
+		// aberto. O botão leva à entrada, que confirma — a nova substitui esta.
+		podeRefazer: settings.allowRetake && !activityVersion.activity.archivedAt,
 		activity: {
 			title: activityVersion.activity.title,
 			itemCount: items.length,

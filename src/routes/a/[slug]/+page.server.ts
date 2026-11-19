@@ -136,7 +136,10 @@ export const load: PageServerLoad = async ({ params, cookies, locals }) => {
 					when: relativeTime(concluida.finishedAt ?? concluida.startedAt),
 					respondidas: concluida.items.length,
 					acertos: concluida.items.filter((linha) => linha.score >= 1).length,
-					name: concluida.name
+					name: concluida.name,
+					// O professor deixou responder de novo (`allowRetake`): a tela troca o
+					// "fale com seu professor" pelo botão (`refazerTentativa`).
+					podeRefazer: settings.allowRetake
 				}
 			: null,
 		resumable: previous

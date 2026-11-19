@@ -60,10 +60,72 @@ export const playerRepo = {
 		// Autorização para GUARDAR as gravações de fala. Opt-in, perguntado na
 		// entrada — `false` é o padrão e o caminho de sempre: transcreve e
 		// descarta.
-		audioConsent = false
+		audioConsent = false,
+		// A entrega que esta REFAZ (`allowRetake`): ela sai quando esta for
+		// entregue (`substituirTentativa`), e esta herda a contagem de vezes.
+		refaz: { id: string; vez: number } | null = null
 	) {
 		return prisma.attempt.create({
-			data: { publicationId, name, anonId, seed, studentId, accountId, audioConsent }
+			data: {
+				publicationId,
+				name,
+				anonId,
+				seed,
+				studentId,
+				accountId,
+				audioConsent,
+				substituiId: refaz?.id ?? null,
+				vez: refaz ? refaz.vez + 1 : 1
+			}
+		});
+	},
+
+	/**
+	 * A questão na posição `posicao` (1..n) ficou para trás — respondida ou
+	 * pulada. O avanço só CRESCE: responder de novo uma questão de trás não o
+	 * puxa de volta (`server/player/sequencia.ts`).
+	 *
+	 * `updateMany` com a condição no `where`, e não ler-somar-gravar: duas
+	 * requisições juntas (o clique duplo) não podem se desfazer.
+	 */
+	async avancarAte(attemptId: string, posicao: number): Promise<void> {
+		await prisma.attempt.updateMany({
+			where: { id: attemptId, avanco: { lt: posicao } },
+			data: { avanco: posicao }
+		});
+	},
+
+	/**
+	 * A tentativa refeita toma o lugar da antiga: a antiga sai, com as respostas
+	 * (Cascade). Devolve `true` quando havia o que substituir.
+	 *
+	 * Só sai a ENTREGUE e da MESMA publicação — o id vem da tentativa nova, que o
+	 * próprio servidor gravou (`refazerTentativa`), mas a condição fica no `where`
+	 * para que nenhum caminho apague a tentativa de outra atividade.
+	 *
+	 * **Os relatos de problema da antiga passam para a nova**, em vez de irem
+	 * junto no Cascade: são da EQUIPE (auth.md "Dados do aluno e LGPD"), com prazo
+	 * próprio, e refazer a atividade não pode apagar o relato de um defeito.
+	 *
+	 * As gravações de fala ficam no bucket; quem as apaga é `trocarPelaRefeita`.
+	 */
+	async substituirTentativa(
+		nova: { id: string; publicationId: string },
+		antigaId: string
+	): Promise<boolean> {
+		if (antigaId === nova.id) return false;
+		return prisma.$transaction(async (tx) => {
+			const antiga = await tx.attempt.findFirst({
+				where: { id: antigaId, publicationId: nova.publicationId, finishedAt: { not: null } },
+				select: { id: true }
+			});
+			if (!antiga) return false;
+			await tx.problemReport.updateMany({
+				where: { attemptId: antiga.id },
+				data: { attemptId: nova.id }
+			});
+			await tx.attempt.delete({ where: { id: antiga.id } });
+			return true;
 		});
 	},
 
@@ -225,11 +287,18 @@ export const playerRepo = {
 		});
 	},
 
-	finishAttempt(attemptId: string) {
-		return prisma.attempt.update({
-			where: { id: attemptId },
+	/**
+	 * Entrega a tentativa e diz se foi ESTA chamada que entregou. Recarregar a
+	 * tela final chama a entrega de novo, e o que acontece uma vez só — o sino do
+	 * professor, a troca pela refeita — depende de saber qual foi a primeira. Com
+	 * a condição no `where`, duas chamadas juntas não são as duas a primeira.
+	 */
+	async finishAttempt(attemptId: string): Promise<boolean> {
+		const { count } = await prisma.attempt.updateMany({
+			where: { id: attemptId, finishedAt: null },
 			data: { finishedAt: new Date() }
 		});
+		return count === 1;
 	},
 
 	/**

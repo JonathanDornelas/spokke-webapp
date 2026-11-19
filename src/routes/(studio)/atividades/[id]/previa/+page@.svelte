@@ -95,6 +95,12 @@
 			? item.teclado
 			: null
 	);
+	/** O que o rodapé abre: a grade ("Teclado") ou a barra de acentos ("Acentos"). */
+	const tecladoDoRodape = $derived(
+		item && (item.interaction === 'type' || item.interaction === 'cloze') && item.teclado
+			? item.teclado
+			: null
+	);
 	async function abrirTeclado() {
 		tecladoAberto = true;
 		await tick();
@@ -659,7 +665,7 @@
 					class="flex items-center gap-2.5 border-t border-line px-5 pt-3.5 pb-[22px] lg:gap-4 lg:px-16
 					       lg:pt-5 lg:pb-[26px] max-lg:baixa:pt-3 max-lg:baixa:pb-3.5 lg:baixa:pt-3.5 lg:baixa:pb-4"
 				>
-					{#if gradeNaTela && !atual.respondida && !tecladoAberto}
+					{#if tecladoDoRodape && !atual.respondida && !tecladoAberto}
 						<button
 							type="button"
 							onclick={abrirTeclado}
@@ -678,7 +684,7 @@
 								/>
 								<path d="M8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
 							</svg>
-							Teclado
+							{tecladoDoRodape.formato === 'barra' ? 'Acentos' : 'Teclado'}
 						</button>
 					{/if}
 					{#if item?.skippable && !atual.respondida}
